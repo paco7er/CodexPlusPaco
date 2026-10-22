@@ -4126,13 +4126,9 @@ function RelayProfileEditor({
     const selected = apiKeys.find((entry) => entry.id === activeApiKeyId) || apiKeys[0];
     updateDraft({ apiKeys, activeApiKeyId: selected?.id || "", apiKey: selected?.apiKey || "" });
   };
-  const selectEditorMode = (mode: RelayEditorMode) => {
+  const selectEditorMode = (mode: Exclude<RelayEditorMode, "mixedApi">) => {
     if (mode === "official") {
       updateDraft({ relayMode: "official", officialMixApiKey: false });
-      return;
-    }
-    if (mode === "mixedApi") {
-      updateDraft({ relayMode: "official", officialMixApiKey: true });
       return;
     }
     updateDraft({ relayMode: "pureApi", officialMixApiKey: false });
@@ -4506,7 +4502,6 @@ function RelayProfileEditor({
             <div className="relay-mode-block-head">
               <div>
                 <strong>{t("接入方式")}</strong>
-                <span>{t("官方登录 + API 会保留官方账号，同时使用下方 API 连接；不需要再到其他面板勾选。")}</span>
               </div>
             </div>
             <div className="relay-mode-options" role="radiogroup" aria-label={t("接入方式")}>
@@ -4516,12 +4511,6 @@ function RelayProfileEditor({
                   icon: ShieldCheck,
                   title: t("官方登录"),
                   description: t("使用 ChatGPT 官方账号，不写入 API 凭据。"),
-                },
-                {
-                  mode: "mixedApi" as const,
-                  icon: Cable,
-                  title: t("官方登录 + API"),
-                  description: t("保留官方登录，同时使用 API Base URL 与 Key。"),
                 },
                 {
                   mode: "pureApi" as const,
@@ -4547,6 +4536,12 @@ function RelayProfileEditor({
                 </button>
               ))}
             </div>
+            {editorMode === "mixedApi" ? (
+              <div className="relay-mode-note">
+                <Cable className="h-4 w-4" />
+                <span>{t("当前使用旧版混合接入配置。")}</span>
+              </div>
+            ) : null}
             {showApiFields ? (
               <div className="relay-inline-connection">
                 <div className="relay-inline-connection-head">
@@ -4720,7 +4715,7 @@ function RelayProfileEditor({
             ) : (
               <div className="relay-mode-note">
                 <ShieldCheck className="h-4 w-4" />
-                <span>{t("当前使用官方账号登录；切换到“官方登录 + API”或“纯 API”后，API 连接字段会在这里展开。")}</span>
+                <span>{t("当前使用官方账号登录。")}</span>
               </div>
             )}
           </div>

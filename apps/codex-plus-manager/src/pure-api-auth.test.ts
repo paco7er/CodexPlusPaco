@@ -245,11 +245,40 @@ test("official mixed API still uses explicit provider auth while preserving OAut
   assert.doesNotMatch(generated.configContents, /fixture-oauth/);
 });
 
-test("provider editor exposes official, mixed API, and pure API as one mode choice", () => {
+test("provider editor recognizes legacy mixed API profiles without rewriting their mode", () => {
   assert.equal(context.relayEditorMode({ relayMode: "official", officialMixApiKey: false }), "official");
   assert.equal(context.relayEditorMode({ relayMode: "official", officialMixApiKey: true }), "mixedApi");
   assert.equal(context.relayEditorMode({ relayMode: "mixedApi", officialMixApiKey: false }), "mixedApi");
   assert.equal(context.relayEditorMode({ relayMode: "pureApi", officialMixApiKey: false }), "pureApi");
+});
+
+test("provider editor only offers official login and pure API", () => {
+  const modes: string[] = [];
+  const visit = (node: ts.Node) => {
+    if (ts.isPropertyAssignment(node) && node.name.getText(app) === "mode"
+      && ts.isAsExpression(node.initializer) && ts.isStringLiteral(node.initializer.expression)) {
+      modes.push(node.initializer.expression.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  const editor = app.statements.find((node) =>
+    ts.isFunctionDeclaration(node) && node.name?.text === "RelayProfileEditor");
+  assert.ok(editor);
+  visit(editor);
+  assert.deepEqual(modes, ["official", "pureApi"]);
+});
+
+test("editing legacy mixed API profile details preserves its files and credentials", () => {
+  const original = context.withGeneratedRelayFiles({
+    ...profile(), relayMode: "official", officialMixApiKey: true,
+    authContents: JSON.stringify({ tokens: { access_token: "fixture-oauth" } }),
+  });
+  const edited = context.applyRelayProfilePatchToFiles(original, { name: "Renamed provider" });
+  assert.equal(edited.relayMode, "official");
+  assert.equal(edited.officialMixApiKey, true);
+  assert.equal(edited.configContents, original.configContents);
+  assert.equal(edited.authContents, original.authContents);
+  assert.equal(edited.apiKey, original.apiKey);
 });
 
 const tableCases = [
