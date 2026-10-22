@@ -9,17 +9,17 @@ const commands = read("../src-tauri/src/commands.rs");
 const handlers = read("../src-tauri/src/lib.rs");
 
 test("application rail and retired pages cannot be navigated to", () => {
-  for (const name of ["ApplicationRail", "ToolSwitcher", "RecommendationsScreen", "AboutScreen", "SettingsScreen", "AgentCacheScreen", "AgentCollaborationPage", "UpdateDialog"]) {
+  for (const name of ["ApplicationRail", "ToolSwitcher", "RecommendationsScreen", "AboutScreen", "SettingsScreen", "AgentCacheScreen", "AgentCollaborationPage", "UpdateDialog", "PluginMarketScreen"]) {
     assert.doesNotMatch(app, new RegExp(`\\b${name}\\b`), name);
   }
   const source = ts.createSourceFile("App.tsx", app, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const route = source.statements.find((node) => ts.isTypeAliasDeclaration(node) && node.name.text === "Route");
   assert.ok(route);
   const routeText = route.getText(source);
-  for (const id of ["recommendations", "agentCache", "agentCollaboration", "about", "settings", "maintenance"]) {
+  for (const id of ["recommendations", "agentCache", "agentCollaboration", "about", "settings", "maintenance", "pluginMarket"]) {
     assert.ok(!routeText.includes(`"${id}"`), id);
   }
-  for (const id of ["overview", "relay", "context", "skills", "sessions", "enhance", "pluginMarket"]) {
+  for (const id of ["overview", "relay", "context", "skills", "sessions", "enhance"]) {
     assert.ok(routeText.includes(`"${id}"`), id);
   }
   assert.match(app, /<div className="shell">/);
@@ -27,7 +27,7 @@ test("application rail and retired pages cannot be navigated to", () => {
 });
 
 test("retired commands and modules have no implementation or invoke handler", () => {
-  for (const command of ["list_tools", "load_ads", "scan_agent_cache", "clean_agent_cache", "check_update", "perform_update", "startup_options", "read_latest_logs", "clear_logs", "copy_diagnostics", "export_settings", "preview_import_settings", "set_settings_path", "reset_settings_path", "reset_settings", "reset_image_overlay_settings", "update_tray_labels"]) {
+  for (const command of ["list_tools", "load_ads", "scan_agent_cache", "clean_agent_cache", "check_update", "perform_update", "startup_options", "read_latest_logs", "clear_logs", "copy_diagnostics", "export_settings", "preview_import_settings", "set_settings_path", "reset_settings_path", "reset_settings", "reset_image_overlay_settings", "update_tray_labels", "refresh_plugin_market", "install_plugin_market_item", "plugin_market_install_status"]) {
     assert.doesNotMatch(commands, new RegExp(`pub (?:async )?fn ${command}\\(`), command);
     assert.ok(!handlers.includes(`commands::${command},`), command);
     assert.ok(!app.includes(`"${command}"`), command);

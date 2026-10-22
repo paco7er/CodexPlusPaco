@@ -12,11 +12,12 @@ export const ENHANCEMENT_SECTION_IDS: Record<EnhancementSection, string> = {
 };
 
 export function managerNavigationDestination(intent: ManagerNavigationIntent): {
-  route: "enhance" | "pluginMarket";
+  route: "enhance" | "overview";
   section: EnhancementSection | null;
 } {
   // 旧版悬浮球发出的 settings + section 也定位到新的增强配置页。
-  if (intent.page === "pluginMarket") return { route: "pluginMarket", section: null };
+  // 兼容旧版客户端留下的市场跳转，退役页面统一回到概览。
+  if (intent.page === "pluginMarket") return { route: "overview", section: null };
   const section = intent.section ?? null;
   return { route: "enhance", section };
 }

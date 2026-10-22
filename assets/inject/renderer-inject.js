@@ -7456,8 +7456,6 @@
       native.click();
       return;
     }
-    // 没有可验证的原生入口时打开管理工具，不猜测内部路由或跳转外部浏览器。
-    void postJson("/manager/open", { page: "pluginMarket" });
   }
   async function setCodexGlobalState(key, value) {
     return await codexStateCall("set-global-state", { params: { key, value } });

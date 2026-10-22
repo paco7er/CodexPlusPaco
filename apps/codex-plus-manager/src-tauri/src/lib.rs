@@ -136,9 +136,6 @@ pub fn run() {
             commands::load_provider_sync_recovery,
             commands::recover_provider_sync,
 
-            commands::refresh_plugin_market,
-            commands::install_plugin_market_item,
-            commands::plugin_market_install_status,
 
             commands::refresh_skill_catalog,
             commands::list_installed_skills,

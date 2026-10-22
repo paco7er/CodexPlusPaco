@@ -1,6 +1,6 @@
 # CodeX 插件市场
 
-管理工具的「CodeX 插件市场」可以检索、筛选并按需下载安装插件。Codex 侧复用原生插件页面，注入层拦截插件请求并接入相同后端。
+Codex 侧复用原生插件页面，注入层拦截插件请求并接入索引和单包安装后端。管理工具已移除独立的「Codex 插件市场」菜单与页面，旧页面跳转回到概览。
 
 ## 下载行为
 
@@ -25,7 +25,6 @@
 
 - `crates/codex-plus-core/src/plugin_market.rs`：索引、分包下载、安装和原生协议适配。
 - `assets/inject/renderer-inject/62-plugin-market-adapter.js`：原生页面请求拦截与响应合并。
-- `apps/codex-plus-manager/src/PluginMarketScreen.tsx`：管理页面。
 - `scripts/build-plugin-market-index.mjs`：从缓存仓库的已提交文件生成轻量索引。
 
 索引生成示例：
@@ -42,7 +41,7 @@ node scripts/build-plugin-market-index.mjs /path/to/CodexPlusPlusFullPluginCache
 ```sh
 cargo test -p codex-plus-core plugin_market::tests --lib
 node --test assets/inject/plugin-market-adapter.test.cjs
-node --test apps/codex-plus-manager/src/plugin-market-model.test.ts
+node --test assets/inject/plugin-market-navigation.test.cjs
 node scripts/assemble-renderer-inject.mjs --check
 ```
 

@@ -2476,46 +2476,6 @@ fn persist_provider_sync_selection(provider: &str) {
     let _ = store.save(&settings);
 }
 
-#[tauri::command]
-pub async fn refresh_plugin_market(source: String, refresh: bool) -> Value {
-    match codex_plus_core::plugin_market::list_plugins(
-        &codex_plus_core::codex_home::default_codex_home_dir(),
-        &source,
-        refresh,
-    )
-    .await
-    {
-        Ok(payload) => payload,
-        Err(error) => json!({"status": "failed", "message": error.to_string(), "plugins": []}),
-    }
-}
-
-#[tauri::command]
-pub async fn install_plugin_market_item(source: String, id: String) -> Value {
-    match codex_plus_core::plugin_market::install_plugin(
-        &codex_plus_core::codex_home::default_codex_home_dir(),
-        &source,
-        &id,
-    )
-    .await
-    {
-        Ok(payload) => payload,
-        Err(error) => json!({"status": "failed", "message": error.to_string()}),
-    }
-}
-
-#[tauri::command]
-pub fn plugin_market_install_status(source: String, id: String) -> Value {
-    match codex_plus_core::plugin_market::install_status(
-        &codex_plus_core::codex_home::default_codex_home_dir(),
-        &source,
-        &id,
-    ) {
-        Ok(payload) => payload,
-        Err(error) => json!({"status": "failed", "message": error.to_string(), "busy": false}),
-    }
-}
-
 /// 拉取所有启用仓库的 skill 清单，合并本地安装/启用状态后返回。
 ///
 /// 单个仓库失败（限流、网络、仓库删了）不影响其它仓库，错误单独收集回前端。

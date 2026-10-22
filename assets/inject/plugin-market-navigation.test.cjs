@@ -145,8 +145,7 @@ test("extension/self entries cannot impersonate native plugins or cause recursiv
   f.install(); assert.ok(!f.fallback());
   f.context.openCodexPlusNativePluginMarket();
   assert.equal(owned.clicks, 0); assert.equal(registered.clicks, 0);
-  assert.equal(f.calls.length, 1); assert.equal(f.calls[0].path, "/manager/open");
-  assert.equal(f.calls[0].payload.page, "pluginMarket");
+  assert.equal(f.calls.length, 0);
 });
 
 test("legacy injected IDs and non-navigation Plugins buttons cannot masquerade as native", () => {
@@ -155,13 +154,13 @@ test("legacy injected IDs and non-navigation Plugins buttons cannot masquerade a
   const button = fallback.querySelector("button"); button.setAttribute("data-sidebar-destination", "plugins"); button.setAttribute("aria-label", "Plugins");
   const outside = f.document.body.appendChild(new Element("button", { "data-sidebar-destination": "plugins", "aria-label": "Plugins" }));
   f.context.openCodexPlusNativePluginMarket();
-  assert.equal(button.clicks, 0); assert.equal(outside.clicks, 0); assert.equal(f.calls.length, 1);
+  assert.equal(button.clicks, 0); assert.equal(outside.clicks, 0); assert.equal(f.calls.length, 0);
 });
 
-test("disabled native navigation does not create a duplicate and activation opens the manager", () => {
+test("disabled native navigation does not create a duplicate or open the retired manager page", () => {
   const f = fixture(); const native = f.native(); native.disabled = true;
   f.install(); assert.ok(!f.fallback());
-  f.context.openCodexPlusNativePluginMarket(); assert.equal(native.clicks, 0); assert.equal(f.calls.length, 1);
+  f.context.openCodexPlusNativePluginMarket(); assert.equal(native.clicks, 0); assert.equal(f.calls.length, 0);
 });
 
 test("native activation rechecks rebuilt DOM and never clicks a stale or invisible entry", () => {
@@ -170,7 +169,7 @@ test("native activation rechecks rebuilt DOM and never clicks a stale or invisib
   first.remove(); const next = f.native();
   f.context.openCodexPlusNativePluginMarket(); assert.equal(next.clicks, 1); assert.equal(first.clicks, 1);
   next.visible = false;
-  f.context.openCodexPlusNativePluginMarket(); assert.equal(next.clicks, 1); assert.equal(f.calls.length, 1);
+  f.context.openCodexPlusNativePluginMarket(); assert.equal(next.clicks, 1); assert.equal(f.calls.length, 0);
 });
 
 test("classic navigation without destination attributes recognizes Chinese and English native labels", () => {

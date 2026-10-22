@@ -48,7 +48,6 @@ import {
   Search,
   ShieldCheck,
   ShieldAlert,
-  Store,
   Stethoscope,
   TestTube,
   Trash2,
@@ -68,7 +67,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { NativeBrowserStatusView, nativeBrowserConsent } from "./native-browser-settings";
 
-import { PluginMarketScreen } from "./PluginMarketScreen";
 
 import { McpPage, PageHeader } from "./ManagementPages";
 import { SkillsPage } from "./ManagementExtra";
@@ -754,7 +752,7 @@ function providerSyncTargetLabel(target: ProviderSyncTargetOption): string {
   return [...labels, ...current, ...unavailable].join(" / ") || t("发现");
 }
 
-type Route = "overview" | "relay" | "sessions" | "context" | "skills" | "enhance" | "pluginMarket";
+type Route = "overview" | "relay" | "sessions" | "context" | "skills" | "enhance";
 
 const MANAGER_NAVIGATION_EVENT = "manager-navigation-requested";
 
@@ -767,7 +765,6 @@ const routes: Array<{ id: Route; label: string; icon: LucideIcon; badge?: string
   { id: "context", label: "MCP", icon: Network, tool: "codex" },
   { id: "skills", label: "Skills", icon: BookOpen, tool: "codex" },
   { id: "enhance", get label() { return t("Codex增强"); }, icon: Hammer, tool: "codex" },
-  { id: "pluginMarket", get label() { return t("Codex 插件市场"); }, icon: Store, tool: "codex" },
 ];
 
 const navigationSections: Array<{ label: string; routes: Route[] }> = [
@@ -781,7 +778,7 @@ const navigationSections: Array<{ label: string; routes: Route[] }> = [
   },
   {
     get label() { return t("扩展"); },
-    routes: ["enhance", "pluginMarket"],
+    routes: ["enhance"],
   },
 ];
 
@@ -2233,7 +2230,6 @@ export function App() {
               actions={actions}
             />
           ) : null}
-          {route === "pluginMarket" ? <PluginMarketScreen /> : null}
 
 
         </section>
@@ -7749,7 +7745,6 @@ function routeSubtitle(route: Route) {
     context: t("独立管理 MCP 服务器与插件"),
     skills: t("从 GitHub 仓库安装 Skill 到 Codex"),
     enhance: t("管理常用功能、语音输入与下一步建议。"),
-    pluginMarket: t("检索插件，按需下载并安装到 Codex"),
   };
   return subtitles[route];
 }

@@ -30,7 +30,7 @@ test("proxy settings, request history and user scripts have no manager page or d
   }
   assert.doesNotMatch(read("./styles.css"), /\.(?:request-log|proxy-provider|relay-environment|script-market|script-row)(?:-|\b)/);
   assert.match(handlers, /commands::load_relay_proxy,/);
-  assert.match(handlers, /commands::refresh_plugin_market,/);
+  assert.match(read("../../../crates/codex-plus-core/src/routes.rs"), /"\/plugin-market\/native"/);
 });
 
 test("request history has no storage backend and script loading is absent from the launcher", () => {
