@@ -10,9 +10,7 @@ use serde_json::{Value, json};
 use crate::models::{DeleteResult, DeleteStatus, ExportResult, ExportStatus, SessionRef};
 use crate::settings::{BackendSettings, SettingsStore};
 use crate::status::StatusStore;
-use crate::user_scripts::UserScriptManager;
 
-pub type UserScriptEvaluator = Arc<dyn Fn(&str, &str) -> anyhow::Result<Value> + Send + Sync>;
 pub type DevtoolsOpener = Arc<dyn Fn(&str) -> anyhow::Result<()> + Send + Sync>;
 
 #[derive(Clone)]
@@ -76,20 +74,6 @@ pub trait BridgeSettingsService: Send + Sync {
 
 #[async_trait]
 pub trait BridgeRuntimeService: Send + Sync {
-    async fn user_script_inventory(&self) -> anyhow::Result<Value>;
-    async fn user_script_inventory_with_runtime_status(
-        &self,
-        _payload: Value,
-    ) -> anyhow::Result<Value> {
-        self.user_script_inventory().await
-    }
-    async fn set_user_scripts_enabled(&self, enabled: bool) -> anyhow::Result<Value>;
-    async fn set_user_script_enabled(&self, key: String, enabled: bool) -> anyhow::Result<Value>;
-    async fn delete_user_script(&self, key: String) -> anyhow::Result<Value>;
-    async fn reload_user_scripts(&self) -> anyhow::Result<Value>;
-    async fn load_user_scripts(&self) -> anyhow::Result<Value> {
-        self.user_script_inventory().await
-    }
     /// 列出拓展可注入的 Codex 页面。默认关闭，具体 runtime 再接 CDP。
     async fn cdp_targets(&self) -> anyhow::Result<Value> {
         anyhow::bail!("CDP targets are unavailable")
@@ -97,14 +81,6 @@ pub trait BridgeRuntimeService: Send + Sync {
     /// 在指定 Codex 页面执行表达式。默认关闭。
     async fn cdp_evaluate(&self, _payload: Value) -> anyhow::Result<Value> {
         anyhow::bail!("CDP evaluate is unavailable")
-    }
-    /// 拉市场清单，并合并本地已安装状态。
-    async fn script_market_list(&self) -> anyhow::Result<Value> {
-        anyhow::bail!("script market is unavailable")
-    }
-    /// 按 id 从市场安装脚本。
-    async fn script_market_install(&self, _payload: Value) -> anyhow::Result<Value> {
-        anyhow::bail!("script market is unavailable")
     }
     /// 独立插件市场只读取索引，安装时才获取目标插件。
     async fn plugin_market_list(&self, payload: Value) -> anyhow::Result<Value> {
@@ -287,40 +263,6 @@ pub async fn handle_bridge_request(
         "/settings/set" => {
             settings_value(&ctx, ctx.settings.set_settings(payload.clone()).await).await
         }
-        "/user-scripts/list" => {
-            ctx.runtime
-                .user_script_inventory_with_runtime_status(payload.clone())
-                .await
-        }
-        "/user-scripts/set-enabled" => {
-            let enabled = payload
-                .get("enabled")
-                .and_then(Value::as_bool)
-                .unwrap_or(true);
-            ctx.runtime.set_user_scripts_enabled(enabled).await
-        }
-        "/user-scripts/set-script-enabled" => {
-            let key = payload
-                .get("key")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_string();
-            let enabled = payload
-                .get("enabled")
-                .and_then(Value::as_bool)
-                .unwrap_or(true);
-            ctx.runtime.set_user_script_enabled(key, enabled).await
-        }
-        "/user-scripts/delete" => {
-            let key = payload
-                .get("key")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_string();
-            ctx.runtime.delete_user_script(key).await
-        }
-        "/user-scripts/load" => ctx.runtime.load_user_scripts().await,
-        "/user-scripts/reload" => ctx.runtime.reload_user_scripts().await,
         "/cdp/targets" => ctx.runtime.cdp_targets().await,
         "/cdp/evaluate" => ctx.runtime.cdp_evaluate(payload.clone()).await,
         "/devtools/open" => ctx.runtime.open_devtools().await,
@@ -333,8 +275,6 @@ pub async fn handle_bridge_request(
         "/codex-model-catalog" | "/codex-config-model" => ctx.runtime.codex_model_catalog().await,
         "/diagnostics/log" => diagnostic_log_value(payload.clone()),
         "/llm-proxy" => llm_proxy_value(payload.clone()).await,
-        "/script-market/list" => ctx.runtime.script_market_list().await,
-        "/script-market/install" => ctx.runtime.script_market_install(payload.clone()).await,
         "/plugin-market/list" => ctx.runtime.plugin_market_list(payload.clone()).await,
         "/plugin-market/install" => ctx.runtime.plugin_market_install(payload.clone()).await,
         "/plugin-market/install-status" => {
@@ -547,9 +487,6 @@ impl BridgeSettingsService for CoreSettingsService {
 pub struct CoreRuntimeService {
     debug_port: u16,
     status_store: StatusStore,
-    user_scripts: Option<UserScriptManager>,
-    websocket_url: Option<String>,
-    user_script_evaluator: Option<UserScriptEvaluator>,
     devtools_opener: Option<DevtoolsOpener>,
     devtools_target_id: Option<String>,
 }
@@ -559,27 +496,9 @@ impl CoreRuntimeService {
         Self {
             debug_port,
             status_store,
-            user_scripts: None,
-            websocket_url: None,
-            user_script_evaluator: None,
             devtools_opener: None,
             devtools_target_id: None,
         }
-    }
-
-    pub fn with_user_scripts(mut self, user_scripts: UserScriptManager) -> Self {
-        self.user_scripts = Some(user_scripts);
-        self
-    }
-
-    pub fn with_websocket_url(mut self, websocket_url: impl Into<String>) -> Self {
-        self.websocket_url = Some(websocket_url.into());
-        self
-    }
-
-    pub fn with_user_script_evaluator(mut self, evaluator: UserScriptEvaluator) -> Self {
-        self.user_script_evaluator = Some(evaluator);
-        self
     }
 
     pub fn with_devtools_opener(mut self, opener: DevtoolsOpener) -> Self {
@@ -595,96 +514,6 @@ impl CoreRuntimeService {
 
 #[async_trait]
 impl BridgeRuntimeService for CoreRuntimeService {
-    async fn user_script_inventory(&self) -> anyhow::Result<Value> {
-        match &self.user_scripts {
-            Some(user_scripts) => user_scripts.inventory(),
-            None => Ok(empty_user_script_inventory()),
-        }
-    }
-
-    async fn set_user_scripts_enabled(&self, enabled: bool) -> anyhow::Result<Value> {
-        match &self.user_scripts {
-            Some(user_scripts) => {
-                user_scripts.set_global_enabled(enabled)?;
-                user_scripts.inventory()
-            }
-            None => {
-                let mut inventory = empty_user_script_inventory();
-                inventory["enabled"] = json!(enabled);
-                Ok(inventory)
-            }
-        }
-    }
-
-    async fn set_user_script_enabled(&self, key: String, enabled: bool) -> anyhow::Result<Value> {
-        match &self.user_scripts {
-            Some(user_scripts) => {
-                user_scripts.set_script_enabled(&key, enabled)?;
-                user_scripts.inventory()
-            }
-            None => Ok(empty_user_script_inventory()),
-        }
-    }
-
-    async fn delete_user_script(&self, key: String) -> anyhow::Result<Value> {
-        match &self.user_scripts {
-            Some(user_scripts) => {
-                user_scripts.delete_user_script(&key)?;
-                user_scripts.inventory()
-            }
-            None => Ok(empty_user_script_inventory()),
-        }
-    }
-
-    async fn load_user_scripts(&self) -> anyhow::Result<Value> {
-        if let (Some(user_scripts), Some(websocket_url), Some(evaluator)) = (
-            &self.user_scripts,
-            self.websocket_url.as_deref(),
-            &self.user_script_evaluator,
-        ) {
-            evaluator(websocket_url, &user_scripts.build_initial_bundle()?)?;
-        } else {
-            anyhow::bail!("Codex 页面尚未连接");
-        }
-        self.user_script_inventory().await
-    }
-
-    async fn script_market_list(&self) -> anyhow::Result<Value> {
-        let Some(user_scripts) = &self.user_scripts else {
-            anyhow::bail!("用户脚本目录不可用");
-        };
-        crate::script_market::list_market_scripts(user_scripts).await
-    }
-
-    async fn script_market_install(&self, payload: Value) -> anyhow::Result<Value> {
-        let Some(user_scripts) = &self.user_scripts else {
-            anyhow::bail!("用户脚本目录不可用");
-        };
-        let id = payload
-            .get("id")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .unwrap_or_default();
-        if id.is_empty() {
-            anyhow::bail!("脚本 id 不能为空");
-        }
-        crate::script_market::install_market_script_by_id(user_scripts, id).await
-    }
-
-    async fn reload_user_scripts(&self) -> anyhow::Result<Value> {
-        if let (Some(user_scripts), Some(websocket_url), Some(evaluator)) = (
-            &self.user_scripts,
-            self.websocket_url.as_deref(),
-            &self.user_script_evaluator,
-        ) {
-            let bundle = user_scripts.build_reload_bundle()?;
-            evaluator(websocket_url, &bundle)?;
-        } else {
-            anyhow::bail!("Codex 页面尚未连接");
-        }
-        self.user_script_inventory().await
-    }
-
     async fn cdp_targets(&self) -> anyhow::Result<Value> {
         crate::cdp::list_extension_cdp_targets(self.debug_port).await
     }
@@ -1306,13 +1135,6 @@ pub fn devtools_url(debug_port: u16, target_id: &str) -> String {
     format!(
         "http://127.0.0.1:{debug_port}/devtools/inspector.html?ws=127.0.0.1:{debug_port}/devtools/page/{target_id}"
     )
-}
-
-fn empty_user_script_inventory() -> Value {
-    json!({
-        "enabled": true,
-        "scripts": []
-    })
 }
 
 #[cfg(test)]

@@ -52,8 +52,8 @@ Friendly link: <a href="https://linux.do">LINUX DO</a>
 | Native Fast for API keys | Opt in to Codex's native Standard / Fast controls for models configured with Fast (priority) support; disabled by default, with availability and pricing determined by the provider |
 | Development workflow | Project move and thread IDs |
 | Usage status line | Live generation speed, cache hit rate, and context usage below the composer, read from local Codex session records; the context share follows the per-model window Codex sees |
-| Request shock absorption | Absorb upstream overload errors (`server_overloaded`, `server_is_overloaded`, `at capacity`, ...) at the proxy with backoff retries. Streaming mode keeps live output and hands post-first-token overloads to Codex's native retry; buffered mode buffers the whole response and retries at any point (no streaming). Switch under Proxy settings → Request shock absorption; the request log shows in-flight requests, time to first token and total duration live |
-| Scripts and maintenance | User script installation and toggles, app detection, shortcuts, Watcher, environment cleanup, and health checks |
+| Request shock absorption | Absorb upstream overload errors (`server_overloaded`, `server_is_overloaded`, `at capacity`, ...) at the proxy with backoff retries. Existing shock absorption settings remain effective, and the composer status line shows in-flight request status |
+| Maintenance | App detection, shortcuts, Watcher, environment cleanup, and health checks |
 
 Every UI enhancement is independently configurable. Disabling the global enhancement switch still leaves Codex++ available as a provider and launch manager.
 
@@ -63,7 +63,7 @@ Every UI enhancement is independently configurable. Disabling the global enhance
   <img src="docs/images/usage-statusline.png" alt="Usage status line below the composer: 51 tok/s, cache hit 99.9%, context usage 19%" width="100%">
 </p>
 
-This custom branch removes Codex multi-launch, WeChat connection, and skin management. Existing instance settings, sessions, and theme files are preserved.
+This custom branch removes Codex multi-launch, WeChat connection, skin management, proxy settings, request logs, and extension management. Request history is no longer written to disk, and user scripts no longer load automatically. Existing configuration, sessions, historical logs, and user files are preserved. Protocol conversion, standalone proxies, and in-flight request status used by provider configuration remain available.
 
 
 Enable the optional Codex usage widget under Codex Enhancements → General → Widgets and pets. It includes the original character, modular bubble editor, sound library and waveform trimming, character/image/audio management, edge snapping and alerts. View session and local usage, observed subscription windows and costs estimated from configured prices, or connect provider balance and quota templates. See the [widget guide](docs/whale-widget.md) and [feature verification](docs/whale-parity.md).
@@ -107,7 +107,6 @@ Provider switching saves the current profile before applying the target profile.
 - Dictation: use an independent OpenAI-compatible service or the local SenseVoiceSmall INT8 model (downloaded manually from the voice settings and run on-device), then record and insert or send the text.
 - Conversation width, scroll restoration, thread IDs, native Fast unlock, and Goals.
 - Next-step suggestions: manage toggles, API, model, item count, and timeout together in Codex Enhancements.
-- User scripts.
 
 Settings that depend on renderer injection generally require saving and restarting Codex from the Codex++ window.
 

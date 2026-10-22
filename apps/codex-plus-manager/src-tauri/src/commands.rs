@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -6,13 +5,10 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use codex_plus_core::models::{DeleteResult, SessionRef};
-use codex_plus_core::relay_environment::RelayEnvironmentReport;
-use codex_plus_core::script_market::{self, MarketScript, ScriptMarketManifest};
 use codex_plus_core::settings::{
     BackendSettings, RelayMode, RelayProfile, RelaySessionProvider, SettingsStore,
 };
 use codex_plus_core::status::{LaunchStatus, StatusStore};
-use codex_plus_core::user_scripts::UserScriptManager;
 use serde::Serialize;
 use serde_json::{Value, json};
 use tauri::Emitter;
@@ -99,7 +95,6 @@ pub struct SettingsPayload {
     pub revision: String,
     pub settings: BackendSettings,
     pub settings_path: String,
-    pub user_scripts: Value,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -199,7 +194,6 @@ pub struct RelaySwitchPayload {
     pub settings: BackendSettings,
     pub relay: RelayPayload,
     pub settings_path: String,
-    pub user_scripts: Value,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -370,12 +364,6 @@ pub struct WatcherPayload {
     pub start_minimized: bool,
     pub start_codex: bool,
     pub start_codex_on_open: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ScriptMarketPayload {
-    pub market: Value,
-    pub user_scripts: Value,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1299,7 +1287,6 @@ pub fn load_settings() -> CommandResult<SettingsPayload> {
                 settings_path: codex_plus_core::paths::default_settings_path()
                     .to_string_lossy()
                     .to_string(),
-                user_scripts: user_script_inventory(),
             },
         )
         },
@@ -1337,7 +1324,6 @@ pub fn save_settings(mut settings: BackendSettings, expected_revision: Option<St
                 settings_path: codex_plus_core::paths::default_settings_path()
                     .to_string_lossy()
                     .to_string(),
-                user_scripts: user_script_inventory(),
             },
         );
     };
@@ -2491,20 +2477,6 @@ fn persist_provider_sync_selection(provider: &str) {
 }
 
 #[tauri::command]
-pub async fn refresh_script_market() -> CommandResult<ScriptMarketPayload> {
-    match script_market::fetch_market_manifest(script_market::DEFAULT_MARKET_INDEX_URL).await {
-        Ok(manifest) => ok(
-            "脚本市场已刷新。",
-            script_market_payload_from_manifest(&manifest, "ok", "脚本市场已刷新。"),
-        ),
-        Err(error) => failed(
-            &format!("脚本市场加载失败：{error}"),
-            failed_script_market_payload(&format!("脚本市场加载失败：{error}")),
-        ),
-    }
-}
-
-#[tauri::command]
 pub async fn refresh_plugin_market(source: String, refresh: bool) -> Value {
     match codex_plus_core::plugin_market::list_plugins(
         &codex_plus_core::codex_home::default_codex_home_dir(),
@@ -2541,210 +2513,6 @@ pub fn plugin_market_install_status(source: String, id: String) -> Value {
     ) {
         Ok(payload) => payload,
         Err(error) => json!({"status": "failed", "message": error.to_string(), "busy": false}),
-    }
-}
-
-#[tauri::command]
-pub async fn refresh_user_script_inventory() -> CommandResult<SettingsPayload> {
-    let debug_port = StatusStore::default()
-        .load_latest()
-        .ok()
-        .flatten()
-        .and_then(|status| status.debug_port)
-        .unwrap_or_else(default_debug_port);
-    let manager = default_user_script_manager();
-    let (user_scripts, message) = match codex_plus_core::user_scripts::live_runtime_status(
-        debug_port,
-    )
-    .await
-    {
-        Ok(runtime_status) => (
-            manager
-                .inventory_with_runtime_status(Some(&runtime_status))
-                .unwrap_or_else(
-                    |error| json!({ "enabled": true, "scripts": [], "error": error.to_string() }),
-                ),
-            "已同步 Codex 用户脚本运行状态。",
-        ),
-        Err(_) => (
-            manager.inventory().unwrap_or_else(
-                |error| json!({ "enabled": true, "scripts": [], "error": error.to_string() }),
-            ),
-            "Codex 未运行或暂不可连接，已显示本地脚本状态。",
-        ),
-    };
-    ok(
-        message,
-        SettingsPayload {
-            revision: SettingsStore::default().revision().unwrap_or_default(),
-            settings: SettingsStore::default().load().unwrap_or_default(),
-            settings_path: codex_plus_core::paths::default_settings_path()
-                .to_string_lossy()
-                .to_string(),
-            user_scripts,
-        },
-    )
-}
-
-#[tauri::command]
-pub async fn reload_user_scripts() -> CommandResult<SettingsPayload> {
-    let debug_port = StatusStore::default()
-        .load_latest()
-        .ok()
-        .flatten()
-        .and_then(|status| status.debug_port)
-        .unwrap_or_else(default_debug_port);
-    let manager = default_user_script_manager();
-    match codex_plus_core::user_scripts::reload_live_scripts(debug_port, &manager).await {
-        Ok(user_scripts) => {
-            let page_reload = user_scripts["reload_mode"] == "page";
-            let script_failed = user_scripts["scripts"]
-                .as_array()
-                .is_some_and(|scripts| scripts.iter().any(|script| script["status"] == "failed"));
-            let payload = SettingsPayload {
-                revision: SettingsStore::default().revision().unwrap_or_default(),
-                settings: SettingsStore::default().load().unwrap_or_default(),
-                settings_path: codex_plus_core::paths::default_settings_path()
-                    .to_string_lossy()
-                    .to_string(),
-                user_scripts,
-            };
-            if script_failed {
-                failed("部分脚本执行失败，请查看本地脚本状态。", payload)
-            } else {
-                ok(
-                    if page_reload {
-                        "已请求刷新 Codex 页面以安全重载旧脚本。"
-                    } else {
-                        "用户脚本已热重载。"
-                    },
-                    payload,
-                )
-            }
-        }
-        Err(error) => failed(
-            &format!("用户脚本热重载失败：{error}"),
-            fallback_settings_payload(),
-        ),
-    }
-}
-
-#[tauri::command]
-pub async fn install_market_script(id: String) -> CommandResult<ScriptMarketPayload> {
-    let trimmed = id.trim();
-    if trimmed.is_empty() {
-        return failed(
-            "脚本 id 不能为空。",
-            failed_script_market_payload("脚本 id 不能为空。"),
-        );
-    }
-    let manifest =
-        match script_market::fetch_market_manifest(script_market::DEFAULT_MARKET_INDEX_URL).await {
-            Ok(manifest) => manifest,
-            Err(error) => {
-                return failed(
-                    &format!("脚本市场加载失败：{error}"),
-                    failed_script_market_payload(&format!("脚本市场加载失败：{error}")),
-                );
-            }
-        };
-    let Some(script) = manifest.scripts.iter().find(|script| script.id == trimmed) else {
-        return failed(
-            "市场清单中未找到该脚本。",
-            script_market_payload_from_manifest(&manifest, "failed", "市场清单中未找到该脚本。"),
-        );
-    };
-    let manager = default_user_script_manager();
-    match script_market::install_market_script(&manager, script).await {
-        Ok(()) => ok(
-            "脚本已安装。",
-            script_market_payload_from_manifest(&manifest, "ok", "脚本已安装。"),
-        ),
-        Err(error) => failed(
-            &format!("安装脚本失败：{error}"),
-            script_market_payload_from_manifest(
-                &manifest,
-                "failed",
-                &format!("安装脚本失败：{error}"),
-            ),
-        ),
-    }
-}
-
-#[tauri::command]
-pub fn set_user_scripts_enabled(enabled: bool) -> CommandResult<SettingsPayload> {
-    let manager = default_user_script_manager();
-    match manager.set_global_enabled(enabled) {
-        Ok(_) => settings_payload(
-            if enabled {
-                "本地拓展整体已开启。"
-            } else {
-                "本地拓展整体已关闭。"
-            },
-            "本地拓展整体开关设置失败",
-        ),
-        Err(error) => failed(
-            &format!("本地拓展整体开关设置失败：{error}"),
-            fallback_settings_payload(),
-        ),
-    }
-}
-
-#[tauri::command]
-pub fn set_user_scripts_skip_next_start(skip: bool) -> CommandResult<SettingsPayload> {
-    let manager = default_user_script_manager();
-    match manager.set_skip_next_start(skip) {
-        Ok(_) => settings_payload(
-            if skip {
-                "下次启动将跳过本地拓展。"
-            } else {
-                "已取消下次启动跳过本地拓展。"
-            },
-            "设置下次启动安全模式失败",
-        ),
-        Err(error) => failed(
-            &format!("设置下次启动安全模式失败：{error}"),
-            fallback_settings_payload(),
-        ),
-    }
-}
-
-#[tauri::command]
-pub fn set_user_script_enabled(key: String, enabled: bool) -> CommandResult<SettingsPayload> {
-    let trimmed = key.trim();
-    if trimmed.is_empty() {
-        return failed("脚本 key 不能为空。", fallback_settings_payload());
-    }
-    let manager = default_user_script_manager();
-    match manager.set_script_enabled(trimmed, enabled) {
-        Ok(_) => settings_payload(
-            if enabled {
-                "脚本已启用。"
-            } else {
-                "脚本已禁用。"
-            },
-            "脚本启停失败",
-        ),
-        Err(error) => failed(
-            &format!("脚本启停失败：{error}"),
-            fallback_settings_payload(),
-        ),
-    }
-}
-
-#[tauri::command]
-pub fn delete_user_script(key: String) -> CommandResult<SettingsPayload> {
-    let trimmed = key.trim();
-    if trimmed.is_empty() {
-        return failed("脚本 key 不能为空。", fallback_settings_payload());
-    }
-    let manager = default_user_script_manager();
-    match manager.delete_user_script(trimmed) {
-        Ok(_) => settings_payload("脚本已删除。", "脚本删除失败"),
-        Err(error) => failed(
-            &format!("脚本删除失败：{error}"),
-            fallback_settings_payload(),
-        ),
     }
 }
 
@@ -3256,58 +3024,6 @@ pub fn load_relay_proxy(profile_id: String) -> CommandResult<Value> {
 }
 
 #[tauri::command]
-pub fn load_request_logs(limit: Option<usize>) -> CommandResult<Value> {
-    let limit = limit.unwrap_or(200).clamp(1, 1000);
-    match codex_plus_core::request_log::read_request_logs(limit) {
-        Ok(entries) => {
-            // 会话标题来自 Codex 本地会话库，只用于展示；查不到时前端退回短 id。
-            let thread_ids: Vec<String> = entries
-                .iter()
-                .filter_map(|entry| entry.thread_id.clone())
-                .collect();
-            let titles = if thread_ids.is_empty() {
-                std::collections::HashMap::new()
-            } else {
-                let home = codex_plus_core::codex_sqlite::default_codex_home_dir();
-                let db_paths = codex_plus_core::codex_sqlite::codex_session_db_paths_from_home(&home);
-                codex_plus_data::local_session_titles(&db_paths, &thread_ids)
-            };
-            let entries: Vec<Value> = entries
-                .iter()
-                .map(|entry| {
-                    let mut value = serde_json::to_value(entry).unwrap_or_else(|_| json!({}));
-                    if let Some(title) = entry
-                        .thread_id
-                        .as_ref()
-                        .and_then(|thread_id| titles.get(thread_id))
-                        && let Some(object) = value.as_object_mut()
-                    {
-                        object.insert("threadTitle".to_string(), json!(title));
-                    }
-                    value
-                })
-                .collect();
-            ok(
-                &format!("已读取 {} 条请求日志。", entries.len()),
-                json!({ "entries": entries }),
-            )
-        }
-        Err(error) => failed(
-            &format!("读取请求日志失败：{error}"),
-            json!({ "entries": [] }),
-        ),
-    }
-}
-
-#[tauri::command]
-pub fn clear_request_logs() -> CommandResult<Value> {
-    match codex_plus_core::request_log::clear_request_logs() {
-        Ok(()) => ok("请求日志已清空。", json!({})),
-        Err(error) => failed(&format!("清空请求日志失败：{error}"), json!({})),
-    }
-}
-
-#[tauri::command]
 pub fn set_relay_proxy(profile_id: String, proxy_url: String) -> CommandResult<Value> {
     match codex_plus_core::relay_proxy::set_proxy_for_profile(&profile_id, &proxy_url) {
         Ok(()) => ok(
@@ -3398,17 +3114,6 @@ pub fn check_env_conflicts() -> CommandResult<EnvConflictsPayload> {
         "检测到可能覆盖 Codex 供应商配置的 OPENAI 环境变量。"
     };
     ok(message, EnvConflictsPayload { conflicts })
-}
-
-#[tauri::command]
-pub fn check_relay_environment() -> CommandResult<RelayEnvironmentReport> {
-    let report = codex_plus_core::relay_environment::inspect_relay_environment();
-    let message = if report.all_passed() {
-        "中转站环境配置检测全部通过。"
-    } else {
-        "检测到可能影响中转站配置的环境问题。"
-    };
-    ok(message, report)
 }
 
 #[tauri::command]
@@ -4967,7 +4672,6 @@ fn relay_switch_payload(
         settings_path: codex_plus_core::paths::default_settings_path()
             .to_string_lossy()
             .to_string(),
-        user_scripts: user_script_inventory(),
     }
 }
 
@@ -5066,7 +4770,6 @@ fn settings_payload_value() -> Result<SettingsPayload, (anyhow::Error, SettingsP
             revision: settings.settings_revision.clone(),
             settings,
             settings_path,
-            user_scripts: user_script_inventory(),
         }),
         Err(error) => Err((
             error,
@@ -5074,7 +4777,6 @@ fn settings_payload_value() -> Result<SettingsPayload, (anyhow::Error, SettingsP
                 revision: String::new(),
                 settings: BackendSettings::default(),
                 settings_path,
-                user_scripts: user_script_inventory(),
             },
         )),
     }
@@ -5087,129 +4789,7 @@ fn fallback_settings_payload() -> SettingsPayload {
         settings_path: codex_plus_core::paths::default_settings_path()
             .to_string_lossy()
             .to_string(),
-        user_scripts: user_script_inventory(),
     }
-}
-
-fn user_script_inventory() -> Value {
-    default_user_script_manager()
-        .inventory()
-        .unwrap_or_else(|error| {
-            json!({
-                "enabled": true,
-                "scripts": [],
-                "error": error.to_string()
-            })
-        })
-}
-
-fn failed_script_market_payload(message: &str) -> ScriptMarketPayload {
-    ScriptMarketPayload {
-        market: json!({
-            "status": "failed",
-            "message": message,
-            "indexUrl": script_market::DEFAULT_MARKET_INDEX_URL,
-            "updatedAt": "",
-            "scripts": []
-        }),
-        user_scripts: user_script_inventory(),
-    }
-}
-
-fn script_market_payload_from_manifest(
-    manifest: &ScriptMarketManifest,
-    status: &str,
-    message: &str,
-) -> ScriptMarketPayload {
-    let user_scripts = user_script_inventory();
-    let installed = installed_market_versions(&user_scripts);
-    let scripts = manifest
-        .scripts
-        .iter()
-        .map(|script| market_script_payload(script, &installed))
-        .collect::<Vec<_>>();
-    ScriptMarketPayload {
-        market: json!({
-            "status": status,
-            "message": message,
-            "indexUrl": script_market::DEFAULT_MARKET_INDEX_URL,
-            "updatedAt": manifest.updated_at.clone().unwrap_or_default(),
-            "scripts": scripts
-        }),
-        user_scripts,
-    }
-}
-
-fn installed_market_versions(user_scripts: &Value) -> BTreeMap<String, String> {
-    user_scripts
-        .get("scripts")
-        .and_then(Value::as_array)
-        .map(|scripts| {
-            scripts
-                .iter()
-                .filter_map(|script| {
-                    let id = script.get("market_id").and_then(Value::as_str)?;
-                    if id.is_empty() {
-                        return None;
-                    }
-                    let version = script
-                        .get("version")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_string();
-                    Some((id.to_string(), version))
-                })
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-fn market_script_payload(script: &MarketScript, installed: &BTreeMap<String, String>) -> Value {
-    let installed_version = installed.get(&script.id).cloned().unwrap_or_default();
-    let is_installed = !installed_version.is_empty();
-    json!({
-        "id": script.id,
-        "name": script.name,
-        "description": script.description,
-        "version": script.version,
-        "author": script.author,
-        "tags": script.tags,
-        "homepage": script.homepage,
-        "script_url": script.script_url,
-        "installed": is_installed,
-        "installedVersion": installed_version,
-        "updateAvailable": is_installed && installed.get(&script.id).map(|version| version != &script.version).unwrap_or(false)
-    })
-}
-
-fn default_user_script_manager() -> UserScriptManager {
-    let config_dir = user_scripts_config_dir();
-    UserScriptManager::new(
-        builtin_user_scripts_dir(),
-        config_dir.join("user_scripts"),
-        config_dir.join("user_scripts.json"),
-    )
-}
-
-fn user_scripts_config_dir() -> PathBuf {
-    if cfg!(windows) {
-        if let Some(roaming) = std::env::var_os("APPDATA") {
-            return PathBuf::from(roaming).join("Codex++");
-        }
-    }
-    std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| directories::BaseDirs::new().map(|dirs| dirs.home_dir().join(".config")))
-        .unwrap_or_else(|| PathBuf::from(".config"))
-        .join("Codex++")
-}
-
-fn builtin_user_scripts_dir() -> PathBuf {
-    std::env::current_exe()
-        .ok()
-        .and_then(|path| path.parent().map(Path::to_path_buf))
-        .map(|path| path.join("user_scripts"))
-        .unwrap_or_else(|| PathBuf::from("user_scripts"))
 }
 
 fn load_overview_payload() -> (

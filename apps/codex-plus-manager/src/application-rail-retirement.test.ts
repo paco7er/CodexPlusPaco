@@ -19,7 +19,7 @@ test("application rail and retired pages cannot be navigated to", () => {
   for (const id of ["recommendations", "agentCache", "agentCollaboration", "about", "settings"]) {
     assert.ok(!routeText.includes(`"${id}"`), id);
   }
-  for (const id of ["overview", "relay", "relayEnvironment", "requestLog", "context", "skills", "sessions", "enhance", "userScripts", "pluginMarket", "maintenance"]) {
+  for (const id of ["overview", "relay", "context", "skills", "sessions", "enhance", "pluginMarket", "maintenance"]) {
     assert.ok(routeText.includes(`"${id}"`), id);
   }
   assert.match(app, /<div className="shell">/);

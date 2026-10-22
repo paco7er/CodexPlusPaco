@@ -43,7 +43,6 @@
     "/thread-usage-history",
     "/archived-thread",
     "/export-markdown",
-    "/user-scripts/list",
     // 显式开放：给拓展注入 overlay 等独立 Codex 页面，不暴露任意 CDP 方法。
     "/cdp/targets",
     "/cdp/evaluate",

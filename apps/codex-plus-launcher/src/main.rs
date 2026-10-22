@@ -6,7 +6,6 @@ use codex_plus_core::launcher::{
 use codex_plus_core::models::{DeleteResult, ExportResult, SessionRef};
 use codex_plus_core::routes::{BridgeContext, BridgeDataService, BridgeRuntimeService};
 use codex_plus_core::status::LaunchStatus;
-use codex_plus_core::user_scripts::UserScriptManager;
 use serde_json::{Value, json};
 use std::future::Future;
 use std::path::{Path, PathBuf};
@@ -519,10 +518,7 @@ impl Default for LauncherHooks {
             attach_only: false,
             core: Arc::new(DefaultLaunchHooks::default()),
             data: Arc::new(LauncherDataService::default()),
-            runtime: Arc::new(LauncherRuntimeService::new(
-                9229,
-                default_user_script_manager(),
-            )),
+            runtime: Arc::new(LauncherRuntimeService::new(9229)),
             bridge_context: Arc::new(Mutex::new(None)),
             browser_monitor: Arc::new(Mutex::new(None)),
             index_repair_due: Arc::new(AtomicBool::new(false)),
@@ -1604,77 +1600,22 @@ impl LauncherDataService {
 
 struct LauncherRuntimeService {
     debug_port: Mutex<u16>,
-    websocket_url: Mutex<Option<String>>,
-    user_scripts: UserScriptManager,
 }
 
 impl LauncherRuntimeService {
-    fn new(debug_port: u16, user_scripts: UserScriptManager) -> Self {
+    fn new(debug_port: u16) -> Self {
         Self {
             debug_port: Mutex::new(debug_port),
-            websocket_url: Mutex::new(None),
-            user_scripts,
         }
     }
 
     fn set_debug_port(&self, debug_port: u16) {
         *self.debug_port.lock().unwrap() = debug_port;
     }
-
-    fn set_websocket_url(&self, websocket_url: &str) {
-        *self.websocket_url.lock().unwrap() = Some(websocket_url.to_string());
-    }
 }
 
 #[async_trait::async_trait]
 impl BridgeRuntimeService for LauncherRuntimeService {
-    async fn user_script_inventory(&self) -> anyhow::Result<Value> {
-        self.user_scripts.inventory()
-    }
-
-    async fn user_script_inventory_with_runtime_status(
-        &self,
-        payload: Value,
-    ) -> anyhow::Result<Value> {
-        self.user_scripts
-            .inventory_with_runtime_status(payload.get("runtime_status"))
-    }
-
-    async fn set_user_scripts_enabled(&self, enabled: bool) -> anyhow::Result<Value> {
-        self.user_scripts.set_global_enabled(enabled)?;
-        self.user_scripts.inventory()
-    }
-
-    async fn set_user_script_enabled(&self, key: String, enabled: bool) -> anyhow::Result<Value> {
-        self.user_scripts.set_script_enabled(&key, enabled)?;
-        self.user_scripts.inventory()
-    }
-
-    async fn delete_user_script(&self, key: String) -> anyhow::Result<Value> {
-        self.user_scripts.delete_user_script(&key)?;
-        self.user_scripts.inventory()
-    }
-
-    async fn load_user_scripts(&self) -> anyhow::Result<Value> {
-        let websocket_url = self
-            .websocket_url
-            .lock()
-            .unwrap()
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("Codex 页面尚未连接"))?;
-        codex_plus_core::user_scripts::load_scripts_at(&websocket_url, &self.user_scripts).await
-    }
-
-    async fn reload_user_scripts(&self) -> anyhow::Result<Value> {
-        let websocket_url = self
-            .websocket_url
-            .lock()
-            .unwrap()
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("Codex 页面尚未连接"))?;
-        codex_plus_core::user_scripts::reload_scripts_at(&websocket_url, &self.user_scripts).await
-    }
-
     async fn cdp_targets(&self) -> anyhow::Result<Value> {
         let debug_port = *self.debug_port.lock().unwrap();
         codex_plus_core::cdp::list_extension_cdp_targets(debug_port).await
@@ -1683,22 +1624,6 @@ impl BridgeRuntimeService for LauncherRuntimeService {
     async fn cdp_evaluate(&self, payload: Value) -> anyhow::Result<Value> {
         let debug_port = *self.debug_port.lock().unwrap();
         codex_plus_core::routes::evaluate_extension_cdp(debug_port, &payload).await
-    }
-
-    async fn script_market_list(&self) -> anyhow::Result<Value> {
-        codex_plus_core::script_market::list_market_scripts(&self.user_scripts).await
-    }
-
-    async fn script_market_install(&self, payload: Value) -> anyhow::Result<Value> {
-        let id = payload
-            .get("id")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .unwrap_or_default();
-        if id.is_empty() {
-            anyhow::bail!("脚本 id 不能为空");
-        }
-        codex_plus_core::script_market::install_market_script_by_id(&self.user_scripts, id).await
     }
 
     async fn open_devtools(&self) -> anyhow::Result<Value> {
@@ -1783,7 +1708,7 @@ async fn try_inject_with_context(
     debug_port: u16,
     helper_port: u16,
     ctx: BridgeContext,
-    runtime: Arc<LauncherRuntimeService>,
+    _runtime: Arc<LauncherRuntimeService>,
 ) -> anyhow::Result<()> {
     let targets = codex_plus_core::cdp::list_targets(debug_port).await?;
     let target = codex_plus_core::cdp::pick_injectable_codex_page_target(&targets)?;
@@ -1791,15 +1716,11 @@ async fn try_inject_with_context(
         .web_socket_debugger_url
         .as_deref()
         .ok_or_else(|| anyhow::anyhow!("selected CDP target has no websocket URL"))?;
-    runtime.set_websocket_url(websocket_url);
     let settings = codex_plus_core::settings::SettingsStore::default()
         .load()
         .unwrap_or_default();
     let script = codex_plus_core::assets::injection_script_with_settings(helper_port, &settings);
-    let new_document_scripts = vec![
-        script,
-        codex_plus_core::user_scripts::BOOTSTRAP_SCRIPT.to_string(),
-    ];
+    let new_document_scripts = vec![script];
     codex_plus_core::bridge::install_bridge(
         websocket_url,
         codex_plus_core::bridge::BRIDGE_BINDING_NAME,
@@ -1848,31 +1769,6 @@ fn open_url(url: &str) -> anyhow::Result<()> {
         let _ = url;
         anyhow::bail!("opening DevTools URL is not supported on this platform")
     }
-}
-
-fn default_user_script_manager() -> UserScriptManager {
-    let config_dir = default_user_scripts_config_dir();
-    UserScriptManager::new(
-        builtin_user_scripts_dir(),
-        config_dir.join("user_scripts"),
-        config_dir.join("user_scripts.json"),
-    )
-}
-
-fn default_user_scripts_config_dir() -> PathBuf {
-    if cfg!(windows) {
-        if let Some(roaming) = std::env::var_os("APPDATA") {
-            return PathBuf::from(roaming).join("Codex++");
-        }
-        if let Some(home) = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf()) {
-            return home.join("AppData").join("Roaming").join("Codex++");
-        }
-    }
-    std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| directories::BaseDirs::new().map(|dirs| dirs.home_dir().join(".config")))
-        .unwrap_or_else(|| PathBuf::from(".config"))
-        .join("Codex++")
 }
 
 #[cfg(test)]
@@ -2533,7 +2429,7 @@ mod tests {
             received.lock().unwrap().push(payload);
             Ok(())
         });
-        let runtime = LauncherRuntimeService::new(9229, default_user_script_manager());
+        let runtime = LauncherRuntimeService::new(9229);
         runtime.open_manager(json!({})).await.unwrap();
         runtime.open_transient_manager(json!({})).await.unwrap();
         assert_eq!(*navigations.lock().unwrap(), vec![json!({}), json!({})]);
@@ -2749,14 +2645,7 @@ mod tests {
                 db_path: test_dir.join("state.sqlite"),
                 backup_dir: test_dir.join("backups"),
             }),
-            runtime: Arc::new(LauncherRuntimeService::new(
-                9229,
-                UserScriptManager::new(
-                    test_dir.join("builtin"),
-                    test_dir.join("user"),
-                    test_dir.join("settings.json"),
-                ),
-            )),
+            runtime: Arc::new(LauncherRuntimeService::new(9229)),
             bridge_context: Arc::new(Mutex::new(None)),
             browser_monitor: Arc::new(Mutex::new(None)),
             index_repair_due: Arc::new(AtomicBool::new(false)),
@@ -2770,12 +2659,4 @@ mod tests {
 
         assert_ne!(result["message"], "Unknown bridge path");
     }
-}
-
-fn builtin_user_scripts_dir() -> PathBuf {
-    std::env::current_exe()
-        .ok()
-        .and_then(|path| path.parent().map(Path::to_path_buf))
-        .map(|path| path.join("user_scripts"))
-        .unwrap_or_else(|| PathBuf::from("user_scripts"))
 }

@@ -834,7 +834,7 @@ fn injection_script_keeps_one_backend_heartbeat_per_generation() {
         .find("function scheduleBackendHeartbeat()")
         .expect("backend heartbeat scheduler should exist");
     let end = script[start..]
-        .find("\n  function userScriptStatusLabel")
+        .find("\n  function installCodexPlusPageLayout(")
         .map(|offset| start + offset)
         .expect("backend heartbeat scheduler should have an end marker");
     let scheduler = &script[start..end];

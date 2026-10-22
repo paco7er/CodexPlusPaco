@@ -146,7 +146,7 @@ const overview = ok({
   logs_path: "演示模式",
 });
 
-const settingsResult = () => ok({ revision: "web-preview", settings: demoSettings, settings_path: "演示模式", user_scripts: { enabled: true, skip_next_start: false, scripts: [] } });
+const settingsResult = () => ok({ revision: "web-preview", settings: demoSettings, settings_path: "演示模式" });
 
 export async function invoke<T = unknown>(command: string, args: Record<string, unknown> = {}): Promise<T> {
   switch (command) {
@@ -154,8 +154,7 @@ export async function invoke<T = unknown>(command: string, args: Record<string, 
     case "load_overview": return overview as T;
     case "load_settings":
     case "save_settings":
-    case "refresh_user_script_inventory":
-      if (command === "save_settings" && args.settings) return ok({ revision: "web-preview", settings: args.settings, settings_path: "演示模式", user_scripts: { enabled: true, skip_next_start: false, scripts: [] } }) as T;
+      if (command === "save_settings" && args.settings) return ok({ revision: "web-preview", settings: args.settings, settings_path: "演示模式" }) as T;
       return settingsResult() as T;
     case "relay_status": return ok({ authenticated: true, authSource: "演示", accountLabel: "Web preview", configPath: "演示模式", configured: true, requiresOpenaiAuth: false, hasBearerToken: true, backupPath: null }) as T;
     case "read_relay_files": return ok({ configPath: "演示模式", authPath: "演示模式", configContents: "[model_providers.custom]", authContents: "{}" }) as T;
@@ -168,12 +167,9 @@ export async function invoke<T = unknown>(command: string, args: Record<string, 
       compatibility: { state: "not_started", detail: "" },
       connection: { state: "unavailable", browsers: [], failedChecks: 0 },
     } as T;
-    case "refresh_script_market": return ok({ market: { status: "ok", message: "演示模式", scripts: [] }, user_scripts: { enabled: true, skip_next_start: false, scripts: [] } }) as T;
     case "load_ccs_providers": return ok({ providers: [] }) as T;
     case "load_local_sessions":
     case "list_local_sessions": return ok({ dbPath: "演示模式", dbPaths: [], sessions: [], offset: 0, limit: 50, hasMore: false, totalCount: 0 }) as T;
-    case "load_relay_environment":
-    case "check_relay_environment": return ok({ clashVergeTun: { enabled: false, configPath: null }, proxyEnvironment: { variables: [] }, codexEnvFile: { exists: false, path: "" } }) as T;
     default: return ok() as T;
   }
 }

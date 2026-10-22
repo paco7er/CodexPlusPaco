@@ -107,8 +107,7 @@ pub fn run() {
             commands::launch_codex_plus,
             commands::restart_codex_plus,
             commands::load_settings,
-            commands::load_request_logs,
-            commands::clear_request_logs,
+
             commands::dictation_local_model_status,
             commands::download_dictation_local_model,
             commands::load_global_dictation_hotkey,
@@ -136,17 +135,11 @@ pub fn run() {
             commands::sync_providers_now,
             commands::load_provider_sync_recovery,
             commands::recover_provider_sync,
-            commands::refresh_script_market,
+
             commands::refresh_plugin_market,
             commands::install_plugin_market_item,
             commands::plugin_market_install_status,
-            commands::refresh_user_script_inventory,
-            commands::reload_user_scripts,
-            commands::install_market_script,
-            commands::set_user_scripts_enabled,
-            commands::set_user_scripts_skip_next_start,
-            commands::set_user_script_enabled,
-            commands::delete_user_script,
+
             commands::refresh_skill_catalog,
             commands::list_installed_skills,
             commands::import_ccs_skills,
@@ -178,7 +171,7 @@ pub fn run() {
             commands::relay_status,
             commands::read_relay_files,
             commands::check_env_conflicts,
-            commands::check_relay_environment,
+
             commands::remove_env_conflicts,
             commands::save_relay_file,
             commands::write_diagnostic_event,

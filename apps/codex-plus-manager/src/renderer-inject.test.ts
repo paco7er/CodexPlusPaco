@@ -325,44 +325,7 @@ describe("renderer injection header compatibility", () => {
     assert.match(renderer, /const installed = document\.getElementById\(codexPlusSidebarNavId\)\s*\|\| document\.getElementById\(codexPlusRailNavId\);/);
   });
 
-  it("opens 拓展 as a standalone page instead of a Codex++ tab", async () => {
-    const renderer = await readFile(new URL("../../../assets/inject/renderer-inject.js", import.meta.url), "utf8");
-
-    assert.match(renderer, /codexPlusExtensionsTab\s*=\s*"extensions"/);
-    assert.match(renderer, /function openCodexPlusExtensions\(\)/);
-    assert.match(renderer, /openCodexPlusModal\(\{ page: true, tab: codexPlusExtensionsTab \}\)/);
-    // 旧名 userScripts 仍要能映射过去，避免存量调用点失效。
-    assert.match(renderer, /if \(tab === "extensions" \|\| tab === "userScripts"\) return codexPlusExtensionsTab;/);
-    // 弹窗必须尊重传入的初始 tab，而不是硬编码 home。
-    assert.match(renderer, /selectCodexPlusTab\(initialTab\);/);
-    // 激活态要靠 data-codex-plus-active-tab 区分页面，必须排在 selectCodexPlusTab 之后。
-    assert.match(renderer, /selectCodexPlusTab\(initialTab\);\s*\/\/[^]*?if \(pageMode\) setCodexPlusSidebarNavActive\(true, codexPlusActiveEntry\(\) \|\| "home"\);/);
-  });
-
-  it("gives the page mode a two-column layout with its own left panel", async () => {
-    const renderer = await readFile(new URL("../../../assets/inject/renderer-inject.js", import.meta.url), "utf8");
-
-    assert.match(renderer, /function installCodexPlusPageLayout\(overlay, tab\)/);
-    assert.match(renderer, /function refreshCodexPlusPageNav\(tab\)/);
-    assert.match(renderer, /function renderCodexPlusPageNavItems\(tab\)/);
-    // 三栏容器是 createElement + className 赋值的，不是 markup 字面量。
-    assert.match(renderer, /layout\.className = "codex-plus-page-layout"/);
-    assert.match(renderer, /main\.className = "codex-plus-page-main"/);
-    // 只搬动已有的 modal-body，不重建里面的 data-codex-* 挂载点，
-    // 否则 renderUserScripts / 各 toggle 的 querySelector 会找不到目标。
-    assert.match(renderer, /main\.appendChild\(body\)/);
-    // 左面板只有「拓展」需要（它是脚本列表）；主页与推荐内容是单栏内容页，
-    // 页面切换交给图标栏那三个入口，所以导航容器要在条件分支里创建。
-    assert.match(renderer, /if \(tab === codexPlusExtensionsTab\) \{[\s\S]{0,400}nav\.className = "codex-plus-page-nav"/);
-    assert.match(renderer, /data-codex-plus-page-nav-body="true"/);
-    // 布局必须在 selectCodexPlusTab 之前建好，否则刷新左面板时找不到容器。
-    assert.match(renderer, /installCodexPlusPageLayout\(overlay, initialTab\);[\s\S]{0,900}selectCodexPlusTab\(initialTab\);/);
-    // 左面板分组导航走同一个选中函数。
-    assert.match(renderer, /const pageNav = target\?\.closest\("\[data-codex-plus-page-nav\]"\)/);
-    assert.match(renderer, /selectCodexPlusTab\(pageNav\.getAttribute\("data-codex-plus-page-nav"\)\)/);
-  });
-
-  it("保留增强和拓展页面与缩放适配，移除推荐入口", async () => {
+  it("保留增强页面与缩放适配，移除推荐和拓展入口", async () => {
     const renderer = await readFile(new URL("../../../assets/inject/renderer-inject.js", import.meta.url), "utf8");
 
     // 已发布的常量保留兼容，但不再创建推荐入口。
@@ -376,7 +339,6 @@ describe("renderer injection header compatibility", () => {
     assert.doesNotMatch(renderer, /codex-plus-tab-button/);
 
     // 「拓展」入口用 VSCode 的扩展字形，和列表默认图标同一份 path。
-    assert.match(renderer, /extensions: `<svg viewBox="0 0 16 16" fill="currentColor"><path d="\$\{codexPlusDefaultExtensionIconPath\}"/);
 
     // 界面缩放：读 Codex 的 zoom 变量，套到 overlay 上，尺寸用 calc 反向抵消。
     assert.match(renderer, /const codexPlusWindowZoomVar = "--codex-window-zoom"/);
@@ -406,59 +368,6 @@ describe("renderer injection header compatibility", () => {
     assert.ok(themeBody.length > 0, "找不到 applyCodexPlusTheme 的函数体");
     assert.ok(!themeBody.includes('text: "#f3f4f6"'), "主题函数里残留硬编码的正文色");
     assert.ok(!themeBody.includes('textSecondary: "#a1a1aa"'), "主题函数里残留硬编码的次要色");
-  });
-
-  it("lists user scripts in the 拓展 page left panel", async () => {
-    const renderer = await readFile(new URL("../../../assets/inject/renderer-inject.js", import.meta.url), "utf8");
-
-    assert.match(renderer, /function renderCodexPlusExtensionsNav\(\)/);
-    // 点左面板的行 = 选中（右侧看详情），不直接切开关——
-    // 开关移到详情页，避免点行就误触发启停。
-    assert.match(renderer, /data-codex-extensions-select="installed:\$\{escapeHtml\(entry\.key\)\}"/);
-    assert.match(renderer, /function renderCodexPlusExtensionsOverview\(\)/);
-    assert.match(renderer, /data-codex-extensions-browse="market"/);
-    assert.match(renderer, /codex-plus-page-nav-item-state/);
-    // 每个条目都有图标，没有自带图标的用默认字形。
-    assert.match(renderer, /codex-plus-page-nav-item-icon/);
-    assert.match(renderer, /codexPlusDefaultExtensionIconPath/);
-    // 脚本启停/状态变化要同步到左面板与详情。
-    assert.match(renderer, /if \(codexPlusActiveEntry\(\) === "extensions"\) refreshCodexPlusExtensionsView\(\);/);
-  });
-
-  it("shows a native-style detail pane for the selected 拓展", async () => {
-    const renderer = await readFile(new URL("../../../assets/inject/renderer-inject.js", import.meta.url), "utf8");
-
-    assert.match(renderer, /function renderCodexPlusExtensionsDetail\(\)/);
-    assert.match(renderer, /data-codex-plus-extensions-detail="true"/);
-    assert.match(renderer, /function codexPlusExtensionsSelectionDetail\(\)/);
-    // 详情里给已安装的开关（复用 user-script-key 委托）与卸载入口。
-    assert.match(renderer, /data-codex-extensions-uninstall=/);
-    assert.match(renderer, /function uninstallUserScript\(key\)/);
-    assert.match(renderer, /postJson\("\/user-scripts\/delete", \{ key \}\)/);
-    // 内置脚本在只读目录里，只给用户脚本提供卸载。
-    assert.match(renderer, /if \(local\?\.source === "user"\)/);
-    // 市场条目在详情里也能直接安装。
-    assert.match(renderer, /codex-plus-extensions-detail-primary/);
-    // 选中项要高亮。
-    assert.match(renderer, /data-active="\$\{String\(selected\)\}"/);
-  });
-
-  it("gives 拓展 searchable 已安装 / 市场 views while retaining the search input", async () => {
-    const renderer = await readFile(new URL("../../../assets/inject/renderer-inject.js", import.meta.url), "utf8");
-
-    assert.match(renderer, /data-codex-extensions-search="true"/);
-    assert.match(renderer, /function refreshCodexPlusExtensionsView\(\)/);
-    assert.match(renderer, /function codexPlusExtensionsEntries\(\)/);
-    assert.match(renderer, /function loadScriptMarket\(/);
-    // 市场走 bridge 的两个新路由。
-    assert.match(renderer, /postJson\("\/script-market\/list", \{\}\)/);
-    assert.match(renderer, /postJson\("\/script-market\/install", \{ id \}\)/);
-    assert.match(renderer, /data-codex-extensions-browse="installed"/);
-    const start = renderer.indexOf("  function refreshCodexPlusExtensionsView()");
-    const end = renderer.indexOf("  function codexPlusExtensionsSelectionDetail()", start);
-    assert.ok(start >= 0 && end > start);
-    // 搜索框留在主区标题栏，刷新只更新侧栏和结果，不重建输入框或抢焦点。
-    assert.doesNotMatch(renderer.slice(start, end), /data-codex-extensions-search|setSelectionRange/);
   });
 
   it("does not install Codex++ UI in embedded browser documents", async () => {
@@ -555,7 +464,7 @@ return (loaded) => { codexPlusBackendSettingsLoaded = loaded; renderCodexPlusMen
   it("refreshes backend switches from enabled to disabled without losing their accessible state", async () => {
     const renderer = await readFile(new URL("../../../assets/inject/renderer-inject.js", import.meta.url), "utf8");
     const start = renderer.indexOf("  function refreshCodexPlusBackendToggles()");
-    const end = renderer.indexOf("\n  let codexPlusUserScripts =", start);
+    const end = renderer.indexOf("\n  let codexPlusBackendStatus =", start);
     assert.ok(start >= 0 && end > start);
     const settings = { enhancementsEnabled: true };
     const attributes: Record<string, string> = {};
@@ -669,7 +578,7 @@ return (loaded) => { codexPlusBackendSettingsLoaded = loaded; renderCodexPlusMen
     const changeStart = renderer.indexOf('      const typingEffectSelect = target?.closest("[data-codex-plus-typing-effect]");');
     const changeEnd = renderer.indexOf("      const widthInput", changeStart);
     const optionStart = renderer.indexOf('      const typingEffectOption = target?.closest("[data-codex-plus-typing-effect-option]");');
-    const optionEnd = renderer.indexOf("      // 左面板", optionStart);
+    const optionEnd = renderer.indexOf('      if (target?.closest("[data-codex-open-devtools]"))', optionStart);
     assert.ok(changeStart >= 0 && changeEnd > changeStart && optionStart >= 0 && optionEnd > optionStart);
     const saves: Array<{ key: string; value: string }> = [];
     const events: Array<{ type: string; bubbles: boolean }> = [];
@@ -807,151 +716,6 @@ const codexContainer = { nodeType: 1, relevant: true };
 function mutation(addedNodes: unknown[] = [], removedNodes: unknown[] = []) {
   return { target: codexContainer, addedNodes, removedNodes };
 }
-
-describe("native-style extension and sponsor discovery", () => {
-  const rendererPath = new URL("../../../assets/inject/renderer-inject.js", import.meta.url);
-  function segment(source: string, from: string, to: string) {
-    const start = source.indexOf(from);
-    const end = source.indexOf(to, start);
-    assert.ok(start >= 0 && end > start, `missing renderer segment: ${from}`);
-    return source.slice(start, end);
-  }
-  function escapeSource(renderer: string) {
-    return segment(renderer, "  function escapeHtml(value)", "  function confirmDelete(");
-  }
-  function extensionRuntime(renderer: string) {
-    const icon = renderer.match(/^  const codexPlusDefaultExtensionIconPath = .+;$/m)?.[0];
-    assert.ok(icon);
-    return new Function(`${icon}\n${escapeSource(renderer)}
-let codexPlusUserScripts = { scripts: [] }, codexPlusUserScriptsLoaded = false;
-let codexPlusScriptMarket = { scripts: [], loaded: false, loading: false, message: "" };
-let codexPlusExtensionsQuery = "", codexPlusExtensionsFilter = "market", codexPlusExtensionsSelected = null;
-${segment(renderer, "  function userScriptStatusLabel(", "  async function uninstallUserScript(")}
-${segment(renderer, "  function codexPlusExtensionsEntries()", "  function selectCodexPlusTab(")}
-return {
-  nav: renderCodexPlusExtensionsNav, overview: renderCodexPlusExtensionsOverview, detail: renderCodexPlusExtensionsDetail,
-  configure(scripts, market, options = {}) {
-    codexPlusUserScripts = { scripts }; codexPlusUserScriptsLoaded = options.userLoaded ?? true;
-    codexPlusScriptMarket = { scripts: market, loaded: options.marketLoaded ?? true, loading: options.loading ?? false, message: options.message || "" };
-    codexPlusExtensionsQuery = options.query || ""; codexPlusExtensionsFilter = options.filter || "market";
-    codexPlusExtensionsSelected = options.selected || null;
-  }
-};`)() as {
-      nav: () => string; overview: () => string; detail: () => string;
-      configure: (scripts: Record<string, unknown>[], market: Record<string, unknown>[], options?: Record<string, unknown>) => void;
-    };
-  }
-
-  it("filters installed and market entries, escapes their data and keeps actions outside selection buttons", async () => {
-    const runtime = extensionRuntime(await readFile(rendererPath, "utf8"));
-    const scripts = [
-      { key: 'user"&', name: "Owned <user>", source: "user", market_id: "owned", enabled: true, status: "loaded" },
-      { key: "builtin.js", name: "Builtin", source: "builtin", enabled: false, status: "disabled" },
-    ];
-    const market = [
-      { id: "owned", name: "Owned market", description: "Owned-document", tags: ["owned-tag"], version: "2" },
-      { id: 'available"&', name: "Available <script>", description: 'Catalog <docs> & "more"', tags: ["catalog"], author: "Author", version: "1", icon: "https://example.test/logo.png?x=1&y=2" },
-    ];
-    runtime.configure(scripts, market);
-    const nav = runtime.nav();
-    assert.ok(nav.includes('data-codex-extensions-select="installed:user&quot;&amp;"'));
-    assert.ok(nav.includes('data-codex-extensions-select="installed:builtin.js"'));
-    assert.ok(nav.includes('data-codex-extensions-browse="market"'));
-    assert.doesNotMatch(nav, /data-codex-market-install|data-codex-extensions-search/);
-    const overview = runtime.overview();
-    assert.ok(overview.includes('data-codex-extensions-select="market:available&quot;&amp;"'));
-    assert.ok(overview.includes('data-codex-market-install="available&quot;&amp;"'));
-    assert.ok(overview.includes("Available &lt;script&gt;"));
-    assert.ok(overview.includes("Catalog &lt;docs&gt; &amp; &quot;more&quot;"));
-    assert.ok(overview.includes('src="https://example.test/logo.png?x=1&amp;y=2"'));
-    assert.doesNotMatch(overview, /<script>|data-codex-market-install="owned"|Owned market|Builtin/);
-    const cards = Array.from(overview.matchAll(/<article class="codex-plus-extension-card">([\s\S]*?)<\/article>/g));
-    assert.equal(cards.length, 1);
-    assert.match(cards[0][1], /<\/button>\s*<div class="codex-plus-extension-card-actions"><button/);
-    assert.equal(Array.from(cards[0][1].matchAll(/<button\b/g)).length, 2);
-    assert.doesNotMatch(cards[0][1], /<button\b(?:(?!<\/button>)[\s\S])*<button\b/);
-    assert.equal(runtime.detail(), overview, "opening extensions initially displays the browse results");
-
-    runtime.configure(scripts, market, { filter: "installed" });
-    const installed = runtime.overview();
-    assert.ok(installed.includes("Owned market"), "installed market scripts use their catalog display name");
-    assert.ok(installed.includes('data-codex-user-script-key="user&quot;&amp;"'));
-    assert.ok(installed.includes('role="switch" aria-checked="true"'));
-    assert.ok(installed.includes('role="switch" aria-checked="false"'));
-    assert.doesNotMatch(installed, /data-codex-market-install|Available/);
-    runtime.configure(scripts, market, { filter: "installed", query: "OWNED-DOCUMENT" });
-    assert.ok(runtime.overview().includes('data-codex-user-script-key="user&quot;&amp;"'));
-    assert.doesNotMatch(runtime.overview(), /Builtin/);
-    runtime.configure(scripts, market, { filter: "installed", query: "Owned <user>" });
-    assert.ok(runtime.overview().includes('data-codex-user-script-key="user&quot;&amp;"'), "the original local name remains searchable");
-    runtime.configure(scripts, market, { filter: "installed", query: 'user"&' });
-    assert.ok(runtime.overview().includes('data-codex-user-script-key="user&quot;&amp;"'), "the local script key remains searchable");
-    runtime.configure(scripts, market, { query: "CATALOG" });
-    assert.ok(runtime.overview().includes("Available &lt;script&gt;"));
-    runtime.configure(scripts, market, { selected: { kind: "installed", key: 'user"&' } });
-    assert.ok(runtime.detail().includes('data-codex-extensions-uninstall="user&quot;&amp;"'));
-    runtime.configure(scripts, market, { selected: { kind: "installed", key: "builtin.js" } });
-    assert.doesNotMatch(runtime.detail(), /data-codex-extensions-uninstall/);
-  });
-
-  it("retains loading, empty and escaped search/error states in extension browse results", async () => {
-    const runtime = extensionRuntime(await readFile(rendererPath, "utf8"));
-    runtime.configure([], [], { marketLoaded: false, loading: true, userLoaded: false });
-    assert.match(runtime.overview(), /role="status">正在读取拓展…/);
-    assert.match(runtime.nav(), /正在读取用户拓展…/);
-    runtime.configure([], [], { filter: "installed", userLoaded: false });
-    assert.match(runtime.overview(), /正在读取用户拓展…/);
-    runtime.configure([], [], { filter: "installed" });
-    assert.match(runtime.overview(), /未发现已安装的拓展。/);
-    runtime.configure([], []);
-    assert.match(runtime.overview(), /市场里没有可安装的拓展。/);
-    runtime.configure([], [], { message: "<backend> & unavailable" });
-    assert.ok(runtime.overview().includes("&lt;backend&gt; &amp; unavailable"));
-    runtime.configure([], [], { query: '<missing> "query"' });
-    assert.ok(runtime.overview().includes("没有匹配「&lt;missing&gt; &quot;query&quot;」的拓展。"));
-    runtime.configure([], [], { selected: { kind: "market", key: "removed" } });
-    assert.match(runtime.detail(), /市场里没有可安装的拓展。/);
-  });
-
-  it("updates extension results without replacing or refocusing the search input", async () => {
-    const renderer = await readFile(rendererPath, "utf8");
-    const input = { value: "query", selectionStart: 2, selectionEnd: 2 };
-    const nav = { innerHTML: "old nav" }, detail = { innerHTML: "old detail" };
-    const nodes: Record<string, object> = {
-      "[data-codex-plus-page-nav-body]": nav,
-      "[data-codex-plus-extensions-detail]": detail,
-      "[data-codex-extensions-search]": input,
-    };
-    const requested: string[] = [];
-    const renderedSelections: unknown[] = [];
-    const runtime = new Function("document", "codexPlusActiveEntry", "renderNav", "renderDetail", "codexPlusExtensionsSelectionDetail",
-      `let codexPlusExtensionsSelected = { kind: "market", key: "removed" };
-function renderCodexPlusExtensionsNav() { return renderNav(codexPlusExtensionsSelected); }
-function renderCodexPlusExtensionsDetail() { return renderDetail(codexPlusExtensionsSelected); }
-${segment(renderer, "  function refreshCodexPlusExtensionsView()", "  function codexPlusExtensionsSelectionDetail()")}
-return { refresh: refreshCodexPlusExtensionsView, selection: () => codexPlusExtensionsSelected };`,
-    )(
-      { querySelector(selector: string) { requested.push(selector); return nodes[selector]; } }, () => "extensions",
-      (selection: unknown) => { renderedSelections.push(selection); return "new nav"; },
-      (selection: unknown) => { renderedSelections.push(selection); return "new results"; },
-      () => null,
-    ) as { refresh: () => void; selection: () => unknown };
-    runtime.refresh();
-    assert.equal(runtime.selection(), null, "removed selections return to the browse list");
-    assert.deepEqual(renderedSelections, [null, null], "the sidebar and results render from the same normalized selection");
-    assert.equal(nav.innerHTML, "new nav");
-    assert.equal(detail.innerHTML, "new results");
-    assert.equal(nodes["[data-codex-extensions-search]"], input);
-    assert.deepEqual(input, { value: "query", selectionStart: 2, selectionEnd: 2 });
-    assert.deepEqual(requested, ["[data-codex-plus-page-nav-body]", "[data-codex-plus-extensions-detail]"]);
-  });
-
-  it("does not render recommendations or fetch advertisement lists", async () => {
-    const renderer = await readFile(rendererPath, "utf8");
-    assert.doesNotMatch(renderer, /fetchCodexPlusAds|directFetchCodexPlusAds|renderCodexPlusAds/);
-    assert.doesNotMatch(renderer, /ads\.codexpp\.cc|Ad-List|data-codex-plus-panel="sponsor"/);
-  });
-});
 
 describe("renderer injection scan scheduling", () => {
   const rendererPath = new URL("../../../assets/inject/renderer-inject.js", import.meta.url);
@@ -1800,26 +1564,6 @@ describe("renderer inject 分片与产物一致", () => {
     assert.ok(end > start, "defaultCodexPlusSettings 必须排在 installStyle 之后");
   });
 
-  it("拓展列表渲染不裸取 entry.item", async () => {
-    // 已安装条目的形状是 { kind, key, name, meta, enabled, script }，没有 item；
-    // 只有市场条目才有。裸取 entry.item.description 会在列表里只要有任意一个
-    // 已安装脚本时就抛 TypeError，整块渲染中断，左面板停在「正在读取…」占位。
-    // 已安装条目要走 codexPlusExtensionMarketItem(entry) 按 market_id 回查。
-    const { source } = await assembleFromFragments();
-    const openingTag = source.indexOf("  function renderCodexPlusExtensionsNav()");
-    const closingTag = source.indexOf("  function refreshCodexPlusExtensionsView()", openingTag);
-    assert.ok(openingTag >= 0, "找不到 renderCodexPlusExtensionsNav");
-    assert.ok(closingTag > openingTag, "找不到函数结束位置");
-    const body = source.slice(openingTag, closingTag);
-    assert.ok(
-      !/entry\.item\s*\./.test(body),
-      "itemHtml 里出现了不带可选链的 entry.item.*，会在已安装条目上抛 TypeError",
-    );
-    assert.ok(
-      body.includes("codexPlusExtensionMarketItem(entry)"),
-      "itemHtml 应该用 codexPlusExtensionMarketItem(entry) 解析图标与简介来源",
-    );
-  });
 });
 
 /**

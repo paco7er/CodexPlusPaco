@@ -158,7 +158,7 @@ Codex++ 是面向 OpenAI Codex / ChatGPT 桌面应用的统一管理应用，通
     </td>
     <td valign="top">
       <h3>🧩 拓展你的工作区</h3>
-      浏览与管理社区用户脚本，按需添加模型选择、用量统计等能力；另有 MCP、Skill 与 Codex 插件管理。
+      管理 MCP、Skill 与 Codex 插件，按供应商配置工作区需要的工具。
     </td>
   </tr>
   <tr>
@@ -180,7 +180,7 @@ Codex++ 是面向 OpenAI Codex / ChatGPT 桌面应用的统一管理应用，通
   <tr>
     <td colspan="2" valign="top">
       <h3>🛡️ 请求避震</h3>
-      在代理层吸收上游过载：模型容量/过载错误（server_overloaded、server_is_overloaded、at capacity 等）自动退避重试，不再把 Codex 的会话频繁打断。可在「代理设置 → 请求避震」切换两种模式：<strong>流式避震</strong>保留实时输出，首字后把过载错误交给 Codex 原生重试；<strong>整段缓冲避震</strong>先收完整段响应再转发，任何时点的过载都由代理重试（代价是失去流式）。请求日志会实时显示进行中的请求、首字耗时与完整耗时。
+      在代理层吸收上游过载：模型容量/过载错误（server_overloaded、server_is_overloaded、at capacity 等）自动退避重试，不再把 Codex 的会话频繁打断。保留已有的请求避震配置，输入框状态条显示运行中的请求状态。
     </td>
   </tr>
   <tr>
@@ -191,7 +191,7 @@ Codex++ 是面向 OpenAI Codex / ChatGPT 桌面应用的统一管理应用，通
   </tr>
 </table>
 
-此定制分支已移除 Codex 多开、微信连接和皮肤管理；已有实例配置、会话和主题文件保持不变。
+此定制分支已移除 Codex 多开、微信连接、皮肤管理、代理设置、请求日志和拓展管理。请求历史不再写盘，用户脚本不再自动加载；已有配置、会话、历史日志和用户文件保持不变。供应商配置使用的协议转换、独立代理及运行中请求状态仍然保留。
 
 ## 看看它能做什么
 
@@ -233,16 +233,6 @@ Codex++ 是面向 OpenAI Codex / ChatGPT 桌面应用的统一管理应用，通
 <p align="center">
   <img src="docs/images/usage-statusline.png" alt="输入框下方的用量状态栏：51 tok/s、缓存命中 99.9%、上下文占用 19%" width="100%">
 </p>
-
-### 让拓展适应你的工作流
-
-从拓展市场发现社区脚本，为工作区添加用量面板、模型选择器、提示词优化等工具。你可以按需安装、启停，也可以编写自己的脚本。
-
-<p align="center">
-  <img src="docs/images/readme-preview/extension-market.png" alt="Codex++ 拓展市场：浏览社区脚本和工作流工具" width="100%">
-</p>
-
-这里的「拓展」是 Codex++ 用户脚本，与 Codex 官方插件市场是两个入口。社区脚本的服务配置和使用要求以各自说明为准。开发说明见 [用户脚本热重载](docs/user-script-reload.md)。
 
 ### 认真工作，也可以有点趣味
 

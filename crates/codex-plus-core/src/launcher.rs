@@ -1735,7 +1735,7 @@ async fn handle_helper_connection(
             "helper.backend_status_ok",
         )
     } else if path == "/proxy-status" && matches!(method, "GET" | "POST" | "OPTIONS") {
-        let mut active = crate::request_log::running_requests();
+        let mut active = crate::request_metrics::running_requests();
         active.sort_by_key(|entry| std::cmp::Reverse(entry.started_at_ms));
         let requests = active
             .into_iter()
@@ -1992,17 +1992,14 @@ async fn handle_models_proxy_connection(
     stream.shutdown().await?;
     Ok(())
 }
-/// 单次协议代理请求的日志草稿。
-///
-/// 用 Drop 兜底写盘：这个函数分支很多（错误、非 2xx、原生压缩、流式、协议转换），
-/// 每个分支都手写一遍落盘容易漏；字段在分支里按需补齐，析构时统一写一条记录。
-struct ProxyRequestLog {
+/// 运行中请求的状态快照，退出任何响应分支时通过 Drop 从内存移除。
+struct ProxyRequestStatus {
     started: std::time::Instant,
-    entry: crate::request_log::RequestLogEntry,
+    entry: crate::request_metrics::InFlightRequest,
     written: bool,
 }
 
-impl ProxyRequestLog {
+impl ProxyRequestStatus {
     fn begin(
         method: &str,
         path: &str,
@@ -2017,8 +2014,8 @@ impl ProxyRequestLog {
             .to_string();
         let log = Self {
             started: std::time::Instant::now(),
-            entry: crate::request_log::RequestLogEntry {
-                id: crate::request_log::RequestLogEntry::new_id(started_at_ms),
+            entry: crate::request_metrics::InFlightRequest {
+                id: crate::request_metrics::InFlightRequest::new_id(started_at_ms),
                 timestamp_ms: started_at_ms,
                 started_at_ms,
                 duration_ms: 0,
@@ -2048,7 +2045,7 @@ impl ProxyRequestLog {
             },
             written: false,
         };
-        crate::request_log::start_request(&log.entry);
+        crate::request_metrics::start_request(&log.entry);
         log
     }
 
@@ -2070,7 +2067,7 @@ impl ProxyRequestLog {
                     Some(first_output_at_ms.saturating_sub(self.entry.started_at_ms));
             }
         }
-        crate::request_log::update_running(&self.entry);
+        crate::request_metrics::update_running(&self.entry);
     }
 
     fn record_error(&mut self, status: &str, error: String) {
@@ -2085,14 +2082,14 @@ impl ProxyRequestLog {
 
     fn record_usage_json(&mut self, body: &[u8]) {
         if self.entry.usage.is_none() {
-            self.entry.usage = crate::request_log::usage_from_body_bytes(body);
+            self.entry.usage = crate::request_metrics::usage_from_body_bytes(body);
         }
     }
 
     fn record_stream(
         &mut self,
         failure: Option<&str>,
-        usage: Option<crate::request_log::RequestUsage>,
+        usage: Option<crate::request_metrics::RequestUsage>,
         failure_detail: Option<String>,
     ) {
         match failure {
@@ -2119,7 +2116,7 @@ impl ProxyRequestLog {
             self.entry.first_token_ms =
                 Some(first_output_at_ms.saturating_sub(self.entry.started_at_ms));
             self.entry.phase = Some("generating".to_string());
-            crate::request_log::update_running(&self.entry);
+            crate::request_metrics::update_running(&self.entry);
         }
     }
 
@@ -2134,12 +2131,12 @@ impl ProxyRequestLog {
         if !self.entry.stream && self.entry.first_token_ms.is_none() {
             self.entry.first_token_ms = Some(self.entry.duration_ms);
         }
-        crate::request_log::finish_request(&self.entry);
+        crate::request_metrics::finish_request(&self.entry);
         let _ = self.started; // 时长由 entry.finish 统一计算，保留 Instant 供调试断点。
     }
 }
 
-impl Drop for ProxyRequestLog {
+impl Drop for ProxyRequestStatus {
     fn drop(&mut self) {
         self.write();
     }
@@ -2169,9 +2166,9 @@ async fn handle_protocol_proxy_connection(
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string);
-    let mut request_log =
-        ProxyRequestLog::begin(method, path, request_json.as_ref(), request_thread_id);
-    let live_request_id = request_log.entry.id.clone();
+    let mut request_status =
+        ProxyRequestStatus::begin(method, path, request_json.as_ref(), request_thread_id);
+    let live_request_id = request_status.entry.id.clone();
     let mut upstream =
         match crate::protocol_proxy::open_responses_proxy_request_for_path_with_session_headers_and_live_id(
             request_body,
@@ -2218,17 +2215,17 @@ async fn handle_protocol_proxy_connection(
                     &error_chain,
                     remote_addr_text,
                 );
-                request_log.record_error(status, error_chain.clone());
+                request_status.record_error(status, error_chain.clone());
                 stream.shutdown().await?;
                 return Ok(());
             }
         };
-    request_log.record_upstream(&upstream);
+    request_status.record_upstream(&upstream);
     if !upstream.is_success() {
         let status = upstream.status();
         let upstream_content_type = upstream.content_type.clone();
         let upstream_body = upstream.read_body().await?;
-        request_log.record_usage_json(&upstream_body);
+        request_status.record_usage_json(&upstream_body);
         let error = crate::protocol_proxy::responses_error_from_upstream(
             upstream.status_code,
             &upstream_content_type,
@@ -2248,8 +2245,8 @@ async fn handle_protocol_proxy_connection(
     }
     if upstream.native_compaction_passthrough {
         let body = upstream.read_body().await?;
-        request_log.record_usage_json(&body);
-        request_log.record_stream(None, None, None);
+        request_status.record_usage_json(&body);
+        request_status.record_stream(None, None, None);
         let content_type = if upstream.content_type.is_empty() {
             if upstream.is_stream {
                 "text/event-stream; charset=utf-8"
@@ -2282,7 +2279,7 @@ async fn handle_protocol_proxy_connection(
             let detail = transformer.take_failure_detail();
             let failure = transformer.finish();
             let detail_for_log = detail.clone();
-            request_log.record_stream(failure.as_deref(), usage, detail);
+            request_status.record_stream(failure.as_deref(), usage, detail);
             if let Some(reason) = failure {
                 let _ = crate::diagnostic_log::append_diagnostic_log(
                     "helper.protocol_proxy_stream_failed",
@@ -2355,7 +2352,7 @@ async fn handle_protocol_proxy_connection(
                 }
             }
             let outcome = converter.finish_with_outcome();
-            request_log.record_stream(
+            request_status.record_stream(
                 (!outcome.succeeded).then_some("compaction stream failed"),
                 None,
                 None,
@@ -2394,7 +2391,7 @@ async fn handle_protocol_proxy_connection(
             if let Some(outcome) = upstream.exec_outcome.as_mut() {
                 outcome.finish(exec_succeeded);
             }
-            request_log.record_stream((!exec_succeeded).then_some("exec stream failed"), None, None);
+            request_status.record_stream((!exec_succeeded).then_some("exec stream failed"), None, None);
             stream.shutdown().await?;
             return Ok(());
         }
@@ -2408,10 +2405,10 @@ async fn handle_protocol_proxy_connection(
         )
         .await?;
         if let Some(first_output_at_ms) = first_output_at_ms {
-            request_log.mark_first_token_at(first_output_at_ms);
+            request_status.mark_first_token_at(first_output_at_ms);
         }
         let failure_detail_for_log = failure_detail.clone();
-        request_log.record_stream(failure.as_deref(), usage, failure_detail);
+        request_status.record_stream(failure.as_deref(), usage, failure_detail);
         if let Some(reason) = failure {
             let _ = crate::diagnostic_log::append_diagnostic_log(
                 "helper.protocol_proxy_stream_failed",
@@ -2445,11 +2442,11 @@ async fn handle_protocol_proxy_connection(
             if let Some(outcome) = upstream.exec_outcome.as_mut() {
                 outcome.finish(false);
             }
-            request_log.record_error("502 Bad Gateway", error.to_string());
+            request_status.record_error("502 Bad Gateway", error.to_string());
             return Err(error);
         }
     };
-    request_log.record_usage_json(&upstream_body);
+    request_status.record_usage_json(&upstream_body);
     if upstream.compaction {
         // v2 远程压缩非流式路径：同样重组为单个 compaction 输出项。
         if upstream.wire_api == crate::protocol_proxy::UpstreamWireApi::AnthropicMessages {
@@ -2474,7 +2471,7 @@ async fn handle_protocol_proxy_connection(
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or(""),
         )?;
-        request_log.record_stream(None, None, None);
+        request_status.record_stream(None, None, None);
         write_http_response(stream, "200 OK", "text/event-stream; charset=utf-8", &body).await?;
         log_helper_response(
             "helper.protocol_proxy_compaction_ok",
@@ -2498,7 +2495,7 @@ async fn handle_protocol_proxy_connection(
         } else {
             upstream_body
         };
-        request_log.record_usage_json(&body);
+        request_status.record_usage_json(&body);
         write_http_response(
             stream,
             "200 OK",
@@ -2543,7 +2540,7 @@ async fn handle_protocol_proxy_connection(
         crate::anthropic_bridge::attach_thinking_to_responses(&mut response_json, &thinking_blocks);
     }
     let body = serde_json::to_vec(&response_json)?;
-    request_log.record_usage_json(&body);
+    request_status.record_usage_json(&body);
     write_http_response(stream, "200 OK", "application/json; charset=utf-8", &body).await?;
     log_helper_response(
         "helper.protocol_proxy_ok",
@@ -2997,7 +2994,7 @@ async fn forward_protocol_proxy_stream(
     request: Option<&Value>,
 ) -> anyhow::Result<(
     Option<String>,
-    Option<crate::request_log::RequestUsage>,
+    Option<crate::request_metrics::RequestUsage>,
     Option<String>,
     Option<u64>,
 )> {
@@ -5695,15 +5692,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn helper_writes_request_log_with_usage_and_trace() {
-        let _log_guard = crate::request_log::request_log_test_guard();
+    async fn helper_forwards_usage_without_writing_request_history() {
+        let _log_guard = crate::request_metrics::request_metrics_test_guard();
         let _settings_guard = crate::paths::settings_path_test_guard();
         let temp = tempfile::tempdir().unwrap();
         let settings_path = temp.path().join("settings.json");
         let log_path = temp.path().join("request-log.jsonl");
+        std::fs::write(&log_path, b"existing history").unwrap();
         let previous_settings_path =
             crate::paths::set_settings_path_for_tests(Some(settings_path.clone()));
-        crate::request_log::set_request_log_path_for_tests(Some(log_path.clone()));
 
         let upstream_listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
             .await
@@ -5782,41 +5779,20 @@ mod tests {
         helper.await.unwrap();
         upstream.await.unwrap();
 
-        let entries = crate::request_log::read_request_logs_at(&log_path, 10).unwrap();
-        assert_eq!(entries.len(), 1, "每次代理请求写一条请求日志");
-        let entry = &entries[0];
-        assert_eq!(entry.status_code, 200);
-        assert!(entry.success);
-        assert_eq!(entry.model, "gpt-6.1-sol");
-        assert_eq!(entry.upstream_model, "gpt-6.1-sol");
-        assert_eq!(entry.relay_name, "请求日志供应商");
-        assert_eq!(entry.attempts, 1);
-        assert_eq!(entry.auto_retries, 0);
-        assert_eq!(
-            entry.first_token_ms,
-            Some(entry.duration_ms),
-            "非流式请求用总耗时作为首字耗时"
-        );
-        let usage = entry.usage.as_ref().expect("usage");
-        assert_eq!(usage.input_tokens, 120);
-        assert_eq!(usage.output_tokens, 30);
-        assert_eq!(usage.cached_tokens, 100);
-        assert_eq!(entry.cache_hit_ratio, Some(100.0 / 120.0));
-
-        crate::request_log::set_request_log_path_for_tests(None);
+        assert_eq!(std::fs::read(&log_path).unwrap(), b"existing history");
         crate::paths::set_settings_path_for_tests(previous_settings_path);
     }
 
     #[tokio::test]
     async fn helper_buffered_mode_retries_overload_and_hides_error() {
-        let _log_guard = crate::request_log::request_log_test_guard();
+        let _log_guard = crate::request_metrics::request_metrics_test_guard();
         let _settings_guard = crate::paths::settings_path_test_guard();
         let temp = tempfile::tempdir().unwrap();
         let settings_path = temp.path().join("settings.json");
         let log_path = temp.path().join("request-log.jsonl");
+        std::fs::write(&log_path, b"existing history").unwrap();
         let previous_settings_path =
             crate::paths::set_settings_path_for_tests(Some(settings_path.clone()));
-        crate::request_log::set_request_log_path_for_tests(Some(log_path.clone()));
 
         let upstream_listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
             .await
@@ -5913,27 +5889,20 @@ mod tests {
         let text = String::from_utf8_lossy(&response);
         assert!(text.contains("resp_ok"), "{text}");
         assert!(!text.contains("server_is_overloaded"), "buffered 模式不应把过载错误交给客户端");
-        let entries = crate::request_log::read_request_logs_at(&log_path, 10).unwrap();
-        assert_eq!(entries.len(), 1);
-        assert!(entries[0].success);
-        assert_eq!(entries[0].attempts, 2);
-        assert_eq!(entries[0].auto_retries, 1);
-        assert_eq!(entries[0].usage.as_ref().map(|u| u.input_tokens), Some(12));
-
-        crate::request_log::set_request_log_path_for_tests(None);
+        assert_eq!(std::fs::read(&log_path).unwrap(), b"existing history");
         crate::paths::set_settings_path_for_tests(previous_settings_path);
     }
 
     #[tokio::test]
-    async fn helper_records_upstream_stream_error_detail_in_request_log() {
-        let _log_guard = crate::request_log::request_log_test_guard();
+    async fn helper_forwards_stream_failure_without_writing_request_history() {
+        let _log_guard = crate::request_metrics::request_metrics_test_guard();
         let _settings_guard = crate::paths::settings_path_test_guard();
         let temp = tempfile::tempdir().unwrap();
         let settings_path = temp.path().join("settings.json");
         let log_path = temp.path().join("request-log.jsonl");
+        std::fs::write(&log_path, b"existing history").unwrap();
         let previous_settings_path =
             crate::paths::set_settings_path_for_tests(Some(settings_path.clone()));
-        crate::request_log::set_request_log_path_for_tests(Some(log_path.clone()));
 
         let upstream_listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
             .await
@@ -6014,21 +5983,7 @@ mod tests {
         helper.await.unwrap();
         upstream.await.unwrap();
 
-        let entries = crate::request_log::read_request_logs_at(&log_path, 10).unwrap();
-        assert_eq!(entries.len(), 1);
-        let entry = &entries[0];
-        assert_eq!(entry.status_code, 200);
-        assert!(!entry.success, "流内 error 事件应记为失败");
-        assert_eq!(
-            entry.stream_outcome.as_deref(),
-            Some("原生 Responses 上游返回 error 事件"),
-            "客户端可见的原因保持泛化，不泄露 payload"
-        );
-        let error = entry.error.as_deref().unwrap_or("");
-        assert!(error.contains("server_error"), "{error}");
-        assert!(error.contains("upstream exploded"), "{error}");
-
-        crate::request_log::set_request_log_path_for_tests(None);
+        assert_eq!(std::fs::read(&log_path).unwrap(), b"existing history");
         crate::paths::set_settings_path_for_tests(previous_settings_path);
     }
 

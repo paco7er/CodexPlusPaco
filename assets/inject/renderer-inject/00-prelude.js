@@ -21,6 +21,21 @@
   }
   retireLegacySkinRuntime();
 
+  // 热重注入时释放旧用户脚本已登记的资源，不改动脚本文件和配置。
+  function retireLegacyUserScripts() {
+    const runtime = window.__codexPlusUserScripts;
+    for (const script of Object.values(runtime?.scripts || {}).reverse()) {
+      const cleanups = Array.isArray(script.cleanups) ? script.cleanups.splice(0).reverse() : [];
+      for (const cleanup of cleanups) {
+        try { Promise.resolve(cleanup()).catch(() => {}); } catch {}
+      }
+    }
+    if (runtime) runtime.scripts = {};
+    delete window.__codexPlusUserScripts;
+    delete window.__codexPlusUserScriptsBootstrap;
+  }
+  retireLegacyUserScripts();
+
   function codexPlusStatsigClients() {
     const root = window.__STATSIG__ || globalThis.__STATSIG__;
     if (!root || typeof root !== "object") return [];

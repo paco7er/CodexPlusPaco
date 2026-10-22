@@ -1,23 +1,10 @@
-//! 请求日志：按请求记录代理转发的状态、模型、重试、token 用量与缓存命中。
-//!
-//! 存储为 `<state dir>/request-log.jsonl`，只保留最近的若干条（追加时按大小裁剪），
-//! 管理器「请求日志」页通过 Tauri 命令读取。日志里不保存提示词/回复正文，
-//! 只保存模型名、token 计数和错误摘要，避免把会话内容写进明文日志。
+//! 协议转换与输入框状态条共用的运行中请求指标，仅保存在内存中。
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::VecDeque;
-use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-pub const REQUEST_LOG_FILE: &str = "request-log.jsonl";
-/// 日志文件达到该大小后裁剪到约一半，避免无限增长。
-const MAX_LOG_BYTES: u64 = 2 * 1024 * 1024;
-const KEEP_LOG_BYTES: u64 = 1024 * 1024;
-
 static ENTRY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
-static LOG_PATH_OVERRIDE: std::sync::OnceLock<std::sync::Mutex<Option<PathBuf>>> =
-    std::sync::OnceLock::new();
 
 /// 一次上游请求的 token 用量。
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -38,7 +25,7 @@ impl RequestUsage {
     }
 }
 
-/// 一次被代理自动重试的上游尝试摘要（请求日志详情用）。
+/// 一次被代理自动重试的上游尝试摘要。
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RequestAttemptDetail {
@@ -55,7 +42,7 @@ pub struct RequestAttemptDetail {
     pub delay_ms: Option<u64>,
 }
 
-/// 代理内部的重试/路由痕迹，随 `UpstreamProxyResponse` 交给启动器写日志。
+/// 代理内部的重试/路由痕迹，随 `UpstreamProxyResponse` 交给启动器更新状态。
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RequestTrace {
@@ -80,10 +67,10 @@ pub struct RequestTrace {
     pub attempt_details: Vec<RequestAttemptDetail>,
 }
 
-/// 管理器「请求日志」页展示的一条记录。
+/// 输入框状态条使用的运行中请求快照。
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RequestLogEntry {
+pub struct InFlightRequest {
     pub id: String,
     pub timestamp_ms: u64,
     pub started_at_ms: u64,
@@ -105,10 +92,10 @@ pub struct RequestLogEntry {
     pub auto_retries: u32,
     #[serde(default)]
     pub retry_reasons: Vec<String>,
-    /// 每次自动重试前的失败尝试摘要（旧日志没有该字段）。
+    /// 每次自动重试前的失败尝试摘要。
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub attempt_details: Vec<RequestAttemptDetail>,
-    /// `running` 表示请求还在进行中；旧日志没有该字段时按已完成处理。
+    /// `running` 表示请求还在进行中。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub state: Option<String>,
     /// 首字耗时（从请求开始到第一段上游输出），毫秒。
@@ -130,7 +117,7 @@ pub struct RequestLogEntry {
     pub cache_hit_ratio: Option<f64>,
 }
 
-impl RequestLogEntry {
+impl InFlightRequest {
     pub fn new_id(started_at_ms: u64) -> String {
         let sequence = ENTRY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         format!("{started_at_ms}-{sequence}")
@@ -145,27 +132,15 @@ impl RequestLogEntry {
     }
 }
 
-fn log_path_override() -> Option<PathBuf> {
-    LOG_PATH_OVERRIDE
-        .get_or_init(|| std::sync::Mutex::new(None))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .clone()
-}
-
-pub fn request_log_path() -> PathBuf {
-    log_path_override().unwrap_or_else(|| crate::paths::default_app_state_dir().join(REQUEST_LOG_FILE))
-}
-
-fn live_requests() -> &'static std::sync::Mutex<std::collections::BTreeMap<String, RequestLogEntry>> {
+fn live_requests() -> &'static std::sync::Mutex<std::collections::BTreeMap<String, InFlightRequest>> {
     static LIVE: std::sync::OnceLock<
-        std::sync::Mutex<std::collections::BTreeMap<String, RequestLogEntry>>,
+        std::sync::Mutex<std::collections::BTreeMap<String, InFlightRequest>>,
     > = std::sync::OnceLock::new();
     LIVE.get_or_init(|| std::sync::Mutex::new(std::collections::BTreeMap::new()))
 }
 
-/// 请求开始：先登记到内存里的进行中列表，管理器即可显示「运行中」并计时。
-pub fn start_request(entry: &RequestLogEntry) {
+/// 请求开始时登记到内存，供输入框状态条展示。
+pub fn start_request(entry: &InFlightRequest) {
     let mut live = live_requests()
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -180,16 +155,15 @@ pub fn start_request(entry: &RequestLogEntry) {
     }
 }
 
-/// 请求结束：从进行中列表移除并写入 JSONL。
-pub fn finish_request(entry: &RequestLogEntry) {
+/// 请求结束即移除快照，不保存历史记录。
+pub fn finish_request(entry: &InFlightRequest) {
     if let Ok(mut live) = live_requests().lock() {
         live.remove(&entry.id);
     }
-    let _ = append_request_log(entry);
 }
 
 /// 更新进行中请求的快照（例如上游地址/首字耗时在请求结束前就已知）。
-pub fn update_running(entry: &RequestLogEntry) {
+pub fn update_running(entry: &InFlightRequest) {
     if let Ok(mut live) = live_requests().lock()
         && live.contains_key(&entry.id)
     {
@@ -215,7 +189,7 @@ pub fn update_running_first_token(id: &str) {
         && let Some(entry) = live.get_mut(id)
     {
         if entry.first_token_ms.is_none() {
-            entry.first_token_ms = Some(crate::request_log::current_time_ms_since(entry.started_at_ms));
+            entry.first_token_ms = Some(crate::request_metrics::current_time_ms_since(entry.started_at_ms));
         }
         entry.phase = Some("generating".to_string());
     }
@@ -262,109 +236,19 @@ pub fn update_running_attempt_detail(id: &str, detail: RequestAttemptDetail) {
     }
 }
 
-pub fn running_requests() -> Vec<RequestLogEntry> {
+pub fn running_requests() -> Vec<InFlightRequest> {
     live_requests()
         .lock()
         .map(|live| live.values().cloned().collect())
         .unwrap_or_default()
 }
 
-/// 串行化会改全局日志路径/进行中列表的测试（Rust 测试默认并行）。
-pub fn request_log_test_guard() -> std::sync::MutexGuard<'static, ()> {
+/// 串行化使用运行中列表的测试（Rust 测试默认并行）。
+pub fn request_metrics_test_guard() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
     LOCK.get_or_init(|| std::sync::Mutex::new(()))
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
-}
-
-/// 测试用：覆盖请求日志路径（传 None 恢复默认）。
-pub fn set_request_log_path_for_tests(path: Option<PathBuf>) {
-    *LOG_PATH_OVERRIDE
-        .get_or_init(|| std::sync::Mutex::new(None))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner()) = path;
-}
-
-/// 追加一条请求日志；达到大小上限时保留最近的约一半。
-pub fn append_request_log(entry: &RequestLogEntry) -> std::io::Result<()> {
-    // 单元测试里默认路径指向真实用户状态目录，不让测试数据污染正式日志。
-    if cfg!(test) && log_path_override().is_none() {
-        return Ok(());
-    }
-    append_request_log_at(&request_log_path(), entry)
-}
-
-pub fn append_request_log_at(path: &Path, entry: &RequestLogEntry) -> std::io::Result<()> {
-    use std::io::Write;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let line = serde_json::to_string(entry)
-        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)?;
-    writeln!(file, "{line}")?;
-    drop(file);
-    if std::fs::metadata(path).map(|meta| meta.len() > MAX_LOG_BYTES).unwrap_or(false) {
-        trim_request_log_to_tail(path, KEEP_LOG_BYTES)?;
-    }
-    Ok(())
-}
-
-fn trim_request_log_to_tail(path: &Path, keep_bytes: u64) -> std::io::Result<()> {
-    let contents = std::fs::read(path)?;
-    let keep_from = contents.len().saturating_sub(keep_bytes as usize);
-    let start = contents[keep_from..]
-        .iter()
-        .position(|byte| *byte == b'\n')
-        .map(|offset| keep_from + offset + 1)
-        .unwrap_or(keep_from);
-    std::fs::write(path, &contents[start..])
-}
-
-/// 读取最近 `limit` 条请求日志（含正在进行的请求），按开始时间倒序返回。
-pub fn read_request_logs(limit: usize) -> std::io::Result<Vec<RequestLogEntry>> {
-    let mut entries = read_request_logs_at(&request_log_path(), limit)?;
-    entries.extend(running_requests());
-    entries.sort_by_key(|entry| std::cmp::Reverse(entry.started_at_ms));
-    entries.truncate(limit);
-    Ok(entries)
-}
-
-pub fn read_request_logs_at(path: &Path, limit: usize) -> std::io::Result<Vec<RequestLogEntry>> {
-    let contents = match std::fs::read_to_string(path) {
-        Ok(contents) => contents,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(error),
-    };
-    let mut entries = VecDeque::with_capacity(limit.min(1024));
-    for line in contents.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        if let Ok(entry) = serde_json::from_str::<RequestLogEntry>(line) {
-            entries.push_back(entry);
-            if entries.len() > limit {
-                entries.pop_front();
-            }
-        }
-    }
-    Ok(entries.into_iter().rev().collect())
-}
-
-pub fn clear_request_logs() -> std::io::Result<()> {
-    clear_request_logs_at(&request_log_path())
-}
-
-pub fn clear_request_logs_at(path: &Path) -> std::io::Result<()> {
-    match std::fs::remove_file(path) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error),
-    }
 }
 
 /// 从非流式 Responses JSON（或 `response.completed` 的 data）里提取 usage。
@@ -425,8 +309,8 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    fn entry(id: &str) -> RequestLogEntry {
-        RequestLogEntry {
+    fn entry(id: &str) -> InFlightRequest {
+        InFlightRequest {
             id: id.to_string(),
             timestamp_ms: 0,
             started_at_ms: 0,
@@ -478,47 +362,21 @@ mod tests {
             json!("server_is_overloaded")
         );
         assert_eq!(raw["attemptDetails"][0]["delayMs"], json!(250));
-        let parsed: RequestLogEntry = serde_json::from_value(raw).unwrap();
+        let parsed: InFlightRequest = serde_json::from_value(raw).unwrap();
         assert_eq!(parsed.attempt_details, retried.attempt_details);
 
         // 旧日志没有 attemptDetails：读入后为空，且空明细不写盘。
         let mut legacy = serde_json::to_value(entry("legacy")).unwrap();
         legacy.as_object_mut().unwrap().remove("attemptDetails");
-        let parsed: RequestLogEntry = serde_json::from_value(legacy).unwrap();
+        let parsed: InFlightRequest = serde_json::from_value(legacy).unwrap();
         assert!(parsed.attempt_details.is_empty());
         let empty = serde_json::to_value(entry("empty")).unwrap();
         assert!(empty.get("attemptDetails").is_none());
     }
 
     #[test]
-    fn appends_reads_and_clears_entries() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join(REQUEST_LOG_FILE);
-        let mut first = entry("first");
-        first.finish(120);
-        assert_eq!(first.duration_ms, 120);
-        assert_eq!(first.cache_hit_ratio, Some(0.9));
-        append_request_log_at(&path, &first).unwrap();
-        append_request_log_at(&path, &entry("second")).unwrap();
-
-        let logs = read_request_logs_at(&path, 10).unwrap();
-        assert_eq!(logs.len(), 2);
-        assert_eq!(logs[0].id, "second", "按时间倒序");
-        assert_eq!(logs[1].id, "first");
-        assert_eq!(logs[1].duration_ms, 120);
-        assert_eq!(read_request_logs_at(&path, 1).unwrap().len(), 1);
-
-        clear_request_logs_at(&path).unwrap();
-        assert!(read_request_logs_at(&path, 10).unwrap().is_empty());
-        assert!(clear_request_logs_at(&path).is_ok());
-    }
-
-    #[test]
     fn live_requests_are_visible_until_finished() {
-        let _guard = request_log_test_guard();
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join(REQUEST_LOG_FILE);
-        set_request_log_path_for_tests(Some(path.clone()));
+        let _guard = request_metrics_test_guard();
 
         let mut running = entry("live-1");
         running.state = Some("running".to_string());
@@ -526,7 +384,7 @@ mod tests {
         start_request(&running);
         update_running_output_estimate("live-1", 42);
         update_running_retry("live-1", 2, 1, vec!["upstream_buffered_overload".to_string()]);
-        let visible = read_request_logs(10).unwrap();
+        let visible = running_requests();
         assert!(visible.iter().any(|item| item.id == "live-1" && item.state.as_deref() == Some("running")));
         assert!(visible.iter().any(|item| item.estimated_output_tokens == Some(42)));
         assert!(visible.iter().any(|item| item.attempts == 2 && item.auto_retries == 1));
@@ -536,28 +394,6 @@ mod tests {
         finished.finish(200);
         finish_request(&finished);
         assert!(running_requests().is_empty());
-        let entries = read_request_logs(10).unwrap();
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].state.as_deref(), Some("success"));
-
-        set_request_log_path_for_tests(None);
-    }
-
-    #[test]
-    fn oversized_log_keeps_only_recent_lines() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join(REQUEST_LOG_FILE);
-        let padding = "x".repeat(64 * 1024);
-        for index in 0..40 {
-            let mut item = entry(&format!("entry-{index}"));
-            item.relay_name = format!("{padding}-{index}");
-            append_request_log_at(&path, &item).unwrap();
-        }
-        assert!(std::fs::metadata(&path).unwrap().len() <= MAX_LOG_BYTES);
-        let logs = read_request_logs_at(&path, 1000).unwrap();
-        assert!(!logs.is_empty());
-        assert_eq!(logs[0].id, "entry-39");
-        assert!(logs.len() < 40, "裁剪后不应保留全部记录: {}", logs.len());
     }
 
     #[test]

@@ -362,13 +362,13 @@ async fn schedule_proxy_auto_retry(
     if let Some(id) = live_request_id {
         let mut next_reasons = retry_reasons.clone();
         next_reasons.push(reason.to_string());
-        crate::request_log::update_running_retry(
+        crate::request_metrics::update_running_retry(
             id,
             request_attempt as u32,
             next_reasons.len() as u32,
             next_reasons,
         );
-        crate::request_log::update_running_phase(id, "retrying");
+        crate::request_metrics::update_running_phase(id, "retrying");
     }
     tokio::time::sleep(delay).await;
     retry_reasons.push(reason.to_string());
@@ -381,8 +381,8 @@ fn attempt_detail(
     code: Option<&str>,
     message: Option<&str>,
     delay: Duration,
-) -> crate::request_log::RequestAttemptDetail {
-    crate::request_log::RequestAttemptDetail {
+) -> crate::request_metrics::RequestAttemptDetail {
+    crate::request_metrics::RequestAttemptDetail {
         attempt: request_attempt as u32,
         code: code.map(str::to_string),
         message: message.map(|message| message.chars().take(200).collect()),
@@ -462,7 +462,7 @@ async fn read_responses_stream_for_buffering(
             if !is_pre_output_stream_event(&event) && first_output_at_ms.is_none() {
                 first_output_at_ms = Some(current_epoch_ms());
                 if let Some(id) = live_request_id {
-                    crate::request_log::update_running_first_token(id);
+                    crate::request_metrics::update_running_first_token(id);
                 }
             }
             if event.ends_with(".delta")
@@ -473,7 +473,7 @@ async fn read_responses_stream_for_buffering(
                 if let Some(id) = live_request_id
                     && last_estimate_update.elapsed() >= Duration::from_millis(300)
                 {
-                    crate::request_log::update_running_output_estimate(
+                    crate::request_metrics::update_running_output_estimate(
                         id,
                         estimated_tokens_from_chars(estimated_delta_chars),
                     );
@@ -483,7 +483,7 @@ async fn read_responses_stream_for_buffering(
             match event.as_str() {
                 "response.completed" => {
                     if let Some(id) = live_request_id {
-                        crate::request_log::update_running_output_estimate(
+                        crate::request_metrics::update_running_output_estimate(
                             id,
                             estimated_tokens_from_chars(estimated_delta_chars),
                         );
@@ -885,7 +885,7 @@ async fn peek_responses_stream_start(
                 // 请求日志的「首字耗时」仍按上游第一段输出计；预读可能还要
                 // 继续按住一段时间，这里先让进行中的日志行看到首字。
                 if let Some(id) = live_request_id {
-                    crate::request_log::update_running_first_token(id);
+                    crate::request_metrics::update_running_first_token(id);
                 }
             }
             match stream_start_event_kind(&block, &event, policy.mode) {
@@ -1800,7 +1800,7 @@ pub struct UpstreamProxyResponse {
     /// 再消费 `response` 的剩余部分；为空表示没有预读。
     pub stream_prefix: Vec<u8>,
     /// 代理内部的重试与路由痕迹；启动器用它写请求日志。
-    pub request_trace: Option<crate::request_log::RequestTrace>,
+    pub request_trace: Option<crate::request_metrics::RequestTrace>,
     /// 上游请求是否使用了 Responses exec 兼容包装。
     pub exec_adapted: bool,
     pub(crate) exec_outcome: Option<crate::responses_exec_transport::ExecOutcome>,
@@ -3331,7 +3331,7 @@ async fn open_responses_proxy_request_with_settings_and_user_agent(
     let buffered_mode = settings.protocol_proxy_auto_retry_mode == "buffered";
     let commit_policy = StreamStartCommitPolicy::from_settings(&settings);
     let mut retry_reasons: Vec<String> = Vec::new();
-    let mut request_trace = crate::request_log::RequestTrace {
+    let mut request_trace = crate::request_metrics::RequestTrace {
         model: source_model.clone(),
         ..Default::default()
     };
@@ -3347,13 +3347,13 @@ async fn open_responses_proxy_request_with_settings_and_user_agent(
         let relay = relays[attempt].clone();
         request_attempt += 1;
         if let Some(id) = live_request_id {
-            crate::request_log::update_running_retry(
+            crate::request_metrics::update_running_retry(
                 id,
                 request_attempt as u32,
                 retry_reasons.len() as u32,
                 retry_reasons.clone(),
             );
-            crate::request_log::update_running_phase(id, "requesting");
+            crate::request_metrics::update_running_phase(id, "requesting");
         }
         let has_more_candidates = attempt + 1 < relay_count;
         validate_upstream(&relay)?;
@@ -3907,7 +3907,7 @@ async fn open_responses_proxy_request_with_settings_and_user_agent(
         }
 
         if let Some(id) = live_request_id {
-            crate::request_log::update_running_phase(id, "waiting");
+            crate::request_metrics::update_running_phase(id, "waiting");
         }
         let _ = crate::diagnostic_log::append_diagnostic_log(
             "protocol_proxy.upstream_response",
@@ -4008,7 +4008,7 @@ async fn open_responses_proxy_request_with_settings_and_user_agent(
                                 delay,
                             );
                             if let Some(id) = live_request_id {
-                                crate::request_log::update_running_attempt_detail(id, detail.clone());
+                                crate::request_metrics::update_running_attempt_detail(id, detail.clone());
                             }
                             request_trace.attempt_details.push(detail);
                             if !strict_aggregate_model {
@@ -4133,7 +4133,7 @@ async fn open_responses_proxy_request_with_settings_and_user_agent(
                                 delay,
                             );
                             if let Some(id) = live_request_id {
-                                crate::request_log::update_running_attempt_detail(id, detail.clone());
+                                crate::request_metrics::update_running_attempt_detail(id, detail.clone());
                             }
                             request_trace.attempt_details.push(detail);
                             candidate_index = 0;
@@ -10969,7 +10969,7 @@ pub(crate) struct ResponsesSseTransformer {
     /// 请求把 `apply_patch` 声明成了 function 工具：此时 JSON 参数就是正确格式，不能解包。
     apply_patch_declared_as_function: bool,
     /// 从 `response.completed` 里抓到的 usage，供请求日志使用。
-    usage: Option<crate::request_log::RequestUsage>,
+    usage: Option<crate::request_metrics::RequestUsage>,
     /// 终态失败事件里的 code/message 摘要。只进请求日志与诊断日志，
     /// 不拼进 failure 原因（原因会随 SSE 回给客户端，不能泄露上游 payload）。
     failure_detail: Option<String>,
@@ -11065,7 +11065,7 @@ impl ResponsesSseTransformer {
     }
 
     /// 取出 `response.completed` 里捕获的 usage（请求日志用）。
-    pub(crate) fn take_usage(&mut self) -> Option<crate::request_log::RequestUsage> {
+    pub(crate) fn take_usage(&mut self) -> Option<crate::request_metrics::RequestUsage> {
         self.usage.take()
     }
 
@@ -11129,7 +11129,7 @@ impl ResponsesSseTransformer {
         
         self.observe_event_type(event_type);
         if event_type == "response.completed" {
-            if let Some(usage) = crate::request_log::usage_from_response_json(&data_json) {
+            if let Some(usage) = crate::request_metrics::usage_from_response_json(&data_json) {
                 self.usage = Some(usage);
             }
         }
@@ -11560,7 +11560,7 @@ data: {"type":"response.output_item.done","item":{"type":"function_call","name":
     }
 
     #[test]
-    fn completed_event_usage_is_captured_for_request_log() {
+    fn completed_event_usage_is_captured_for_request_metrics() {
         let mut t = ResponsesSseTransformer::default();
         let event = b"data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":123,\"output_tokens\":45,\"input_tokens_details\":{\"cached_tokens\":100},\"output_tokens_details\":{\"reasoning_tokens\":9}}}}\n\n";
         t.push_bytes(event);

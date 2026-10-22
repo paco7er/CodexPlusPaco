@@ -33,18 +33,13 @@ import {
   GripVertical,
   GitBranch,
   Info,
-  ExternalLink,
   Hammer,
   KeyRound,
   Layers3,
-  LayoutGrid,
   LayoutDashboard,
-  List,
   MessageCircle,
   FileCode2,
   Network,
-  Power,
-  PowerOff,
   Plus,
   RefreshCw,
   Rocket,
@@ -52,7 +47,6 @@ import {
   Search,
   ShieldCheck,
   ShieldAlert,
-  Star,
   Store,
   Stethoscope,
   TestTube,
@@ -63,7 +57,7 @@ import {
 import { createPresetPatch } from "@/components/ProviderPresetSelector";
 import { PRESETS, type ProviderPreset } from "./presets";
 import { createPortal } from "react-dom";
-import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { Badge as UiBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -71,7 +65,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { isGitHubRepositoryHomepage } from "./github-repository";
 import { NativeBrowserStatusView, nativeBrowserConsent } from "./native-browser-settings";
 
 import { PluginMarketScreen } from "./PluginMarketScreen";
@@ -438,7 +431,6 @@ type RelayMode = "official" | "mixedApi" | "pureApi" | "aggregate";
 type RelaySessionProvider = "custom" | "openai";
 type RelayEditorMode = "official" | "mixedApi" | "pureApi";
 const CHAT_UPSTREAM_BASE_URL_KEY = "codex_plus_chat_base_url";
-const SCRIPT_MARKET_REPOSITORY_URL = "https://github.com/BigPizzaV3/CodexPlusPlusScriptMarket";
 
 const emptyContextSelection = (): RelayContextSelection => ({
   mcpServers: [],
@@ -446,85 +438,10 @@ const emptyContextSelection = (): RelayContextSelection => ({
   plugins: [],
 });
 
-type UserScriptInventory = {
-  enabled?: boolean;
-  skip_next_start?: boolean;
-  scripts?: Array<{
-    key: string;
-    name: string;
-    source: string;
-    enabled: boolean;
-    status: string;
-    error: string;
-    market_id?: string;
-    version?: string;
-    installed?: boolean;
-    source_url?: string;
-    homepage?: string;
-  }>;
-};
-
-type RequestLogUsage = {
-  inputTokens: number;
-  outputTokens: number;
-  cachedTokens?: number;
-  reasoningTokens?: number;
-};
-
-type RequestLogAttemptDetail = {
-  attempt: number;
-  code?: string | null;
-  message?: string | null;
-  delayMs?: number | null;
-};
-
-type RequestLogEntry = {
-  id: string;
-  timestampMs: number;
-  startedAtMs: number;
-  durationMs: number;
-  method: string;
-  path: string;
-  statusCode: number;
-  success: boolean;
-  stream: boolean;
-  model: string;
-  upstreamModel: string;
-  relayId: string;
-  relayName: string;
-  wireApi: string;
-  /** Codex 会话/线程 id（来自请求头；旧日志没有该字段）。 */
-  threadId?: string | null;
-  /** 会话标题（后端按 threadId 从 Codex 本地会话库补齐；可能缺失）。 */
-  threadTitle?: string | null;
-  attempts: number;
-  autoRetries: number;
-  retryReasons?: string[];
-  /** 每次自动重试前的失败尝试摘要；旧日志没有该字段。 */
-  attemptDetails?: RequestLogAttemptDetail[] | null;
-  /** 请求进行中时为 running；旧日志没有该字段。 */
-  state?: string | null;
-  /** 首字耗时（毫秒）。 */
-  firstTokenMs?: number | null;
-  /** 运行中按流式增量粗估的输出 token。 */
-  estimatedOutputTokens?: number | null;
-  error?: string | null;
-  streamOutcome?: string | null;
-  usage?: RequestLogUsage | null;
-  cacheHitRatio?: number | null;
-};
-
-type RequestLogsResult = {
-  status: Status;
-  message: string;
-  entries: RequestLogEntry[];
-};
-
 type SettingsResult = CommandResult<{
   revision: string;
   settings: BackendSettings;
   settings_path: string;
-  user_scripts: UserScriptInventory;
 }>;
 
 type RelayResult = CommandResult<{
@@ -598,7 +515,6 @@ type ExtractRelayCommonConfigResult = CommandResult<{
 type RelaySwitchResult = CommandResult<{
   settings: BackendSettings;
   settingsPath: string;
-  user_scripts: unknown;
   relay: RelayPayload;
 }>;
 
@@ -683,23 +599,6 @@ type EnvConflict = {
 
 type EnvConflictsResult = CommandResult<{
   conflicts: EnvConflict[];
-}>;
-
-type RelayEnvironmentResult = CommandResult<{
-  clashVergeTun: {
-    enabled: boolean;
-    configPath: string | null;
-  };
-  proxyEnvironment: {
-    variables: Array<{
-      name: string;
-      source: "process" | "user" | "system" | string;
-    }>;
-  };
-  codexEnvFile: {
-    exists: boolean;
-    path: string;
-  };
 }>;
 
 type RemoveEnvConflictsResult = CommandResult<{
@@ -848,31 +747,6 @@ type InstallResult = CommandResult<{
   management_shortcut: { installed: boolean; path: string | null };
 }>;
 
-type ScriptMarketItem = {
-  id: string;
-  name: string;
-  description: string;
-  version: string;
-  author: string;
-  tags: string[];
-  homepage: string;
-  script_url: string;
-  installed: boolean;
-  installedVersion: string;
-  updateAvailable: boolean;
-};
-
-type ScriptMarketResult = CommandResult<{
-  market: {
-    status: string;
-    message: string;
-    indexUrl: string;
-    updatedAt: string;
-    scripts: ScriptMarketItem[];
-  };
-  user_scripts: UserScriptInventory;
-}>;
-
 function providerSyncProgressMessage(result: CommandResult<ProviderSyncPayload>): string {
   const changed = result.changedSessionFiles ?? 0;
   const rows = result.sqliteRowsUpdated ?? 0;
@@ -912,32 +786,7 @@ function providerSyncTargetLabel(target: ProviderSyncTargetOption): string {
   return [...labels, ...current, ...unavailable].join(" / ") || t("发现");
 }
 
-function syncMarketInstalledState(current: ScriptMarketResult | null, userScripts: UserScriptInventory): ScriptMarketResult | null {
-  if (!current) return current;
-  const installed = new Map(
-    (userScripts.scripts ?? [])
-      .filter((script) => script.market_id)
-      .map((script) => [script.market_id || "", script.version || ""]),
-  );
-  return {
-    ...current,
-    user_scripts: userScripts,
-    market: {
-      ...current.market,
-      scripts: current.market.scripts.map((script) => {
-        const installedVersion = installed.get(script.id) || "";
-        return {
-          ...script,
-          installed: Boolean(installedVersion),
-          installedVersion,
-          updateAvailable: Boolean(installedVersion) && installedVersion !== script.version,
-        };
-      }),
-    },
-  };
-}
-
-type Route = "overview" | "relay" | "relayEnvironment" | "requestLog" | "sessions" | "context" | "skills" | "enhance" | "userScripts" | "pluginMarket" | "maintenance";
+type Route = "overview" | "relay" | "sessions" | "context" | "skills" | "enhance" | "pluginMarket" | "maintenance";
 
 const MANAGER_NAVIGATION_EVENT = "manager-navigation-requested";
 
@@ -950,19 +799,15 @@ const routes: Array<{ id: Route; label: string; icon: LucideIcon; badge?: string
   { id: "context", label: "MCP", icon: Network, tool: "codex" },
   { id: "skills", label: "Skills", icon: BookOpen, tool: "codex" },
   { id: "enhance", get label() { return t("Codex增强"); }, icon: Hammer, tool: "codex" },
-  { id: "userScripts", get label() { return t("拓展"); }, icon: FileCode2, tool: "codex" },
   { id: "pluginMarket", get label() { return t("Codex 插件市场"); }, icon: Store, tool: "codex" },
 
   { id: "maintenance", get label() { return t("安装维护"); }, icon: Wrench, tool: "codex" },
-
-  { id: "relayEnvironment", get label() { return t("代理设置"); }, icon: ShieldCheck, tool: "codex" },
-  { id: "requestLog", get label() { return t("请求日志"); }, icon: List, tool: "codex" },
 ];
 
 const navigationSections: Array<{ label: string; routes: Route[]; placement?: "bottom" }> = [
   {
     get label() { return t("工作区"); },
-    routes: ["overview", "relay", "relayEnvironment", "requestLog"],
+    routes: ["overview", "relay"],
   },
   {
     get label() { return t("全局管理"); },
@@ -970,7 +815,7 @@ const navigationSections: Array<{ label: string; routes: Route[]; placement?: "b
   },
   {
     get label() { return t("扩展"); },
-    routes: ["enhance", "userScripts", "pluginMarket"],
+    routes: ["enhance", "pluginMarket"],
   },
   {
     get label() { return t("系统"); },
@@ -1103,15 +948,12 @@ export function App() {
   const [relay, setRelay] = useState<RelayResult | null>(null);
   const [relayFiles, setRelayFiles] = useState<RelayFilesResult | null>(null);
   const [envConflicts, setEnvConflicts] = useState<EnvConflictsResult | null>(null);
-  const [relayEnvironment, setRelayEnvironment] = useState<RelayEnvironmentResult | null>(null);
   const [ccsProviders, setCcsProviders] = useState<CcsProvidersResult | null>(null);
   const [pendingProviderImport, setPendingProviderImport] = useState<ProviderImportRequest | null>(null);
   const [localSessions, setLocalSessions] = useState<LocalSessionsResult | null>(null);
   const [liveContextEntries, setLiveContextEntries] = useState<CodexContextEntries | null>(null);
 
   const [watcher, setWatcher] = useState<WatcherResult | null>(null);
-
-  const [scriptMarket, setScriptMarket] = useState<ScriptMarketResult | null>(null);
   const [launchForm, setLaunchForm] = useState({
     appPath: "",
     debugPort: "9229",
@@ -1202,82 +1044,6 @@ export function App() {
     return null;
   };
 
-  const refreshScriptMarket = async (silent = false) => {
-    const result = await run(() => call<ScriptMarketResult>("refresh_script_market"));
-    if (result) {
-      setScriptMarket(result);
-      setSettings((current) => (current ? { ...current, user_scripts: result.user_scripts } : current));
-      if (!silent || !isSuccessStatus(result.status)) showResultNotice(t("拓展"), result, { silentSuccess: true });
-    }
-  };
-
-  const refreshUserScriptInventory = async () => {
-    const result = await run(() => call<SettingsResult>("refresh_user_script_inventory"));
-    if (result) {
-      setSettings(result);
-      setScriptMarket((current) => syncMarketInstalledState(current, result.user_scripts));
-    }
-    return result;
-  };
-
-  const reloadUserScripts = async () => {
-    const result = await run(() => call<SettingsResult>("reload_user_scripts"));
-    if (result) {
-      setSettings(result);
-      setScriptMarket((current) => syncMarketInstalledState(current, result.user_scripts));
-      showResultNotice(t("本地拓展"), result);
-    }
-  };
-
-  const installMarketScript = async (id: string) => {
-    const result = await run(() => call<ScriptMarketResult>("install_market_script", { id }));
-    if (result) {
-      setScriptMarket(result);
-      setSettings((current) => (current ? { ...current, user_scripts: result.user_scripts } : current));
-      showResultNotice(t("拓展"), result);
-    }
-  };
-
-  const setUserScriptsEnabled = async (enabled: boolean) => {
-    const result = await run(() => call<SettingsResult>("set_user_scripts_enabled", { enabled }));
-    if (!result) return;
-    setSettings(result);
-    setScriptMarket((current) => syncMarketInstalledState(current, result.user_scripts));
-    showResultNotice(t("本地拓展"), result);
-    if (isSuccessStatus(result.status)) await reloadUserScripts();
-  };
-
-  const setUserScriptsSkipNextStart = async (skip: boolean) => {
-    const result = await run(() => call<SettingsResult>("set_user_scripts_skip_next_start", { skip }));
-    if (!result) return;
-    setSettings(result);
-    setScriptMarket((current) => syncMarketInstalledState(current, result.user_scripts));
-    showResultNotice(t("本地拓展"), result);
-  };
-
-  const setUserScriptEnabled = async (key: string, enabled: boolean) => {
-    const result = await run(() => call<SettingsResult>("set_user_script_enabled", { key, enabled }));
-    if (result) {
-      setSettings(result);
-      setScriptMarket((current) => syncMarketInstalledState(current, result.user_scripts));
-      showResultNotice(t("本地拓展"), result);
-      await refreshUserScriptInventory();
-    }
-  };
-
-  const deleteUserScript = async (key: string) => {
-    const script = settings?.user_scripts?.scripts?.find((item) => item.key === key);
-    const name = script?.name || key;
-    if (!window.confirm(tf("删除拓展“{0}”？此操作会移除本地拓展文件。", [name]))) return;
-    const result = await run(() => call<SettingsResult>("delete_user_script", { key }));
-    if (result) {
-      setSettings(result);
-      setScriptMarket((current) => syncMarketInstalledState(current, result.user_scripts));
-      showResultNotice(t("本地拓展"), result);
-      await refreshUserScriptInventory();
-    }
-  };
-
   const refreshRelay = async (silent = false) => {
     const result = await run(() => call<RelayResult>("relay_status"));
     if (result) {
@@ -1300,15 +1066,6 @@ export function App() {
     if (result) {
       setEnvConflicts(result);
       if (!silent || !isSuccessStatus(result.status)) showResultNotice(t("环境变量检测"), result, { silentSuccess: true });
-    }
-    return result;
-  };
-
-  const refreshRelayEnvironment = async (silent = false) => {
-    const result = await run(() => call<RelayEnvironmentResult>("check_relay_environment"));
-    if (result) {
-      setRelayEnvironment(result);
-      if (!silent) showResultNotice(t("中转站环境配置检测"), result, { silentSuccess: true });
     }
     return result;
   };
@@ -1560,7 +1317,6 @@ export function App() {
   const navigate = async (next: Route) => {
     setRoute(next);
     if (next === "overview") await refreshOverview(true);
-    if (next === "relayEnvironment") await refreshRelayEnvironment(true);
     if (next === "sessions") {
       await refreshSettings(true);
       await refreshLocalSessions(true);
@@ -1573,11 +1329,6 @@ export function App() {
       await refreshLiveContextEntries(true);
     }
     if (next === "enhance") await refreshSettings(true);
-    if (next === "userScripts") {
-      await refreshSettings(true);
-      await refreshScriptMarket(true);
-      await refreshUserScriptInventory();
-    }
 
     if (next === "maintenance") {
       await refreshOverview(true);
@@ -2220,7 +1971,6 @@ export function App() {
         message: result.message,
         settings: selectedSettings,
         settings_path: result.settingsPath,
-        user_scripts: result.user_scripts as UserScriptInventory,
       });
       setSettingsForm(selectedSettings);
       setRelay({
@@ -2274,13 +2024,6 @@ export function App() {
       return next;
     }
     return normalized;
-  };
-
-  const openExternalUrl = async (url: string) => {
-    const result = await run(() => call<CommandResult<Record<string, unknown>>>("open_external_url", { url }));
-    if (result) {
-      showResultNotice(t("打开链接"), result, { silentSuccess: true });
-    }
   };
 
   const showNotice = (title: string, message: string, status?: Status) => {
@@ -2491,27 +2234,16 @@ export function App() {
       refreshRelay,
       refreshRelayFiles,
       refreshEnvConflicts,
-      refreshRelayEnvironment,
       removeEnvConflicts,
       refreshCcsProviders,
       importCcsProviders,
       refreshLiveContextEntries,
       syncLiveContextEntries,
-
-      refreshScriptMarket,
-      refreshUserScriptInventory,
-      reloadUserScripts,
-      installMarketScript,
-      setUserScriptsEnabled,
-      setUserScriptsSkipNextStart,
-      setUserScriptEnabled,
-      deleteUserScript,
       refreshLocalSessions,
       listProjectSessions,
       deleteLocalSession,
       deleteLocalSessions,
       archiveLocalSessions,
-      openExternalUrl,
       applyRelayInjection,
       applyPureApiInjection,
       clearRelayInjection,
@@ -2548,7 +2280,7 @@ export function App() {
       pauseAutoTakeover: () => runAutoTakeoverCommand("pause_auto_takeover_for_instance"),
 
     }),
-    [route, launchForm, settingsForm, settings, overview, relayFiles, localSessions, selectedProviderSyncTarget, envConflicts, relayEnvironment, ccsProviders],
+    [route, launchForm, settingsForm, settings, overview, relayFiles, localSessions, selectedProviderSyncTarget, envConflicts, ccsProviders],
   );
 
   const isManagementScreen = route === "relay" || route === "sessions" || route === "context" || route === "skills";
@@ -2613,7 +2345,7 @@ export function App() {
           </div>
         </header>
         <section
-          className={`screen ${isManagementScreen ? "management-screen" : ""} ${route === "requestLog" ? "request-log-screen" : ""}`.trim()}
+          className={`screen ${isManagementScreen ? "management-screen" : ""}`.trim()}
           key={route}
         >
           {route === "overview" ? (
@@ -2631,20 +2363,6 @@ export function App() {
               form={settingsForm}
               actions={actions}
             />
-          ) : null}
-
-          {route === "relayEnvironment" ? (
-            <ProxySettingsScreen
-              dirty={settingsDirty}
-              overview={overview}
-              form={settingsForm}
-              relayEnvironment={relayEnvironment}
-              onFormChange={setSettingsForm}
-              actions={actions}
-            />
-          ) : null}
-          {route === "requestLog" ? (
-            <RequestLogScreen />
           ) : null}
           {route === "sessions" ? (
             <ProjectSessionPage
@@ -2697,8 +2415,6 @@ export function App() {
               actions={actions}
             />
           ) : null}
-
-          {route === "userScripts" ? <UserScriptsScreen settings={settings} market={scriptMarket} actions={actions} /> : null}
           {route === "pluginMarket" ? <PluginMarketScreen /> : null}
 
           {route === "maintenance" ? (
@@ -2910,28 +2626,17 @@ type Actions = {
   refreshRelay: () => Promise<void>;
   refreshRelayFiles: () => Promise<RelayFilesResult | null>;
   refreshEnvConflicts: (silent?: boolean) => Promise<EnvConflictsResult | null>;
-  refreshRelayEnvironment: (silent?: boolean) => Promise<RelayEnvironmentResult | null>;
   removeEnvConflicts: (names: string[]) => Promise<void>;
   refreshCcsProviders: (silent?: boolean) => Promise<CcsProvidersResult | null>;
   importCcsProviders: (bindings?: Record<string, string>) => Promise<void>;
   refreshLiveContextEntries: () => Promise<LiveContextEntriesResult | null>;
   syncLiveContextEntries: (settings: BackendSettings, silent?: boolean) => Promise<LiveContextEntriesResult | null>;
-
-  refreshScriptMarket: () => Promise<void>;
-  refreshUserScriptInventory: () => Promise<SettingsResult | null>;
-  reloadUserScripts: () => Promise<void>;
-  installMarketScript: (id: string) => Promise<void>;
-  setUserScriptsEnabled: (enabled: boolean) => Promise<void>;
-  setUserScriptsSkipNextStart: (skip: boolean) => Promise<void>;
-  setUserScriptEnabled: (key: string, enabled: boolean) => Promise<void>;
-  deleteUserScript: (key: string) => Promise<void>;
   refreshLocalSessions: (silent?: boolean, offset?: number) => Promise<LocalSessionsResult | null>;
   listProjectSessions: (cwd: string) => Promise<LocalSession[]>;
   // 返回是否真正执行（用户取消时为 false），调用方据此决定是否清空选择。
   deleteLocalSession: (session: LocalSession) => Promise<boolean>;
   deleteLocalSessions: (sessions: LocalSession[]) => Promise<boolean>;
   archiveLocalSessions: (sessions: LocalSession[], archived?: boolean) => Promise<boolean>;
-  openExternalUrl: (url: string) => Promise<void>;
   applyRelayInjection: () => Promise<boolean>;
   applyPureApiInjection: () => Promise<boolean>;
   clearRelayInjection: () => Promise<boolean>;
@@ -3015,764 +2720,6 @@ function OverviewScreen({ overview, actions }: {
               </div>
             </CardContent>
           </Panel>
-  );
-}
-
-function ProxySettingsScreen({
-  dirty,
-  overview,
-  form,
-  relayEnvironment,
-  onFormChange,
-  actions,
-}: {
-  dirty: boolean;
-  overview: OverviewResult | null;
-  form: BackendSettings;
-  relayEnvironment: RelayEnvironmentResult | null;
-  onFormChange: (value: BackendSettings) => void;
-  actions: Actions;
-}) {
-  const proxyProfiles = useMemo(
-    () => (form.relayProfiles ?? []).filter((profile) => profile.relayMode !== "aggregate"),
-    [form.relayProfiles],
-  );
-  const proxyProfileKey = proxyProfiles.map((profile) => profile.id).join("|");
-  const [proxyUrls, setProxyUrls] = useState<Record<string, string>>({});
-  const [proxyConfigured, setProxyConfigured] = useState<Record<string, boolean>>({});
-  const [proxyBusyId, setProxyBusyId] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const ids = proxyProfileKey ? proxyProfileKey.split("|") : [];
-    void Promise.all(
-      ids.map(async (id) => {
-        try {
-          const result = await invoke<{ status: string; proxyUrl?: string; configured?: boolean }>(
-            "load_relay_proxy",
-            { profileId: id },
-          );
-          return { id, url: result.status === "ok" ? result.proxyUrl ?? "" : "", configured: result.configured === true };
-        } catch {
-          return { id, url: "", configured: false };
-        }
-      }),
-    ).then((entries) => {
-      if (cancelled) return;
-      const urls: Record<string, string> = {};
-      const configured: Record<string, boolean> = {};
-      entries.forEach((entry) => {
-        urls[entry.id] = entry.url;
-        configured[entry.id] = entry.configured;
-      });
-      setProxyUrls(urls);
-      setProxyConfigured(configured);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [proxyProfileKey]);
-
-  const saveProviderProxy = async (profile: RelayProfile) => {
-    const profileId = profile.id;
-    setProxyBusyId(profileId);
-    try {
-      const result = await invoke<{
-        status: string;
-        message: string;
-        proxyUrl?: string;
-        configured?: boolean;
-      }>("set_relay_proxy", { profileId, proxyUrl: proxyUrls[profileId] ?? "" });
-      if (result.status === "ok") {
-        setProxyUrls((current) => ({ ...current, [profileId]: result.proxyUrl ?? "" }));
-        setProxyConfigured((current) => ({ ...current, [profileId]: result.configured === true }));
-      }
-      await actions.showMessage(t("供应商独立代理"), result.message, result.status === "ok" ? "ok" : "failed");
-    } catch (error) {
-      await actions.showMessage(t("供应商独立代理"), String(error), "failed");
-    } finally {
-      setProxyBusyId(null);
-    }
-  };
-
-  const localServer = overview?.runtime_health?.local_server;
-  const debuggerState = overview?.runtime_health?.debugger;
-  const conversionEnabled = overview?.runtime_health?.protocol_conversion_enabled === true;
-
-  return (
-    <div className="settings-page">
-      <Panel>
-        <CardHead
-          title={t("本地协议代理")}
-          detail={t("从 Codex++ 启动 Codex 时承载协议转换、聚合与请求避震")}
-        />
-        <CardContent className="settings-content">
-          <div className="status-table">
-            <StatusRow
-              title={t("本地服务器状态")}
-              status={localServer?.status ?? "not_checked"}
-              path={localServer?.address || "http://127.0.0.1:57321"}
-            />
-            <StatusRow
-              title={t("协议转换")}
-              status={conversionEnabled ? "ok" : "disabled"}
-              path={conversionEnabled ? t("协议转换已启用") : t("未启用")}
-            />
-            <StatusRow
-              title={t("调试连接状态")}
-              status={debuggerState?.status ?? "not_checked"}
-              path={debuggerState?.address ?? null}
-            />
-          </div>
-          <p className="field-hint">
-            {t("本地代理地址由 Codex++ 写入 config.toml；切换供应商或修改协议后重启 Codex 生效。")}
-          </p>
-        </CardContent>
-      </Panel>
-
-      <Panel>
-        <CardHead
-          title={t("请求避震")}
-          detail={t("代理层吸收上游过载冲击：自动重试模型容量/过载错误（含推理与工具调用阶段），尽量不把错误交给 Codex")}
-        />
-        <CardContent className="settings-content">
-          <div className="settings-block">
-            <label className="check-row">
-              <input
-                checked={form.protocolProxyAutoRetry}
-                onChange={(event) =>
-                  onFormChange({ ...form, protocolProxyAutoRetry: event.currentTarget.checked })
-                }
-                type="checkbox"
-              />
-              <span>{t("启用请求避震")}</span>
-            </label>
-            <p className="field-hint">
-              {t("请求避震只处理经过本地协议代理、且以 200 流式响应返回的上游过载/容量错误（server_overloaded、server_is_overloaded、at capacity 等）。流式避震下：推理、工具调用参数等不可见阶段先缓冲，工具调用整项完成或首段可见输出后再等「首字提交延迟」；这段窗口内遇到过载由代理退避重试；提交之后遇到同类过载，会改写成 Codex 可识别的容量错误，由 Codex 自己重试；连接失败、429/5xx、限流等其它错误不重试。保留的「流式避震（旧行为）」模式仍按旧逻辑：第一个输出事件就交给 Codex。整段缓冲避震下，任何时点的过载都由代理重试，但失去流式。")}
-            </p>
-            <div className="form-row">
-              <Field label={t("最多自动重试次数")}>
-                <Input
-                  max={20}
-                  min={0}
-                  type="number"
-                  value={form.protocolProxyAutoRetryMaxAttempts}
-                  onChange={(event) =>
-                    onFormChange({
-                      ...form,
-                      protocolProxyAutoRetryMaxAttempts: clampNumber(
-                        Number(event.currentTarget.value),
-                        0,
-                        20,
-                      ),
-                    })
-                  }
-                />
-              </Field>
-              <Field label={t("首次重试间隔（秒）")}>
-                <Input
-                  max={30}
-                  min={0}
-                  type="number"
-                  value={form.protocolProxyAutoRetryIntervalSeconds}
-                  onChange={(event) =>
-                    onFormChange({
-                      ...form,
-                      protocolProxyAutoRetryIntervalSeconds: clampNumber(
-                        Number(event.currentTarget.value),
-                        0,
-                        30,
-                      ),
-                    })
-                  }
-                />
-              </Field>
-            </div>
-            <p className="field-hint">
-              {t("之后按 2 倍指数退避，单次最长 30 秒；上游返回 Retry-After 时优先采用（同样受上限约束）。")}
-            </p>
-            <div className="form-row">
-              <Field label={t("避震模式")}>
-                <select
-                  className="request-log-filter"
-                  value={form.protocolProxyAutoRetryMode}
-                  onChange={(event) =>
-                    onFormChange({
-                      ...form,
-                      protocolProxyAutoRetryMode:
-                        event.currentTarget.value === "buffered"
-                          ? "buffered"
-                          : event.currentTarget.value === "streaming-legacy"
-                            ? "streaming-legacy"
-                            : "streaming",
-                    })
-                  }
-                >
-                  <option value="streaming">{t("流式避震：工具调用参数与首字宽限内由代理重试，提交后交给 Codex 原生重试")}</option>
-                  <option value="streaming-legacy">{t("流式避震（旧行为）：首个输出事件立即提交，之后交给 Codex 原生重试")}</option>
-                  <option value="buffered">{t("整段缓冲避震：任何时点过载都由代理重试（失去流式）")}</option>
-                </select>
-              </Field>
-              {form.protocolProxyAutoRetryMode === "streaming" ? (
-                <Field label={t("首字提交延迟（毫秒）")}>
-                  <Input
-                    max={10000}
-                    min={0}
-                    step={100}
-                    type="number"
-                    value={form.protocolProxyAutoRetryCommitDelayMs}
-                    onChange={(event) =>
-                      onFormChange({
-                        ...form,
-                        protocolProxyAutoRetryCommitDelayMs: clampNumber(Number(event.currentTarget.value), 0, 10000),
-                      })
-                    }
-                  />
-                </Field>
-              ) : null}
-            </div>
-            <p className="field-hint">
-              {t("流式避震保留实时输出；「首字提交延迟」把首段可见输出也算进可重试窗口：0 = 一出现正文就提交，1000 = 再缓冲 1 秒，期间过载仍由代理重试；工具调用的参数生成阶段始终整项缓冲，不额外增加首字延迟。选「旧行为」则不做这些缓冲，完全回到旧逻辑。整段缓冲避震在所有情况下都不会把过载错误交给 Codex，但回复要等整段生成完才显示。")}
-            </p>
-          </div>
-        </CardContent>
-      </Panel>
-
-      <Panel>
-        <CardHead
-          title={t("供应商独立代理")}
-          detail={t("为单个供应商单独指定 HTTP 代理；留空表示沿用系统代理")}
-        />
-        <CardContent className="settings-content">
-          {proxyProfiles.length ? (
-            <div className="proxy-provider-list">
-              {proxyProfiles.map((profile) => (
-                <div className="proxy-provider-row" key={profile.id}>
-                  <div className="proxy-provider-meta">
-                    <strong>{profile.name || t("未命名供应商")}</strong>
-                    <small>
-                      {relayProtocolLabel(profile.protocol)} ·{" "}
-                      {proxyConfigured[profile.id] ? t("已配置独立代理") : t("未配置独立代理")}
-                    </small>
-                  </div>
-                  <Input
-                    aria-label={tf("{0} 的独立代理", [profile.name || t("未命名供应商")])}
-                    placeholder={t("例如 http://127.0.0.1:7890，留空表示使用系统代理")}
-                    value={proxyUrls[profile.id] ?? ""}
-                    onChange={(event) =>
-                      setProxyUrls((current) => ({ ...current, [profile.id]: event.currentTarget.value }))
-                    }
-                  />
-                  <Button
-                    disabled={proxyBusyId === profile.id}
-                    onClick={() => void saveProviderProxy(profile)}
-                    variant="secondary"
-                  >
-                    {proxyBusyId === profile.id ? t("保存中…") : t("保存")}
-                  </Button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="field-hint">{t("还没有可配置独立代理的供应商。")}</p>
-          )}
-          <p className="field-hint">
-            {t("保存后需重新应用该供应商并重启 Codex，独立代理才会作用于会话请求。")}
-          </p>
-        </CardContent>
-      </Panel>
-
-      <RelayEnvironmentScreen result={relayEnvironment} actions={actions} />
-
-      {dirty ? (
-        <div className="settings-save-bar">
-          <span>{t("设置有修改时，保存后才会写入本地配置。")}</span>
-          <Button onClick={() => void actions.saveSettings()}>
-            <Save className="h-4 w-4" />
-            {t("保存设置")}
-          </Button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function formatRequestLogTime(timestampMs: number) {
-  if (!Number.isFinite(timestampMs) || timestampMs <= 0) return "-";
-  const date = new Date(timestampMs);
-  const now = new Date();
-  const sameDay =
-    date.getFullYear() === now.getFullYear()
-    && date.getMonth() === now.getMonth()
-    && date.getDate() === now.getDate();
-  const time = date.toLocaleTimeString("zh-CN", { hour12: false });
-  return sameDay ? time : `${date.getMonth() + 1}/${date.getDate()} ${time}`;
-}
-
-function formatRequestLogTokens(value?: number | null) {
-  if (value == null) return "-";
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
-  return String(value);
-}
-
-/** 缓存命中率展示：≥99% 保留一位小数，只有完全命中才显示 100%。 */
-function formatRequestLogCacheHitRatio(
-  inputTokens?: number | null,
-  cachedTokens?: number | null,
-  ratio?: number | null,
-) {
-  const input = inputTokens ?? 0;
-  const cached = cachedTokens ?? 0;
-  if (input <= 0 || cached <= 0) return "-";
-  if (cached >= input) return "100%";
-  const percent = (ratio ?? cached / input) * 100;
-  if (percent >= 99) return `${percent.toFixed(1)}%`;
-  return `${Math.round(percent)}%`;
-}
-
-/** 会话 id 展示：UUIDv7 前缀按时间递增、容易重名，这里取末 8 位区分。 */
-function formatRequestLogSession(threadId?: string | null): string {
-  const value = (threadId ?? "").trim();
-  if (!value) return "-";
-  return value.length > 12 ? `…${value.slice(-8)}` : value;
-}
-
-function formatRequestLogDuration(durationMs: number) {
-  if (!Number.isFinite(durationMs) || durationMs < 0) return "-";
-  if (durationMs < 1000) return `${durationMs}ms`;
-  if (durationMs < 60_000) return `${(durationMs / 1000).toFixed(1)}s`;
-  return `${Math.floor(durationMs / 60_000)}m${Math.round((durationMs % 60_000) / 1000)}s`;
-}
-
-function requestLogRetryLabel(entry: RequestLogEntry) {
-  if (entry.autoRetries > 0) return tf("自动重试 ×{0}", [String(entry.autoRetries)]);
-  if (entry.attempts > 1) return tf("切换 ×{0}", [String(entry.attempts)]);
-  return "-";
-}
-
-function RequestLogScreen() {
-  const [entries, setEntries] = useState<RequestLogEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"all" | "running" | "success" | "failed" | "retried">("all");
-  const [sessionFilter, setSessionFilter] = useState("all");
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [clearing, setClearing] = useState(false);
-  const [nowMs, setNowMs] = useState(() => Date.now());
-
-  const hasRunning = entries.some((entry) => entry.state === "running");
-  useEffect(() => {
-    if (!hasRunning) return;
-    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, [hasRunning]);
-
-  const load = async (silent = false) => {
-    if (!silent) setLoading(true);
-    try {
-      const result = await invoke<RequestLogsResult>("load_request_logs", { limit: 300 });
-      if (result.status === "ok") {
-        setEntries(result.entries ?? []);
-        setError("");
-      } else {
-        setError(result.message || t("读取请求日志失败。"));
-      }
-    } catch (cause) {
-      setError(String(cause));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void load();
-  }, []);
-
-  useEffect(() => {
-    if (!autoRefresh) return;
-    const timer = window.setInterval(() => {
-      if (!document.hidden) void load(true);
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [autoRefresh]);
-
-  const clearLogs = async () => {
-    if (!window.confirm(t("清空全部请求日志？此操作不可撤销。"))) return;
-    setClearing(true);
-    try {
-      const result = await invoke<{ status: Status; message: string }>("clear_request_logs");
-      if (result.status !== "ok") setError(result.message);
-      await load(true);
-    } catch (cause) {
-      setError(String(cause));
-    } finally {
-      setClearing(false);
-    }
-  };
-
-  const sessions = useMemo(() => {
-    const found = new Map<string, { id: string; title: string; count: number }>();
-    for (const entry of entries) {
-      const id = (entry.threadId ?? "").trim();
-      if (!id) continue;
-      const title = (entry.threadTitle ?? "").trim();
-      const session = found.get(id);
-      if (session) {
-        session.count += 1;
-        if (!session.title && title) session.title = title;
-      } else {
-        found.set(id, { id, title, count: 1 });
-      }
-    }
-    // entries 本身按时间倒序，Map 的插入顺序即「最近活跃的会话优先」。
-    return [...found.values()];
-  }, [entries]);
-
-  const hasUnknownSession = useMemo(
-    () => entries.some((entry) => !(entry.threadId ?? "").trim()),
-    [entries],
-  );
-
-  // 日志被清空/切换后，避免筛选项停留在已不存在的会话上。
-  useEffect(() => {
-    if (sessionFilter === "all" || sessionFilter === "__none__") return;
-    if (!sessions.some((session) => session.id === sessionFilter)) {
-      setSessionFilter("all");
-    }
-  }, [sessionFilter, sessions]);
-
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return entries.filter((entry) => {
-      const running = entry.state === "running";
-      if (filter === "running" && !running) return false;
-      if (filter === "success" && (running || !entry.success)) return false;
-      if (filter === "failed" && (running || entry.success)) return false;
-      if (filter === "retried" && entry.autoRetries === 0 && entry.attempts <= 1) return false;
-      const threadId = (entry.threadId ?? "").trim();
-      if (sessionFilter === "__none__") {
-        if (threadId) return false;
-      } else if (sessionFilter !== "all" && threadId !== sessionFilter) {
-        return false;
-      }
-      if (!needle) return true;
-      return [
-        entry.model,
-        entry.upstreamModel,
-        entry.relayName,
-        entry.path,
-        entry.threadId ?? "",
-        entry.error ?? "",
-        entry.wireApi,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(needle);
-    });
-  }, [entries, filter, query]);
-
-  return (
-    <Panel className="request-log-panel">
-      <CardHead
-        title={t("请求日志")}
-        detail={tf("最近 {0} 条代理请求，含状态、模型、重试与 token 用量", [String(entries.length)])}
-      />
-      <CardContent className="request-log-content">
-        <div className="request-log-toolbar">
-          <div className="request-log-search">
-            <Search className="h-4 w-4" aria-hidden="true" />
-            <Input
-              aria-label={t("搜索模型 / 供应商 / 路径 / 错误")}
-              placeholder={t("搜索模型 / 供应商 / 路径 / 错误")}
-              value={query}
-              onChange={(event) => setQuery(event.currentTarget.value)}
-            />
-          </div>
-          <select
-            aria-label={t("状态筛选")}
-            className="request-log-filter"
-            value={filter}
-            onChange={(event) => setFilter(event.currentTarget.value as typeof filter)}
-          >
-            <option value="all">{t("全部")}</option>
-            <option value="running">{t("进行中")}</option>
-            <option value="success">{t("仅成功")}</option>
-            <option value="failed">{t("仅失败")}</option>
-            <option value="retried">{t("含重试")}</option>
-          </select>
-          <select
-            aria-label={t("按会话筛选")}
-            className="request-log-filter request-log-session-filter"
-            onChange={(event) => setSessionFilter(event.currentTarget.value)}
-            title={t("按会话筛选")}
-            value={sessionFilter}
-          >
-            <option value="all">{t("全部会话")}</option>
-            {sessions.map((session) => (
-              <option key={session.id} value={session.id}>
-                {tf("{0}（{1} 条）", [
-                  session.title || tf("会话 {0}", [formatRequestLogSession(session.id)]),
-                  String(session.count),
-                ])}
-              </option>
-            ))}
-            {hasUnknownSession ? <option value="__none__">{t("未记录会话")}</option> : null}
-          </select>
-          <label className="check-row request-log-auto">
-            <input
-              checked={autoRefresh}
-              onChange={(event) => setAutoRefresh(event.currentTarget.checked)}
-              type="checkbox"
-            />
-            <span>{t("自动刷新")}</span>
-          </label>
-          <Button variant="secondary" onClick={() => void load()}>
-            <RefreshCw className="h-4 w-4" />
-            {t("刷新")}
-          </Button>
-          <Button disabled={clearing || entries.length === 0} variant="secondary" onClick={() => void clearLogs()}>
-            <Trash2 className="h-4 w-4" />
-            {t("清空")}
-          </Button>
-        </div>
-
-        {error ? (
-          <p className="field-hint request-log-error" role="alert">{error}</p>
-        ) : null}
-
-        {loading && entries.length === 0 ? (
-          <div className="empty">{t("正在读取请求日志…")}</div>
-        ) : filtered.length ? (
-          <div className="request-log-table" role="table" aria-label={t("请求日志")}>
-            <div className="request-log-row request-log-head" role="row">
-              <span>{t("时间")}</span>
-              <span>{t("状态")}</span>
-              <span>{t("来源")}</span>
-              <span>{t("模型")}</span>
-              <span>{t("重试")}</span>
-              <span>{t("输入")}</span>
-              <span>{t("输出")}</span>
-              <span>{t("缓存")}</span>
-              <span>{t("耗时")}</span>
-            </div>
-            {filtered.map((entry) => (
-              <Fragment key={entry.id}>
-                <button
-                  aria-expanded={expanded === entry.id}
-                  className={`request-log-row request-log-entry ${entry.state === "running" ? "running" : entry.success ? "ok" : "bad"}`}
-                  onClick={() => setExpanded(expanded === entry.id ? null : entry.id)}
-                  role="row"
-                  type="button"
-                >
-                  <span>{formatRequestLogTime(entry.startedAtMs || entry.timestampMs)}</span>
-                  {entry.state === "running" ? (
-                    <span className="request-log-status running">
-                      {t("运行中")}
-                    </span>
-                  ) : (
-                    <span
-                      className={`request-log-status ${entry.success ? "ok" : "bad"}`}
-                      title={entry.error ?? ""}
-                    >
-                      {entry.statusCode || "ERR"}
-                      {!entry.success ? (
-                        <small className="request-log-stream-failed">
-                          {entry.stream ? t("流失败") : t("失败")}
-                        </small>
-                      ) : null}
-                    </span>
-                  )}
-                  <span className="request-log-ellipsis" title={entry.relayName}>{entry.relayName || "-"}</span>
-                  <span className="request-log-ellipsis" title={entry.upstreamModel ? `${entry.model} → ${entry.upstreamModel}` : entry.model}>
-                    {entry.model || "-"}
-                    {entry.upstreamModel && entry.upstreamModel !== entry.model ? (
-                      <small> → {entry.upstreamModel}</small>
-                    ) : null}
-                  </span>
-                  <span
-                    className={entry.autoRetries > 0 ? "request-log-retry" : "request-log-muted"}
-                    title={(entry.retryReasons ?? []).join("、")}
-                  >
-                    {requestLogRetryLabel(entry)}
-                  </span>
-                  <span className="request-log-muted" title={entry.state === "running" ? t("token 用量由上游在请求完成时返回，流式过程中无法准确统计") : ""}>
-                    {entry.state === "running" ? t("流式中") : formatRequestLogTokens(entry.usage?.inputTokens)}
-                  </span>
-                  <span
-                    className="request-log-muted"
-                    title={entry.state === "running"
-                      ? t("按流式增量估算，完成后会更新为准确值")
-                      : ""}
-                  >
-                    {entry.state === "running"
-                      ? entry.estimatedOutputTokens
-                        ? `~${formatRequestLogTokens(entry.estimatedOutputTokens)}`
-                        : t("流式中")
-                      : formatRequestLogTokens(entry.usage?.outputTokens)}
-                  </span>
-                  <span>
-                    {entry.state === "running" ? (
-                      <span className="request-log-muted">{t("流式中")}</span>
-                    ) : entry.usage?.cachedTokens ? (
-                      <>
-                        {formatRequestLogTokens(entry.usage.cachedTokens)}
-                        <small>
-                          {" · "}
-                          {formatRequestLogCacheHitRatio(
-                            entry.usage.inputTokens,
-                            entry.usage.cachedTokens,
-                            entry.cacheHitRatio,
-                          )}
-                        </small>
-                      </>
-                    ) : "-"}
-                  </span>
-                  <span className="request-log-duration">
-                    {formatRequestLogDuration(
-                      entry.state === "running"
-                        ? Math.max(0, nowMs - entry.startedAtMs)
-                        : entry.durationMs,
-                    )}
-                    {entry.state === "running" ? (
-                      <small>{t("进行中")}</small>
-                    ) : entry.firstTokenMs != null ? (
-                      <small>{tf("首字 {0}", [formatRequestLogDuration(entry.firstTokenMs)])}</small>
-                    ) : null}
-                  </span>
-                </button>
-                {expanded === entry.id ? (
-                  <div className="request-log-detail">
-                    <dl>
-                      <div><dt>{t("请求 ID")}</dt><dd><code>{entry.id}</code></dd></div>
-                      <div>
-                        <dt>{t("会话 ID")}</dt>
-                        <dd>
-                          {entry.threadTitle ? <strong className="request-log-session-title">{entry.threadTitle}</strong> : null}
-                          <code>{entry.threadId || "-"}</code>
-                        </dd>
-                      </div>
-                      <div><dt>{t("路径")}</dt><dd><code>{entry.method} {entry.path}</code></dd></div>
-                      <div><dt>{t("上游协议")}</dt><dd>{entry.wireApi || "-"}</dd></div>
-                      <div><dt>{t("上游模型")}</dt><dd>{entry.upstreamModel || "-"}</dd></div>
-                      <div><dt>{t("首字耗时")}</dt><dd>{entry.firstTokenMs == null ? (entry.state === "running" ? t("进行中") : "-") : formatRequestLogDuration(entry.firstTokenMs)}</dd></div>
-                      <div><dt>{t("尝试次数")}</dt><dd>{entry.attempts || "-"}</dd></div>
-                      <div><dt>{t("自动重试")}</dt><dd>{entry.autoRetries}</dd></div>
-                      <div><dt>{t("重试原因")}</dt><dd>{(entry.retryReasons ?? []).join("、") || "-"}</dd></div>
-                      {entry.attemptDetails?.length ? (
-                        <div className="request-log-attempts">
-                          <dt>{t("尝试明细")}</dt>
-                          <dd>
-                            <ul>
-                              {entry.attemptDetails.map((detail) => (
-                                <li key={`${detail.attempt}-${detail.code ?? ""}`}>
-                                  <strong>{tf("第 {0} 次", [detail.attempt])}</strong>
-                                  <code>{detail.code || "-"}</code>
-                                  {detail.delayMs != null ? (
-                                    <small>{tf("退避 {0}", [formatRequestLogDuration(detail.delayMs)])}</small>
-                                  ) : null}
-                                  {detail.message ? <small title={detail.message}>{detail.message}</small> : null}
-                                </li>
-                              ))}
-                            </ul>
-                          </dd>
-                        </div>
-                      ) : null}
-                      <div><dt>{t("流式")}</dt><dd>{entry.stream ? "SSE" : "JSON"}</dd></div>
-                      <div><dt>{t("流结果")}</dt><dd>{entry.streamOutcome || "-"}</dd></div>
-                      <div><dt>{t("推理 tokens")}</dt><dd>{formatRequestLogTokens(entry.usage?.reasoningTokens)}</dd></div>
-                      <div><dt>{t("错误")}</dt><dd>{entry.error || "-"}</dd></div>
-                    </dl>
-                  </div>
-                ) : null}
-              </Fragment>
-            ))}
-          </div>
-        ) : (
-          <div className="empty">
-            {entries.length
-              ? t("没有匹配当前筛选条件的请求。")
-              : t("还没有请求日志。启动 Codex 发起一次对话后即可看到。")}
-          </div>
-        )}
-      </CardContent>
-    </Panel>
-  );
-}
-
-function RelayEnvironmentScreen({ result, actions }: { result: RelayEnvironmentResult | null; actions: Actions }) {
-  const proxyVariables = result?.proxyEnvironment.variables ?? [];
-  const proxyVariableLabels = proxyVariables.map((item) => {
-    const source = item.source === "user" ? t("用户环境") : item.source === "system" ? t("系统环境") : t("进程环境");
-    return tf("{0}（{1}）", [item.name, source]);
-  });
-  const checks = [
-    {
-      id: "clash-verge-tun",
-      title: t("Clash Verge Rev TUN 模式"),
-      passed: result ? !result.clashVergeTun.enabled : false,
-      detail: result
-        ? result.clashVergeTun.enabled
-          ? tf("检测到 TUN 模式已开启，请在 Clash Verge Rev 中关闭。配置：{0}", [result.clashVergeTun.configPath || t("未记录路径")])
-          : result.clashVergeTun.configPath
-            ? tf("TUN 模式已关闭。配置：{0}", [result.clashVergeTun.configPath])
-            : t("未发现 Clash Verge Rev 配置，按未开启处理。")
-        : t("等待检测。"),
-    },
-    {
-      id: "proxy-environment",
-      title: t("系统代理环境变量"),
-      passed: result ? proxyVariables.length === 0 : false,
-      detail: result
-        ? proxyVariables.length
-          ? tf("检测到代理环境变量：{0}。请清理后重新启动 Codex。", [proxyVariableLabels.join(t("、"))])
-          : t("未检测到 HTTP_PROXY、HTTPS_PROXY、ALL_PROXY、NO_PROXY 或 FTP_PROXY。")
-        : t("等待检测。"),
-    },
-    {
-      id: "codex-dotenv",
-      title: t("Codex .env 文件"),
-      passed: result ? !result.codexEnvFile.exists : false,
-      detail: result
-        ? result.codexEnvFile.exists
-          ? tf("检测到可能干扰供应商配置的 .env 文件：{0}", [result.codexEnvFile.path])
-          : tf("未发现 .env 文件：{0}", [result.codexEnvFile.path])
-        : t("等待检测。"),
-    },
-  ];
-  const allPassed = Boolean(result) && checks.every((check) => check.passed);
-
-  return (
-    <Panel>
-      <CardHead
-        title={t("中转站环境配置检测")}
-        detail={result ? (allPassed ? t("三项检测全部通过") : t("检测到需要处理的环境问题")) : t("正在读取本机环境")}
-      />
-      <CardContent>
-        <div className="relay-environment-checks">
-          {checks.map((check) => (
-            <div className={`relay-environment-check ${result ? (check.passed ? "ok" : "failed") : "pending"}`} key={check.id}>
-              <div className="relay-environment-check-icon">
-                {result ? (check.passed ? <CheckCircle2 className="h-5 w-5" /> : <ShieldAlert className="h-5 w-5" />) : <RefreshCw className="h-5 w-5" />}
-              </div>
-              <div className="relay-environment-check-copy">
-                <strong>{check.title}</strong>
-                <span>{check.detail}</span>
-              </div>
-              <Badge status={result ? (check.passed ? "ok" : "failed") : "not_checked"} />
-            </div>
-          ))}
-        </div>
-        <Toolbar>
-          <Button onClick={() => void actions.refreshRelayEnvironment()}>
-            <RefreshCw className="h-4 w-4" />
-            {t("重新检测")}
-          </Button>
-        </Toolbar>
-      </CardContent>
-    </Panel>
   );
 }
 
@@ -4835,173 +3782,6 @@ function StandaloneModeGroup({
   );
 }
 
-function UserScriptsScreen({ settings, market, actions }: { settings: SettingsResult | null; market: ScriptMarketResult | null; actions: Actions }) {
-  const [reloading, setReloading] = useState(false);
-  const reload = async () => {
-    if (reloading) return;
-    setReloading(true);
-    try {
-      await actions.reloadUserScripts();
-    } finally {
-      setReloading(false);
-    }
-  };
-  const inventory = settings?.user_scripts;
-  const scripts = inventory?.scripts ?? [];
-  const marketScripts = market?.market.scripts ?? [];
-  const [marketSearch, setMarketSearch] = useState("");
-  const [marketView, setMarketView] = useState<"grid" | "list">("grid");
-  const filteredMarketScripts = useMemo(() => {
-    const query = marketSearch.trim().toLocaleLowerCase();
-    if (!query) return marketScripts;
-    return marketScripts.filter((script) => {
-      const haystack = [
-        script.name,
-        script.author,
-        script.description,
-        script.version,
-        script.homepage,
-        ...script.tags,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLocaleLowerCase();
-      return haystack.includes(query);
-    });
-  }, [marketSearch, marketScripts]);
-  const installedCount = marketScripts.filter((script) => script.installed).length;
-  // market_id -> 本地脚本 key。只用 user 来源的脚本：内置脚本走的是 builtin: 前缀，
-  // 后端 delete_user_script 只接受 user:，映射过去会直接报错。
-  const installedKeyByMarketId = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const script of scripts) {
-      if (script.source !== "user" || !script.market_id) continue;
-      map.set(script.market_id, script.key);
-    }
-    return map;
-  }, [scripts]);
-  return (
-    <>
-      <Panel>
-        <CardHead title={t("拓展")} detail={tf("{0} 个市场拓展，已安装 {1} 个，本地整体 {2}", [marketScripts.length, installedCount, inventory?.enabled === false ? t("关闭") : t("开启")])} />
-        <CardContent>
-          <div className="metric-list">
-            <Metric label={t("市场状态")} value={market?.market.message ?? t("尚未刷新")} />
-            <Metric label={t("远程拓展")} value={tf("{0} 个", [marketScripts.length])} />
-            <Metric label={t("已安装")} value={tf("{0} 个", [installedCount])} />
-            <Metric label={t("本地整体")} value={inventory?.enabled === false ? t("关闭") : t("开启")} />
-          </div>
-          <Toolbar>
-            <Button
-              onClick={() => void actions.setUserScriptsEnabled(inventory?.enabled === false)}
-              disabled={!inventory}
-              variant="secondary"
-              aria-pressed={inventory?.enabled !== false}
-              title={t("整体开关不改变单个拓展的启停设置")}
-            >
-              {inventory?.enabled === false ? t("开启本地拓展") : t("关闭本地拓展")}
-            </Button>
-            <Button
-              onClick={() => void actions.setUserScriptsSkipNextStart(!inventory?.skip_next_start)}
-              disabled={!inventory}
-              variant={inventory?.skip_next_start ? "secondary" : "outline"}
-              title={t("脚本导致黑屏或卡死时，下一次启动先跳过脚本；脚本启停设置不会改变")}
-            >
-              {inventory?.skip_next_start ? t("取消下次启动安全模式") : t("下次启动跳过拓展")}
-            </Button>
-            <Button onClick={() => void actions.refreshScriptMarket()}>
-              <RefreshCw className="h-4 w-4" />
-              {t("刷新市场")}
-            </Button>
-            <Button onClick={() => void actions.openExternalUrl(SCRIPT_MARKET_REPOSITORY_URL)} variant="secondary">
-              <ExternalLink className="h-4 w-4" />
-              {t("投稿")}
-            </Button>
-            <Button onClick={() => void actions.refreshCurrent()} variant="secondary">
-              <RefreshCw className="h-4 w-4" />
-              {t("刷新本地")}
-            </Button>
-            <Button onClick={() => void reload()} disabled={reloading} variant="secondary" title={t("应用本地拓展及开关；旧拓展可能需要刷新 Codex 页面")}>
-              <RefreshCw className={reloading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-              {t("热重载拓展")}
-            </Button>
-          </Toolbar>
-        </CardContent>
-      </Panel>
-      <Panel>
-        <CardHead
-          title={t("市场拓展")}
-          detail={
-            market?.market.updatedAt
-              ? tf("清单更新时间：{0}，当前显示 {1} / {2}", [market.market.updatedAt, filteredMarketScripts.length, marketScripts.length])
-              : t("从 GitHub 静态清单加载")
-          }
-        />
-        <CardContent>
-          <div className="script-market-toolbar">
-            <div className="script-market-search">
-              <Search className="h-4 w-4" />
-              <Input
-                aria-label={t("搜索市场拓展")}
-                onChange={(event) => setMarketSearch(event.currentTarget.value)}
-                placeholder={t("搜索名称、作者、描述或标签")}
-                value={marketSearch}
-              />
-            </div>
-            <div className="script-market-view-toggle" role="group" aria-label={t("拓展排版")}>
-              <Button
-                aria-pressed={marketView === "grid"}
-                onClick={() => setMarketView("grid")}
-                size="sm"
-                variant={marketView === "grid" ? "secondary" : "ghost"}
-              >
-                <LayoutGrid className="h-4 w-4" />
-                {t("板块")}
-              </Button>
-              <Button
-                aria-pressed={marketView === "list"}
-                onClick={() => setMarketView("list")}
-                size="sm"
-                variant={marketView === "list" ? "secondary" : "ghost"}
-              >
-                <List className="h-4 w-4" />
-                {t("列表")}
-              </Button>
-            </div>
-          </div>
-          {marketScripts.length ? (
-            filteredMarketScripts.length ? (
-              <div className={marketView === "list" ? "script-market-list" : "script-market-grid"}>
-                {filteredMarketScripts.map((script) => (
-                  <MarketScriptCard
-                    actions={actions}
-                    installedKey={installedKeyByMarketId.get(script.id)}
-                    key={script.id}
-                    script={script}
-                    view={marketView}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="empty">{t("没有匹配的市场拓展。")}</div>
-            )
-          ) : (
-            <div className="empty">{market?.status === "failed" ? market.message : t("点击刷新市场加载远程拓展。")}</div>
-          )}
-        </CardContent>
-      </Panel>
-      <Panel>
-        <CardHead title={t("本地拓展")} detail={t("内置、手动和市场安装拓展；可在这里启停或删除用户拓展")} />
-        <CardContent>
-          <div className="table">
-            {scripts.length ? scripts.map((script) => <ScriptRow key={script.key} script={script} actions={actions} />) : <div className="empty">{t("未发现用户拓展。")}</div>}
-          </div>
-        </CardContent>
-      </Panel>
-    </>
-  );
-}
-
 function SessionRepairPanel({ form, providerSyncProgress, sessionIndexRepairActive, sessionIndexRepairReport, sessionIndexRepairReportError, providerSyncTargets, selectedProviderSyncTarget, onFormChange, actions }: {
   form: BackendSettings;
   providerSyncProgress: ProviderSyncProgress;
@@ -5802,76 +4582,6 @@ function SortableRelayProfileCard({
           </Button>
         </span>
       </span>
-    </div>
-  );
-}
-
-function MarketScriptCard({
-  script,
-  actions,
-  view = "grid",
-  installedKey,
-}: {
-  script: ScriptMarketItem;
-  actions: Actions;
-  view?: "grid" | "list";
-  /// 已安装市场脚本在本地清单里的 key（`user:market-*.js`）。后端按 id 生成文件名，
-  /// 前端不重算，直接取自 user_scripts 清单；为空表示未安装或不可删除。
-  installedKey?: string;
-}) {
-  const status = script.updateAvailable ? t("可更新") : script.installed ? tf("已安装 {0}", [script.installedVersion]) : t("未安装");
-  const isGitHubHomepage = script.homepage ? isGitHubRepositoryHomepage(script.homepage) : false;
-  const githubSupportLabel = isGitHubHomepage ? tf("在 GitHub 上支持作者：{0}", [script.name]) : undefined;
-  return (
-    <div className="script-market-card" data-view={view}>
-      <div className="script-market-title">
-        <div>
-          <strong>{script.name}</strong>
-          <span>{script.author || t("未知作者")}</span>
-        </div>
-        <UiBadge variant={script.updateAvailable ? "default" : script.installed ? "secondary" : "outline"}>{status}</UiBadge>
-      </div>
-      <p className="script-market-description">{script.description || t("暂无描述。")}</p>
-      <div className="script-market-tags">
-        <span className="script-market-tag">v{script.version}</span>
-        {script.tags.map((tag) => (
-          <span className="script-market-tag" key={tag}>{tag}</span>
-        ))}
-      </div>
-      <div className="script-market-actions">
-        <Button onClick={() => void actions.installMarketScript(script.id)} size="sm">
-          <Download className="h-4 w-4" />
-          {script.updateAvailable ? t("更新") : script.installed ? t("重新安装") : t("安装")}
-        </Button>
-        {script.homepage ? (
-          <Button
-            aria-label={githubSupportLabel}
-            onClick={() => void actions.openExternalUrl(script.homepage)}
-            size="sm"
-            title={githubSupportLabel}
-            variant="secondary"
-          >
-            {isGitHubHomepage ? (
-              <>
-                <Star className="h-4 w-4" />
-                Star
-                <ExternalLink className="h-3 w-3" />
-              </>
-            ) : (
-              <>
-                <ExternalLink className="h-4 w-4" />
-                {t("主页")}
-              </>
-            )}
-          </Button>
-        ) : null}
-        {installedKey ? (
-          <Button onClick={() => void actions.deleteUserScript(installedKey)} size="sm" variant="outline">
-            <Trash2 className="h-4 w-4" />
-            {t("卸载")}
-          </Button>
-        ) : null}
-      </div>
     </div>
   );
 }
@@ -9403,31 +8113,6 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ScriptRow({ script, actions }: { script: NonNullable<UserScriptInventory["scripts"]>[number]; actions: Actions }) {
-  const source = script.market_id ? tf("市场 · {0}", [script.version || t("未知版本")]) : script.source === "builtin" ? t("内置") : t("用户");
-  const canDelete = script.source === "user";
-  return (
-    <div className="table-row">
-      <span>{script.name}</span>
-      <span>{source}</span>
-      <span>{script.enabled ? t("启用") : t("关闭")}</span>
-      <span>{script.status}</span>
-      <div className="script-row-actions">
-        <Button onClick={() => void actions.setUserScriptEnabled(script.key, !script.enabled)} size="sm" variant="secondary">
-          {script.enabled ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
-          {script.enabled ? t("禁用") : t("启用")}
-        </Button>
-        {canDelete ? (
-          <Button onClick={() => void actions.deleteUserScript(script.key)} size="sm" variant="outline">
-            <Trash2 className="h-4 w-4" />
-            {t("删除")}
-          </Button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 function routeTitle(route: Route) {
   return routes.find((item) => item.id === route)?.label ?? t("概览");
 }
@@ -9436,13 +8121,10 @@ function routeSubtitle(route: Route) {
   const subtitles: Record<Route, string> = {
     overview: t("检查问题、启动与快速修复"),
     relay: t("管理 API 供应商、协议、Key 与配置文件"),
-    relayEnvironment: t("统一管理本地协议代理、供应商代理与重试策略"),
-    requestLog: t("查看代理请求的状态、模型、重试、token 用量与缓存命中"),
     sessions: t("查看、删除和修复 Codex 本地会话"),
     context: t("独立管理 MCP 服务器与插件"),
     skills: t("从 GitHub 仓库安装 Skill 到 Codex"),
     enhance: t("管理常用功能、语音输入与下一步建议。"),
-    userScripts: t("内置和用户自定义拓展清单"),
     pluginMarket: t("检索插件，按需下载并安装到 Codex"),
 
     maintenance: t("入口检查与修复、开机启动与应用路径"),

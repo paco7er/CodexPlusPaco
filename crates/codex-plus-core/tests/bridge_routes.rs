@@ -11,7 +11,6 @@ use codex_plus_core::routes::{
 };
 use codex_plus_core::settings::BackendSettings;
 use codex_plus_core::status::StatusStore;
-use codex_plus_core::user_scripts::UserScriptManager;
 use serde_json::{Value, json};
 
 #[tokio::test]
@@ -21,15 +20,6 @@ async fn bridge_routes_cover_all_current_paths() {
     let cases = [
         ("/settings/get", json!({})),
         ("/settings/set", json!({"providerSyncEnabled": true})),
-        ("/user-scripts/list", json!({})),
-        ("/user-scripts/set-enabled", json!({"enabled": false})),
-        (
-            "/user-scripts/set-script-enabled",
-            json!({"key": "user:a.js", "enabled": false}),
-        ),
-        ("/user-scripts/delete", json!({"key": "user:a.js"})),
-        ("/user-scripts/reload", json!({})),
-        ("/user-scripts/load", json!({})),
         ("/cdp/targets", json!({})),
         ("/cdp/evaluate", json!({"kind":"avatar-overlay","expression":"1"})),
         ("/devtools/open", json!({})),
@@ -45,11 +35,6 @@ async fn bridge_routes_cover_all_current_paths() {
         (
             "/llm-proxy",
             json!({"url": "http://example.com", "method": "POST"}),
-        ),
-        ("/script-market/list", json!({})),
-        (
-            "/script-market/install",
-            json!({"id": "codex-relay-balance"}),
         ),
         ("/stepwise/settings", json!({})),
         (
@@ -90,6 +75,29 @@ async fn bridge_routes_cover_all_current_paths() {
 async fn retired_advertisement_route_fails_closed() {
     let result = handle_bridge_request(test_context(), "/ads", json!({})).await;
     assert_eq!(result["message"], "Unknown bridge path");
+}
+
+#[tokio::test]
+async fn retired_script_management_routes_are_unavailable() {
+    let ctx = test_context();
+    for path in [
+        "/user-scripts/list",
+        "/user-scripts/load",
+        "/user-scripts/reload",
+        "/user-scripts/set-enabled",
+        "/user-scripts/set-script-enabled",
+        "/user-scripts/delete",
+        "/script-market/list",
+        "/script-market/install",
+    ] {
+        let result = handle_bridge_request(
+            ctx.clone(),
+            path,
+            json!({"enabled": true, "key": "user:existing.js", "id": "existing"}),
+        )
+        .await;
+        assert_eq!(result["message"], "Unknown bridge path", "{path}");
+    }
 }
 
 #[tokio::test]
@@ -493,35 +501,6 @@ async fn settings_routes_use_settings_service() {
 }
 
 #[tokio::test]
-async fn runtime_routes_keep_user_script_inventory_shape() {
-    let ctx = test_context();
-
-    let listed = handle_bridge_request(ctx.clone(), "/user-scripts/list", json!({})).await;
-    let global = handle_bridge_request(
-        ctx.clone(),
-        "/user-scripts/set-enabled",
-        json!({"enabled": false}),
-    )
-    .await;
-    let script = handle_bridge_request(
-        ctx.clone(),
-        "/user-scripts/set-script-enabled",
-        json!({"key": "user:a.js", "enabled": false}),
-    )
-    .await;
-    let loaded = handle_bridge_request(ctx.clone(), "/user-scripts/load", json!({})).await;
-    let reloaded = handle_bridge_request(ctx, "/user-scripts/reload", json!({})).await;
-
-    assert_eq!(listed["enabled"], true);
-    assert_eq!(listed["scripts"][0]["key"], "builtin:demo.js");
-    assert_eq!(global["enabled"], false);
-    assert_eq!(script["scripts"][1]["enabled"], false);
-    assert_eq!(reloaded["reloaded"], true);
-    assert_eq!(loaded["reloaded"], false);
-    assert_eq!(reloaded["scripts"][0]["key"], "builtin:demo.js");
-}
-
-#[tokio::test]
 async fn runtime_status_devtools_repair_and_ads_routes_are_dispatched() {
     let runtime = Arc::new(FakeRuntime::default());
     let ctx = BridgeContext::new(
@@ -679,59 +658,6 @@ async fn bridge_context_core_with_data_uses_injected_data_service() {
 }
 
 #[tokio::test]
-async fn user_script_manager_scans_and_persists_inventory_shape() {
-    let temp = tempfile::tempdir().unwrap();
-    let builtin_dir = temp.path().join("builtin");
-    let user_dir = temp.path().join("user");
-    std::fs::create_dir_all(&builtin_dir).unwrap();
-    std::fs::write(builtin_dir.join("demo.js"), "window.demo = true;").unwrap();
-    std::fs::create_dir_all(&user_dir).unwrap();
-    std::fs::write(user_dir.join("a.js"), "window.a = true;").unwrap();
-    std::fs::write(user_dir.join("ignore.txt"), "not js").unwrap();
-    let manager = UserScriptManager::new(
-        builtin_dir.clone(),
-        user_dir.clone(),
-        temp.path().join("user_scripts.json"),
-    );
-
-    let listed = manager.inventory().unwrap();
-    manager.set_global_enabled(false).unwrap();
-    let disabled = manager.inventory().unwrap();
-    manager.set_script_enabled("user:a.js", false).unwrap();
-    let script_disabled = manager.inventory().unwrap();
-    manager.delete_user_script("user:a.js").unwrap();
-    let deleted = manager.inventory().unwrap();
-
-    assert_eq!(listed["enabled"], true);
-    assert_eq!(
-        listed["builtin_dir"].as_str().unwrap(),
-        builtin_dir.to_string_lossy()
-    );
-    assert_eq!(
-        listed["user_dir"].as_str().unwrap(),
-        user_dir.to_string_lossy()
-    );
-    assert_eq!(listed["scripts"][0]["key"], "builtin:demo.js");
-    assert_eq!(listed["scripts"][0]["source"], "builtin");
-    assert_eq!(listed["scripts"][0]["enabled"], true);
-    assert_eq!(listed["scripts"][0]["status"], "not_loaded");
-    assert_eq!(listed["scripts"][0]["error"], "");
-    assert_eq!(listed["scripts"][1]["key"], "user:a.js");
-    assert_eq!(disabled["enabled"], false);
-    assert_eq!(disabled["scripts"][0]["status"], "disabled");
-    assert_eq!(script_disabled["scripts"][1]["enabled"], false);
-    assert_eq!(deleted["scripts"].as_array().unwrap().len(), 1);
-    assert!(!user_dir.join("a.js").exists());
-    assert_eq!(
-        serde_json::from_str::<Value>(
-            &std::fs::read_to_string(temp.path().join("user_scripts.json")).unwrap()
-        )
-        .unwrap(),
-        json!({"enabled": false, "scripts": {}})
-    );
-}
-
-#[tokio::test]
 async fn delete_refuses_remote_and_unknown_hosts_instead_of_local_fallback() {
     let ctx = test_context();
     for host in [
@@ -772,147 +698,6 @@ async fn delete_refuses_remote_and_unknown_hosts_instead_of_local_fallback() {
     .await;
     assert_eq!(local["status"], "local_deleted");
     assert_eq!(local["undo_token"], "undo-s1");
-}
-
-#[tokio::test]
-async fn user_script_inventory_merges_renderer_runtime_status() {
-    let temp = tempfile::tempdir().unwrap();
-    let builtin_dir = temp.path().join("builtin");
-    let user_dir = temp.path().join("user");
-    std::fs::create_dir_all(&builtin_dir).unwrap();
-    std::fs::create_dir_all(&user_dir).unwrap();
-    std::fs::write(user_dir.join("loaded.js"), "window.loaded = true;").unwrap();
-    std::fs::write(user_dir.join("failed.js"), "throw new Error('boom');").unwrap();
-    let manager =
-        UserScriptManager::new(builtin_dir, user_dir, temp.path().join("user_scripts.json"));
-    let runtime_status = json!({
-        "user:loaded.js": {"status": "loaded", "error": ""},
-        "user:failed.js": {"status": "failed", "error": "boom"}
-    });
-
-    let inventory = manager
-        .inventory_with_runtime_status(Some(&runtime_status))
-        .unwrap();
-    let scripts = inventory["scripts"].as_array().unwrap();
-    let loaded = scripts
-        .iter()
-        .find(|script| script["key"] == "user:loaded.js")
-        .unwrap();
-    let failed = scripts
-        .iter()
-        .find(|script| script["key"] == "user:failed.js")
-        .unwrap();
-
-    assert_eq!(loaded["status"], "loaded");
-    assert_eq!(loaded["error"], "");
-    assert_eq!(failed["status"], "failed");
-    assert_eq!(failed["error"], "boom");
-}
-
-#[tokio::test]
-async fn user_script_manager_deletes_market_script_metadata_and_rejects_builtin_delete() {
-    let temp = tempfile::tempdir().unwrap();
-    let builtin_dir = temp.path().join("builtin");
-    let user_dir = temp.path().join("user");
-    std::fs::create_dir_all(&builtin_dir).unwrap();
-    std::fs::write(builtin_dir.join("demo.js"), "window.demo = true;").unwrap();
-    std::fs::create_dir_all(&user_dir).unwrap();
-    let manager = UserScriptManager::new(
-        builtin_dir,
-        user_dir.clone(),
-        temp.path().join("user_scripts.json"),
-    );
-    let script = codex_plus_core::script_market::MarketScript {
-        id: "demo".to_string(),
-        name: "Demo".to_string(),
-        description: String::new(),
-        version: "1.0.0".to_string(),
-        author: String::new(),
-        tags: Vec::new(),
-        homepage: "https://example.com/demo".to_string(),
-        script_url: "https://example.com/demo.js".to_string(),
-        requirements: Vec::new(),
-        limitations: Vec::new(),
-        icon: String::new(),
-    };
-
-    codex_plus_core::script_market::install_market_script_content(
-        &manager,
-        &script,
-        b"window.demo = true;",
-    )
-    .unwrap();
-    manager
-        .set_script_enabled("user:market-demo.js", false)
-        .unwrap();
-
-    let error = manager.delete_user_script("builtin:demo.js").unwrap_err();
-    assert!(error.to_string().contains("only user scripts"));
-    manager.delete_user_script("user:market-demo.js").unwrap();
-
-    assert!(!user_dir.join("market-demo.js").exists());
-    assert!(
-        manager.inventory().unwrap()["scripts"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .all(|script| script["market_id"] != "demo")
-    );
-    let saved = serde_json::from_str::<Value>(
-        &std::fs::read_to_string(temp.path().join("user_scripts.json")).unwrap(),
-    )
-    .unwrap();
-    assert!(saved.get("market").is_none());
-    assert_eq!(saved["scripts"], json!({}));
-}
-
-#[tokio::test]
-async fn core_runtime_reload_evaluates_enabled_user_bundle_and_status_is_ok() {
-    let temp = tempfile::tempdir().unwrap();
-    let builtin_dir = temp.path().join("builtin");
-    std::fs::create_dir_all(&builtin_dir).unwrap();
-    std::fs::write(builtin_dir.join("demo.js"), "window.demo = true;").unwrap();
-    let manager = UserScriptManager::new(
-        builtin_dir,
-        temp.path().join("user"),
-        temp.path().join("user_scripts.json"),
-    );
-    let evaluated = Arc::new(Mutex::new(Vec::<String>::new()));
-    let runtime = CoreRuntimeService::new(9229, StatusStore::default())
-        .with_user_scripts(manager)
-        .with_user_script_evaluator({
-            let evaluated = evaluated.clone();
-            Arc::new(move |websocket_url, script| {
-                evaluated
-                    .lock()
-                    .unwrap()
-                    .push(format!("{websocket_url}:{script}"));
-                Ok(json!({"status": "ok"}))
-            })
-        })
-        .with_websocket_url("ws://page");
-    let ctx = BridgeContext::new(
-        Arc::new(FakeSettings::default()),
-        Arc::new(runtime),
-        Arc::new(FakeData::default()),
-    );
-
-    let status = handle_bridge_request(ctx.clone(), "/backend/status", json!({})).await;
-    let loaded = handle_bridge_request(ctx.clone(), "/user-scripts/load", json!({})).await;
-    let reloaded = handle_bridge_request(ctx, "/user-scripts/reload", json!({})).await;
-
-    assert_eq!(
-        status,
-        json!({"status": "ok", "message": "后端已连接", "version": codex_plus_core::version::VERSION, "hideOfficialUsageAlert": false})
-    );
-    assert_eq!(reloaded["scripts"][0]["key"], "builtin:demo.js");
-    assert_eq!(loaded["scripts"][0]["key"], "builtin:demo.js");
-    let evaluated = evaluated.lock().unwrap();
-    assert_eq!(evaluated.len(), 2);
-    assert!(evaluated[0].starts_with("ws://page:"));
-    assert!(evaluated[0].contains("window.demo = true;"));
-    assert!(!evaluated[0].contains(".prepareReload();"));
-    assert!(evaluated[1].contains(".prepareReload();"));
 }
 
 #[tokio::test]
@@ -969,179 +754,6 @@ async fn bridge_backend_status_writes_diagnostic_log() {
     assert!(contents.contains("bridge.backend_status_ok"));
     assert!(contents.contains("/backend/status"));
     codex_plus_core::diagnostic_log::set_diagnostic_log_path_for_tests(None);
-}
-
-#[test]
-fn user_script_manager_tolerates_bad_config_fields_and_updates_atomically() {
-    let temp = tempfile::tempdir().unwrap();
-    let config_path = temp.path().join("user_scripts.json");
-    std::fs::write(
-        &config_path,
-        r#"{"enabled":"not bool","scripts":{"user:a.js":false,"user:b.js":"bad"},"custom":true}"#,
-    )
-    .unwrap();
-    let manager = UserScriptManager::new(
-        temp.path().join("builtin"),
-        temp.path().join("user"),
-        config_path.clone(),
-    );
-
-    assert_eq!(manager.load_config().enabled, true);
-    assert_eq!(manager.load_config().scripts.get("user:a.js"), Some(&false));
-    assert!(!manager.load_config().scripts.contains_key("user:b.js"));
-
-    manager.set_script_enabled("user:c.js", false).unwrap();
-    let saved = serde_json::from_str::<Value>(&std::fs::read_to_string(config_path).unwrap())
-        .expect("config should remain valid JSON");
-
-    assert_eq!(saved["enabled"], true);
-    assert_eq!(saved["scripts"]["user:a.js"], false);
-    assert_eq!(saved["scripts"]["user:c.js"], false);
-}
-
-#[test]
-fn script_market_manifest_filters_invalid_entries() {
-    let raw = serde_json::json!({
-        "version": 1,
-        "updated_at": "2026-05-21T00:00:00Z",
-        "scripts": [
-            {
-                "id": "demo",
-                "name": "Demo",
-                "description": "Useful demo",
-                "version": "1.0.0",
-                "author": "BigPizzaV3",
-                "tags": ["ui", 42],
-                "homepage": "https://example.com/demo",
-                "script_url": "https://example.com/demo.js",
-            },
-            { "id": "", "name": "Bad", "version": "1", "script_url": "https://example.com/bad.js" },
-            { "id": "missing-url", "name": "Bad", "version": "1" }
-        ]
-    });
-
-    let manifest = codex_plus_core::script_market::parse_market_manifest(raw).unwrap();
-
-    assert_eq!(manifest.version, 1);
-    assert_eq!(manifest.updated_at.as_deref(), Some("2026-05-21T00:00:00Z"));
-    assert_eq!(manifest.scripts.len(), 1);
-    assert_eq!(manifest.scripts[0].id, "demo");
-    assert_eq!(manifest.scripts[0].tags, vec!["ui"]);
-}
-
-#[test]
-fn user_script_inventory_includes_market_metadata() {
-    let temp = tempfile::tempdir().unwrap();
-    let user_dir = temp.path().join("user");
-    std::fs::create_dir_all(&user_dir).unwrap();
-    std::fs::write(user_dir.join("market-demo.js"), "window.demo = true;").unwrap();
-    let manager = UserScriptManager::new(
-        temp.path().join("builtin"),
-        user_dir,
-        temp.path().join("user_scripts.json"),
-    );
-
-    manager
-        .record_market_install(&codex_plus_core::script_market::MarketScript {
-            id: "demo".to_string(),
-            name: "Demo".to_string(),
-            description: "Useful demo".to_string(),
-            version: "1.0.0".to_string(),
-            author: "BigPizzaV3".to_string(),
-            tags: vec!["ui".to_string()],
-            homepage: "https://example.com/demo".to_string(),
-            script_url: "https://example.com/demo.js".to_string(),
-            requirements: Vec::new(),
-            limitations: Vec::new(),
-            icon: String::new(),
-        })
-        .unwrap();
-
-    let inventory = manager.inventory().unwrap();
-
-    assert_eq!(inventory["scripts"][0]["key"], "user:market-demo.js");
-    assert_eq!(inventory["scripts"][0]["market_id"], "demo");
-    assert_eq!(inventory["scripts"][0]["version"], "1.0.0");
-    assert_eq!(inventory["scripts"][0]["installed"], true);
-    assert_eq!(
-        inventory["scripts"][0]["source_url"],
-        "https://example.com/demo.js"
-    );
-    assert_eq!(
-        inventory["scripts"][0]["homepage"],
-        "https://example.com/demo"
-    );
-}
-
-#[test]
-fn install_market_script_writes_file_and_records_metadata() {
-    let temp = tempfile::tempdir().unwrap();
-    let manager = UserScriptManager::new(
-        temp.path().join("builtin"),
-        temp.path().join("user"),
-        temp.path().join("user_scripts.json"),
-    );
-    let script = codex_plus_core::script_market::MarketScript {
-        id: "demo".to_string(),
-        name: "Demo".to_string(),
-        description: String::new(),
-        version: "1.0.0".to_string(),
-        author: String::new(),
-        tags: Vec::new(),
-        homepage: "https://example.com/demo".to_string(),
-        script_url: "https://example.com/demo.js".to_string(),
-        requirements: Vec::new(),
-        limitations: Vec::new(),
-        icon: String::new(),
-    };
-
-    codex_plus_core::script_market::install_market_script_content(
-        &manager,
-        &script,
-        b"window.demo = true;",
-    )
-    .unwrap();
-
-    assert_eq!(
-        std::fs::read_to_string(temp.path().join("user").join("market-demo.js")).unwrap(),
-        "window.demo = true;"
-    );
-    let inventory = manager.inventory().unwrap();
-    assert_eq!(inventory["scripts"][0]["market_id"], "demo");
-}
-
-#[test]
-fn install_market_script_ignores_checksum_mismatch_and_replaces_existing_file() {
-    let temp = tempfile::tempdir().unwrap();
-    let user_dir = temp.path().join("user");
-    std::fs::create_dir_all(&user_dir).unwrap();
-    std::fs::write(user_dir.join("market-demo.js"), "old").unwrap();
-    let manager = UserScriptManager::new(
-        temp.path().join("builtin"),
-        user_dir.clone(),
-        temp.path().join("user_scripts.json"),
-    );
-    let script = codex_plus_core::script_market::MarketScript {
-        id: "demo".to_string(),
-        name: "Demo".to_string(),
-        description: String::new(),
-        version: "1.0.0".to_string(),
-        author: String::new(),
-        tags: Vec::new(),
-        homepage: String::new(),
-        script_url: "https://example.com/demo.js".to_string(),
-        requirements: Vec::new(),
-        limitations: Vec::new(),
-        icon: String::new(),
-    };
-
-    codex_plus_core::script_market::install_market_script_content(&manager, &script, b"new")
-        .unwrap();
-
-    assert_eq!(
-        std::fs::read_to_string(user_dir.join("market-demo.js")).unwrap(),
-        "new"
-    );
 }
 
 #[tokio::test]
@@ -1274,16 +886,14 @@ impl BridgeSettingsService for FakeSettings {
 }
 
 struct FakeRuntime {
-    enabled: Mutex<bool>,
-    script_enabled: Mutex<bool>,
+
     manager_payload: Mutex<Value>,
 }
 
 impl Default for FakeRuntime {
     fn default() -> Self {
         Self {
-            enabled: Mutex::new(true),
-            script_enabled: Mutex::new(true),
+
             manager_payload: Mutex::new(json!({})),
         }
     }
@@ -1291,30 +901,6 @@ impl Default for FakeRuntime {
 
 #[async_trait]
 impl BridgeRuntimeService for FakeRuntime {
-    async fn user_script_inventory(&self) -> anyhow::Result<Value> {
-        Ok(self.inventory(false))
-    }
-
-    async fn set_user_scripts_enabled(&self, enabled: bool) -> anyhow::Result<Value> {
-        *self.enabled.lock().unwrap() = enabled;
-        Ok(self.inventory(false))
-    }
-
-    async fn set_user_script_enabled(&self, key: String, enabled: bool) -> anyhow::Result<Value> {
-        assert_eq!(key, "user:a.js");
-        *self.script_enabled.lock().unwrap() = enabled;
-        Ok(self.inventory(false))
-    }
-
-    async fn delete_user_script(&self, key: String) -> anyhow::Result<Value> {
-        assert_eq!(key, "user:a.js");
-        *self.script_enabled.lock().unwrap() = false;
-        Ok(self.inventory(false))
-    }
-
-    async fn reload_user_scripts(&self) -> anyhow::Result<Value> {
-        Ok(self.inventory(true))
-    }
 
     async fn open_devtools(&self) -> anyhow::Result<Value> {
         Ok(json!({"status": "ok", "opened": true}))
@@ -1348,19 +934,6 @@ impl BridgeRuntimeService for FakeRuntime {
         }))
     }
 
-}
-
-impl FakeRuntime {
-    fn inventory(&self, reloaded: bool) -> Value {
-        json!({
-            "enabled": *self.enabled.lock().unwrap(),
-            "reloaded": reloaded,
-            "scripts": [
-                {"key": "builtin:demo.js", "name": "demo.js", "enabled": true},
-                {"key": "user:a.js", "name": "a.js", "enabled": *self.script_enabled.lock().unwrap()}
-            ]
-        })
-    }
 }
 
 struct FakeData;

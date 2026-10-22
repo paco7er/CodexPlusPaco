@@ -1480,65 +1480,6 @@ body {
   margin: 0;
 }
 
-.relay-environment-checks {
-  display: grid;
-  gap: 8px;
-}
-
-.relay-environment-check {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-  min-height: 74px;
-  border: 1px solid hsl(var(--border));
-  border-radius: 8px;
-  background: hsl(var(--background));
-  padding: 12px;
-}
-
-.relay-environment-check.ok {
-  border-color: hsl(var(--status-success) / 0.35);
-}
-
-.relay-environment-check.failed {
-  border-color: hsl(0 72% 55% / 0.4);
-}
-
-.relay-environment-check-icon {
-  display: grid;
-  place-items: center;
-}
-
-.relay-environment-check.ok .relay-environment-check-icon {
-  color: hsl(var(--status-success));
-}
-
-.relay-environment-check.failed .relay-environment-check-icon {
-  color: hsl(0 72% 55%);
-}
-
-.relay-environment-check.pending .relay-environment-check-icon {
-  color: hsl(var(--muted-foreground));
-}
-
-.relay-environment-check-copy {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.relay-environment-check-copy strong {
-  font-size: 14px;
-}
-
-.relay-environment-check-copy span {
-  color: hsl(var(--muted-foreground));
-  font-size: 12px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-
 .provider-doctor-modal {
   max-width: 620px;
 }
@@ -4008,23 +3949,10 @@ input[type="range"]:disabled {
   grid-template-columns: minmax(120px, 1.4fr) 110px 80px minmax(90px, 1fr) auto;
 }
 
-.script-row-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-.script-market-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 12px;
-}
-
 /* Skills 卡片。
  *
- * 不复用 .script-market-card：那个卡片是 display:grid 且行高 auto，被同行最高的
- * 卡片拉伸时多余高度会分摊进每一行，描述框跟着变高，line-clamp 只渲染 3 行但盒子
+ * 卡片被同行最高的卡片拉伸时，多余高度会分摊进每一行，描述框跟着变高，
+ * line-clamp 只渲染 3 行但盒子
  * 更高，overflow:hidden 下面就会露出第 4 行的一小截。这里用 align-content:
  * space-between，多余空间只落在行与行之间，各行保持自然高度。 */
 .skill-card {
@@ -4094,53 +4022,6 @@ input[type="range"]:disabled {
   color: hsl(var(--muted-foreground));
   font-size: 12px;
   line-height: 1.4;
-}
-
-.script-market-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.script-market-search {
-  position: relative;
-  flex: 1 1 320px;
-  min-width: 220px;
-}
-
-.script-market-search svg {
-  position: absolute;
-  top: 50%;
-  left: 11px;
-  color: hsl(var(--muted-foreground));
-  transform: translateY(-50%);
-  pointer-events: none;
-}
-
-.script-market-search input {
-  padding-left: 34px;
-}
-
-.script-market-view-toggle {
-  display: inline-flex;
-  flex: 0 0 auto;
-  gap: 4px;
-  border: 1px solid hsl(var(--border));
-  border-radius: 8px;
-  background: hsl(var(--muted) / 0.42);
-  padding: 3px;
-}
-
-.script-market-view-toggle .button {
-  height: 32px;
-  border-radius: 6px;
-}
-
-.script-market-list {
-  display: grid;
-  gap: 8px;
 }
 
 .session-list {
@@ -4254,120 +4135,6 @@ input[type="range"]:disabled {
 
 .session-meta {
   justify-items: end;
-}
-
-.script-market-card {
-  display: grid;
-  gap: 10px;
-  border: 1px solid hsl(var(--border));
-  border-radius: 8px;
-  background: hsl(var(--card));
-  padding: 14px;
-  transition:
-    border-color var(--motion-normal) var(--motion-ease),
-    background-color var(--motion-normal) var(--motion-ease),
-    box-shadow var(--motion-normal) var(--motion-ease),
-    transform var(--motion-normal) var(--motion-ease);
-}
-
-.script-market-card[data-view="list"] {
-  grid-template-columns: minmax(220px, 0.9fr) minmax(260px, 1.3fr) minmax(180px, 0.8fr) auto;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-}
-
-/* 卡片被同行最高的那张拉伸时，多余高度默认会分摊进每一行；描述框跟着变高，
- * 但 line-clamp 只渲染 3 行，overflow:hidden 下面就露出第 4 行的一小截。
- * 实测触发条件是行内出现空容器（标签为空时溢出 2.8px），当前 .script-market-tags
- * 总会渲染 v{version} 所以碰不到，这里是防御性收口。
- * 顺带把多余空间集中到行间，操作按钮在同一行的卡片间底部对齐。 */
-.script-market-card[data-view="grid"] {
-  align-content: space-between;
-}
-
-.script-market-card:hover {
-  border-color: hsl(var(--primary) / 0.36);
-  box-shadow: 0 12px 26px hsl(var(--foreground) / 0.08);
-  transform: translateY(-1px);
-}
-
-.script-market-title {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  align-items: flex-start;
-}
-
-.script-market-card[data-view="list"] .script-market-title {
-  align-items: center;
-}
-
-.script-market-title > div {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.script-market-title strong {
-  font-size: 15px;
-  line-height: 1.35;
-}
-
-.script-market-card[data-view="list"] .script-market-title strong,
-.script-market-card[data-view="list"] .script-market-title span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.script-market-title span,
-.script-market-description {
-  color: hsl(var(--muted-foreground));
-  font-size: 13px;
-}
-
-.script-market-description {
-  margin: 0;
-  line-height: 1.5;
-}
-
-.script-market-card[data-view="grid"] .script-market-description {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-}
-
-.script-market-card[data-view="list"] .script-market-description {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.script-market-tags,
-.script-market-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.script-market-card[data-view="list"] .script-market-tags {
-  max-height: 52px;
-  overflow: hidden;
-}
-
-.script-market-card[data-view="list"] .script-market-actions {
-  justify-content: flex-end;
-}
-
-.script-market-tag {
-  border: 1px solid hsl(var(--border));
-  border-radius: 999px;
-  color: hsl(var(--muted-foreground));
-  font-size: 12px;
-  line-height: 1.2;
-  padding: 3px 7px;
 }
 
 .empty {
@@ -4646,10 +4413,6 @@ input[type="range"]:disabled {
 
   .session-meta {
     justify-items: start;
-  }
-
-  .script-row-actions {
-    justify-content: flex-start;
   }
 
   .health-item {
@@ -5500,21 +5263,11 @@ select {
     hsl(var(--card));
 }
 
-.script-market-tag {
-  border-color: hsl(var(--border) / 0.9);
-  border-radius: 999px;
-  background: hsl(var(--card));
-  color: hsl(var(--muted-foreground));
-  font-size: 11px;
-  font-weight: 500;
-}
-
 /* ── 状态色 ─────────────────────────────────────────────────── */
 
 .good,
 .health-item.ok svg,
 .provider-doctor-check.ok svg,
-.relay-environment-check.ok .relay-environment-check-icon,
 .provider-doctor-step.ok .provider-doctor-step-icon {
   color: hsl(var(--status-success));
 }
@@ -5528,7 +5281,6 @@ select {
 
 .bad,
 .provider-doctor-check.failed svg,
-.relay-environment-check.failed .relay-environment-check-icon,
 .provider-doctor-step.failed .provider-doctor-step-icon {
   color: hsl(var(--status-error));
 }
@@ -5573,15 +5325,13 @@ select {
 
 .relay-profile-list,
 .session-list,
-.provider-doctor-checks,
-.relay-environment-checks {
+.provider-doctor-checks {
   gap: 6px;
 }
 
 .relay-profile-card,
 .mobile-server-card,
 .session-row,
-.script-market-card,
 .health-item,
 .feature-item,
 .feature-toggle,
@@ -5590,7 +5340,6 @@ select {
 .switch-row,
 .guide-step,
 .relay-context-row,
-.relay-environment-check,
 .provider-doctor-check,
 .provider-doctor-step,
 .provider-sync-progress {
@@ -5611,7 +5360,6 @@ select {
 .relay-profile-card:hover,
 .relay-profile-card:focus-visible,
 .session-row:hover,
-.script-market-card:hover,
 .mobile-server-card:hover,
 .health-item:hover,
 .feature-item:hover,
@@ -5820,14 +5568,6 @@ select {
   color: hsl(var(--brand-accent));
 }
 
-.relay-environment-check.ok {
-  border-color: hsl(var(--status-success) / 0.34);
-}
-
-.relay-environment-check.failed {
-  border-color: hsl(var(--status-error) / 0.38);
-}
-
 /* ── 浮层 ───────────────────────────────────────────────────── */
 
 .third-party-import-menu,
@@ -5870,10 +5610,6 @@ select {
 
 .toast-card.failed .toast-progress {
   background: hsl(var(--status-error));
-}
-
-.script-market-card {
-  padding: 12px;
 }
 
 /* ── 代码 / 日志 ─────────────────────────────────────────────── */
@@ -6029,33 +5765,6 @@ select {
 
   .mobile-server-grid {
     grid-template-columns: 1fr;
-  }
-
-  .script-market-toolbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .script-market-search {
-    flex-basis: auto;
-    min-width: 0;
-  }
-
-  .script-market-view-toggle {
-    width: 100%;
-  }
-
-  .script-market-view-toggle .button {
-    flex: 1 1 0;
-  }
-
-  .script-market-card[data-view="list"] {
-    grid-template-columns: 1fr;
-    align-items: stretch;
-  }
-
-  .script-market-card[data-view="list"] .script-market-actions {
-    justify-content: flex-start;
   }
 }
 
@@ -7289,305 +6998,6 @@ select {
 /* 更新说明在“关于”和更新弹窗里共用排版，长内容只在正文区滚动。 */
 
 /* ── 代理设置页：供应商独立代理列表 ───────────────────────────── */
-.proxy-provider-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.proxy-provider-row {
-  display: grid;
-  grid-template-columns: minmax(150px, 220px) minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-}
-
-.proxy-provider-meta {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.proxy-provider-meta strong {
-  overflow: hidden;
-  font-size: 13px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.proxy-provider-meta small {
-  overflow: hidden;
-  color: hsl(var(--muted-foreground));
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@media (max-width: 900px) {
-  .proxy-provider-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .proxy-provider-meta {
-    grid-column: 1 / -1;
-  }
-}
 
 /* ── 请求日志页 ──────────────────────────────────────────────── */
 /* 铺满可视区域：卡片撑到页面底部，列表在卡片内部滚动，避免大片留白。 */
-.screen.request-log-screen {
-  align-content: stretch;
-  overflow-y: hidden;
-}
-
-.screen.request-log-screen > * {
-  width: 100%;
-}
-
-.screen.request-log-screen > .request-log-panel {
-  display: flex;
-  height: 100%;
-  min-height: 0;
-  flex-direction: column;
-}
-
-.screen.request-log-screen .request-log-content {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.screen.request-log-screen .request-log-table {
-  flex: 1 1 auto;
-  min-height: 0;
-  max-height: none;
-}
-
-.request-log-panel {
-  width: 100%;
-  min-width: 0;
-}
-
-.request-log-content {
-  display: flex;
-  min-width: 0;
-  max-width: 100%;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.request-log-toolbar {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.request-log-search {
-  display: flex;
-  flex: 1 1 260px;
-  align-items: center;
-  gap: 6px;
-  min-width: 180px;
-}
-
-.request-log-search svg {
-  color: hsl(var(--muted-foreground));
-}
-
-.request-log-filter {
-  height: 32px;
-  border: 1px solid hsl(var(--border));
-  border-radius: 8px;
-  background: hsl(var(--background));
-  color: inherit;
-  padding: 0 8px;
-  font-size: 12px;
-}
-
-.request-log-session-filter {
-  max-width: 260px;
-}
-
-.request-log-auto {
-  margin: 0;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.request-log-error {
-  color: hsl(0 72% 60%);
-}
-
-.request-log-table {
-  width: 100%;
-  max-width: 100%;
-  max-height: calc(100vh - 320px);
-  overflow: auto;
-  border: 1px solid hsl(var(--border));
-  border-radius: 10px;
-  overscroll-behavior: contain;
-}
-
-.request-log-row {
-  display: grid;
-  grid-template-columns: 74px 44px 100px minmax(110px, 1.4fr) 74px 54px 54px 80px 54px;
-  gap: 8px;
-  align-items: center;
-  width: 100%;
-  min-width: 760px;
-  border: 0;
-  padding: 8px 12px;
-  color: inherit;
-  font-size: 12px;
-  text-align: left;
-}
-
-.request-log-head {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: hsl(var(--card));
-  color: hsl(var(--muted-foreground));
-  font-size: 11px;
-  letter-spacing: 0.02em;
-}
-
-.request-log-entry {
-  border-top: 1px solid hsl(var(--border));
-  background: transparent;
-  cursor: pointer;
-}
-
-.request-log-entry:hover {
-  background: hsl(var(--accent) / 0.45);
-}
-
-.request-log-entry[aria-expanded="true"] {
-  background: hsl(var(--accent) / 0.35);
-}
-
-.request-log-status {
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
-
-.request-log-status.ok {
-  color: hsl(142 60% 46%);
-}
-
-.request-log-status.bad {
-  color: hsl(0 72% 62%);
-}
-
-.request-log-retry {
-  color: hsl(38 92% 58%);
-  font-weight: 600;
-}
-
-.request-log-muted {
-  color: hsl(var(--muted-foreground));
-}
-
-.request-log-ellipsis {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.request-log-ellipsis small {
-  color: hsl(var(--muted-foreground));
-  font-size: 10px;
-}
-
-.request-log-detail {
-  padding: 10px 14px 14px;
-  border-top: 1px dashed hsl(var(--border));
-  background: hsl(var(--muted) / 0.25);
-}
-
-.request-log-detail dl {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 8px 18px;
-  margin: 0;
-}
-
-.request-log-detail dl > div {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.request-log-detail dt {
-  color: hsl(var(--muted-foreground));
-  font-size: 11px;
-}
-
-.request-log-detail dd {
-  margin: 0;
-  font-size: 12px;
-  word-break: break-all;
-}
-
-.request-log-detail dl > .request-log-attempts {
-  grid-column: 1 / -1;
-}
-
-.request-log-attempts ul {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.request-log-attempts li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.request-log-session-title {
-  display: block;
-  overflow: hidden;
-  color: hsl(var(--foreground));
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.request-log-attempts code {
-  color: hsl(var(--foreground));
-}
-
-.request-log-attempts small {
-  color: hsl(var(--muted-foreground));
-  font-size: 11px;
-}
-
-.request-log-status small {
-  display: block;
-  font-size: 10px;
-  font-weight: 500;
-  opacity: 0.9;
-}
-
-.request-log-status.running {
-  color: hsl(var(--primary));
-}
-
-.request-log-duration {
-  font-variant-numeric: tabular-nums;
-}
-
-.request-log-duration small {
-  display: block;
-  color: hsl(var(--muted-foreground));
-  font-size: 10px;
-}
