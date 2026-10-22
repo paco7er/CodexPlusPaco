@@ -116,3 +116,7 @@ smoke 通过现有产品接口注入单独启动的 Codex userData 窗口，未�
 最终验证：管理器 Node 测试 357 通过、1 跳过、0 失败；TypeScript、Vite、launcher/manager Cargo 构建通过。核心单测 575 通过、2 忽略，bridge 32、launcher 93、relay switch 18、CDP 159、assets 22 均通过；Tauri 旧配置归一化专项测试通过。当前新增文案均有英文词条；全量国际化校验仍有历史缺项，未扩大本次修改范围。
 
 在独立原生管理器窗口验证了标签切换、键盘左右键和 End 导航、草稿保留及顶部保存状态。临时草稿已恢复，未保存测试值或重新发送录音。最终语音截图为 /tmp/codex-plus-enhance-final-voice.png，中文建议截图为 /tmp/codex-plus-enhance-final-suggestions.png。预览应用为 /tmp/codex-plus-enhance-final-dSwiYn/CodexPlusPlus Enhance Preview.app。
+
+## 2026-10-22 管理器布局调整
+
+按用户要求移除「语音输入」「下一步建议」两个配置区及专用管理器命令，增强页直接展示常用增强，不再显示标签栏。总开关与保存入口仍固定在顶部。旧的语音与建议配置深链打开常用增强页，不再选择标签或滚动到已移除节点；已有运行时设置字段保持兼容，保存其他设置不再经过已撤下语音面板的前端校验。

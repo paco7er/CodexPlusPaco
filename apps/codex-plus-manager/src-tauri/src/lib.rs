@@ -108,10 +108,6 @@ pub fn run() {
             commands::restart_codex_plus,
             commands::load_settings,
 
-            commands::dictation_local_model_status,
-            commands::download_dictation_local_model,
-            commands::load_global_dictation_hotkey,
-            commands::set_global_dictation_hotkey,
             commands::native_browser_status,
             commands::save_settings,
             commands::test_vlm,
@@ -186,7 +182,6 @@ pub fn run() {
             commands::extract_relay_common_config,
             commands::test_relay_profile,
             commands::diagnose_relay_profile,
-            commands::test_stepwise_settings,
             commands::fetch_relay_profile_models,
             commands::fetch_sub2api_billing,
             commands::switch_relay_profile,

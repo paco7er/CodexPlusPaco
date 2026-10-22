@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import ts from "typescript";
@@ -85,6 +86,12 @@ test("retired enhancements have no settings, navigation or command references in
     "setPluginMarketplaceProgress", "setRemotePluginMarketplace", "setRemotePluginMarketplaceProgress",
     "repair_plugin_marketplace", "plugin_marketplace_status", "remote_plugin_marketplace_status", "repair_remote_plugin_marketplace",
     "修复插件市场", "官方远端插件缓存", "插件市场修复进度", "官方远端插件缓存进度", "释放并注册内置缓存",
+    "DictationSettingsPanel", "StepwiseSettingsPanel", "DictationLocalModelState", "GlobalDictationHotkeyState",
+    "enhancementTab", "setEnhancementTab", "pendingEnhancementSection", "ENHANCEMENT_SECTION_IDS",
+    "dictationSettingsIssue", "dictationSettingsValidationMessage",
+    "语音输入", "下一步建议", "语音服务预设", "下载本地模型", "保存全局热键",
+    "testStepwiseSettings", "test_stepwise_settings", "download_dictation_local_model",
+    "dictation_local_model_status", "load_global_dictation_hotkey", "set_global_dictation_hotkey",
   ]);
   const references = descendants(app)
     .filter((node) => ts.isIdentifier(node) || ts.isStringLiteral(node))
@@ -93,7 +100,7 @@ test("retired enhancements have no settings, navigation or command references in
   assert.deepEqual([...new Set(references)], []);
 });
 
-test("unified enhancements use the master switch and Chinese suggestion labels", () => {
+test("remaining enhancements use the master switch and keep their complete feature groups", () => {
   const enhance = component("EnhanceScreen");
   const toggles = elements(enhance).filter((element) => element.tagName.getText(app) === "FeatureToggle");
   assert.ok(toggles.length > 0);
@@ -116,108 +123,35 @@ test("unified enhancements use the master switch and Chinese suggestion labels",
   const visibleEnglish = descendants(app).filter((node) => ts.isStringLiteral(node)
     || ts.isNoSubstitutionTemplateLiteral(node) || ts.isJsxText(node)).filter((node) => /Stepwise/.test(node.getText(app)));
   assert.deepEqual(visibleEnglish.map((node) => node.getText(app)), [], "internal Stepwise fields stay compatible but visible names must use Chinese");
-  const suggestions = component("StepwiseSettingsPanel");
-  const header = elements(suggestions).find((element) => element.tagName.getText(app) === "CardHead");
-  assert.ok(header);
-  assert.equal(attribute(header, "title"), 't("下一步建议")');
-  assert.equal(attribute(fieldControl(suggestions, "form.codexAppStepwiseDirectSend"), "title"), 't("建议直接发送")');
 });
 
-test("complete voice and Stepwise panels share the enhancement form and save action", () => {
+test("remaining enhancements display directly without retired panes or a single-item tab strip", () => {
   const enhance = component("EnhanceScreen");
-  for (const name of ["DictationSettingsPanel", "StepwiseSettingsPanel"]) {
-    const panel = elements(enhance).find((element) => element.tagName.getText(app) === name);
-    assert.ok(panel, `${name} belongs in Codex enhancements`);
-    assert.equal(attribute(panel, "form"), "form");
-    assert.equal(attribute(panel, "onFormChange"), "onFormChange");
-  }
+  assert.ok(!elements(enhance).some((element) => ["tab", "tablist", "tabpanel"].includes(attribute(element, "role") ?? "")));
+  const general = elements(enhance).find((element) => attribute(element, "className") === "enhance-general");
+  assert.ok(general);
+  assert.equal(attribute(general, "hidden"), undefined);
+  assert.equal(isConditional(general, enhance), false);
   const calls = descendants(enhance).filter(ts.isCallExpression);
   assert.ok(calls.some((node) => node.expression.getText(app) === "actions.saveSettings"), "enhancements must retain their save action");
-
   assert.ok(!app.statements.some((node) => ts.isFunctionDeclaration(node) && node.name?.text === "SettingsScreen"));
-});
-
-test("local speech download requires a configuration button click and mount only reads status", () => {
-  const panel = component("DictationSettingsPanel");
-  const button = elements(panel).find((element) => attribute(element, "onClick")?.includes("downloadLocalModel()"));
-  assert.ok(button, "the voice settings must expose a manual model download action");
-  assert.equal(attribute(button, "disabled"), "downloading");
-  const calls = eventHandlerNodes(panel, button, "onClick").filter(ts.isCallExpression);
-  assert.ok(calls.some((node) => node.expression.getText(app) === "invoke"
-    && node.arguments[0]?.getText(app) === '"download_dictation_local_model"'));
-  const effects = descendants(panel).filter(ts.isCallExpression)
-    .filter((node) => node.expression.getText(app) === "useEffect");
-  assert.ok(effects.some((effect) => effect.getText(app).includes('"dictation_local_model_status"')));
-  for (const effect of effects) assert.ok(!effect.getText(app).includes("download_dictation_local_model"));
-});
-
-test("enhancement panels retain every service field, private key input and Stepwise connection test", () => {
-  const dictation = component("DictationSettingsPanel");
-  for (const field of ["enabled", "baseUrl", "apiKey", "apiKeyEnv", "model", "language", "timeoutSeconds"]) {
-    fieldControl(dictation, `form.dictation.${field}`);
-  }
-  assert.equal(attribute(fieldControl(dictation, "form.dictation.apiKey"), "type"), "password");
-
-  const stepwise = component("StepwiseSettingsPanel");
-  for (const field of [
-    "codexAppStepwiseEnabled", "codexAppAnswerOutlineEnabled", "codexAppStepwiseDirectSend",
-    "codexAppStepwiseProtocol", "codexAppStepwiseGenerationMode", "codexAppStepwiseBaseUrl",
-    "codexAppStepwiseApiKey", "codexAppStepwiseApiKeyEnv", "codexAppStepwiseModel",
-    "codexAppStepwiseMaxItems", "codexAppStepwiseMaxInputChars", "codexAppStepwiseMaxOutputTokens", "codexAppStepwiseTimeoutMs",
-  ]) fieldControl(stepwise, `form.${field}`);
-  assert.equal(attribute(fieldControl(stepwise, "form.codexAppStepwiseApiKey"), "type"), "password");
-  const connectionTest = descendants(stepwise).find((node) => ts.isCallExpression(node)
-    && node.expression.getText(app) === "actions.testStepwiseSettings");
-  assert.ok(connectionTest && ts.isCallExpression(connectionTest));
-  assert.equal(connectionTest.arguments[0]?.getText(app), "form", "connection test must use the complete current form");
-});
-
-test("manager deep links select their enhancement tab before displaying the page", () => {
-  const navigation = descendants(app).find((node) => ts.isVariableDeclaration(node)
-    && ts.isIdentifier(node.name) && node.name.text === "consumePendingManagerNavigation");
-  assert.ok(navigation);
-  const calls = descendants(navigation).filter(ts.isCallExpression);
-  const selection = calls.find((node) => node.expression.getText(app) === "setEnhancementTab");
-  const argument = selection?.arguments[0];
-  assert.ok(argument && ts.isBinaryExpression(argument));
-  assert.equal(argument.operatorToken.kind, ts.SyntaxKind.QuestionQuestionToken);
-  assert.equal(argument.left.getText(app), "destination.section");
-  assert.ok(ts.isStringLiteral(argument.right) && argument.right.text === "general");
-  const route = calls.find((node) => node.expression.getText(app) === "setRoute");
-  assert.ok(selection && route && selection.pos < route.pos);
-});
-
-test("all enhancement panes stay mounted while tab selection only changes visibility", () => {
-  const enhance = component("EnhanceScreen");
-  const panes = elements(enhance).filter((element) => attribute(element, "role") === "tabpanel");
-  assert.equal(panes.length, 3);
-  for (const tab of ["general", "dictation", "stepwise"]) {
-    const pane = panes.find((element) => attribute(element, "hidden") === `activeTab !== "${tab}"`);
-    assert.ok(pane, `missing visibility control for ${tab}`);
-    assert.equal(isConditional(pane, enhance), false, `${tab} must retain local form UI state when hidden`);
-    assert.ok(attribute(pane, "id"));
-  }
-  assert.equal(new Set(panes.map((pane) => attribute(pane, "id"))).size, 3);
-  assert.ok(elements(enhance).some((element) => attribute(element, "role") === "tablist"));
-  const tabs = elements(enhance).filter((element) => attribute(element, "role") === "tab");
-  assert.ok(tabs.length > 0);
-  for (const tab of tabs) {
-    assert.ok(attribute(tab, "aria-selected")?.includes("activeTab"));
-    assert.ok(attribute(tab, "aria-controls"));
-    const click = eventHandlerNodes(enhance, tab, "onClick");
-    const keyboard = eventHandlerNodes(enhance, tab, "onKeyDown");
-    for (const handler of [click, keyboard]) {
-      const calls = handler.filter(ts.isCallExpression).map((node) => node.expression.getText(app));
-      assert.ok(calls.includes("onTabChange"));
-      assert.ok(!calls.some((name) => /^actions\.saveSettings(?:Value)?$/.test(name)), "tab selection must not save business settings");
-    }
-    const keys = keyboard.filter(ts.isStringLiteral).map((node) => node.text);
-    for (const key of ["ArrowLeft", "ArrowRight", "Home", "End"]) assert.ok(keys.includes(key));
-  }
   const screen = elements(app).find((element) => element.tagName.getText(app) === "EnhanceScreen");
   assert.ok(screen);
-  assert.equal(attribute(screen, "activeTab"), "enhancementTab");
-  assert.equal(attribute(screen, "onTabChange"), "setEnhancementTab");
+  assert.equal(attribute(screen, "activeTab"), undefined);
+  assert.equal(attribute(screen, "onTabChange"), undefined);
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+  assert.doesNotMatch(styles, /\.enhance-tabs\b|\.enhance-tab-panel\b|\.enhance-service-|\.stepwise-settings-|\.stepwise-advanced\b/);
+});
+
+test("retired service panels have no dedicated manager commands while runtime configuration stays compatible", () => {
+  const commands = readFileSync(new URL("../src-tauri/src/commands.rs", import.meta.url), "utf8");
+  const handlers = readFileSync(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
+  for (const command of ["test_stepwise_settings", "dictation_local_model_status", "download_dictation_local_model", "load_global_dictation_hotkey", "set_global_dictation_hotkey"]) {
+    assert.doesNotMatch(commands, new RegExp(`pub (?:async )?fn ${command}\\(`));
+    assert.ok(!handlers.includes(`commands::${command},`));
+  }
+  assert.match(appSource, /dictation: normalizeDictationSettings\(settings\.dictation\)/);
+  assert.match(appSource, /codexAppStepwiseEnabled: boolean;/);
 });
 
 test("enhancement saving is an explicit permanent top action", () => {
@@ -226,11 +160,11 @@ test("enhancement saving is an explicit permanent top action", () => {
   assert.equal(saves.length, 1);
   assert.equal(attribute(saves[0], "disabled"), "!dirty");
   assert.equal(isConditional(saves[0], enhance), false);
-  const firstPane = elements(enhance).find((element) => attribute(element, "role") === "tabpanel");
-  assert.ok(firstPane && saves[0].pos < firstPane.pos);
+  const general = elements(enhance).find((element) => attribute(element, "className") === "enhance-general");
+  assert.ok(general && saves[0].pos < general.pos);
 });
 
-test("standalone quota unlock lives in its own group inside the general tab and stays editable when enhancements are off", () => {
+test("standalone quota unlock stays in the general settings and remains editable when enhancements are off", () => {
   const enhance = component("EnhanceScreen");
   const group = component("StandaloneModeGroup");
   const standalone = fieldControl(group, "form.codexAppStandaloneQuotaUnlock");
@@ -267,12 +201,9 @@ test("standalone quota unlock lives in its own group inside the general tab and 
   const featureGroups = elements(enhance).filter((element) => element.tagName.getText(app) === "FeatureGroup");
   const lastFeatureGroup = featureGroups[featureGroups.length - 1];
   assert.ok(lastFeatureGroup && placements[1].pos > lastFeatureGroup.pos, "开启增强时独立模式分组排在最后");
-  const generalPane = elements(enhance).find((element) => attribute(element, "role") === "tabpanel"
-    && attribute(element, "id") === "enhance-pane-general");
-  const dictationPane = elements(enhance).find((element) => attribute(element, "role") === "tabpanel"
-    && attribute(element, "id") === "enhance-pane-dictation");
-  assert.ok(generalPane && dictationPane);
-  for (const placement of placements) assert.ok(placement.pos > generalPane.pos && placement.pos < dictationPane.pos);
+  const general = elements(enhance).find((element) => attribute(element, "className") === "enhance-general");
+  assert.ok(general && ts.isJsxElement(general.parent));
+  for (const placement of placements) assert.ok(placement.pos > general.pos && placement.end < general.parent.end);
 });
 
 test("native Fast unlock is the only Fast enhancement toggle and keeps the provider support notice", () => {

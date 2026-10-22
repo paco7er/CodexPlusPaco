@@ -71,18 +71,13 @@ import { NativeBrowserStatusView, nativeBrowserConsent } from "./native-browser-
 import { McpPage, PageHeader } from "./ManagementPages";
 import { SkillsPage } from "./ManagementExtra";
 import { ProjectSessionPage } from "./ProjectSessionPage";
-import { ENHANCEMENT_SECTION_IDS, managerNavigationDestination, type EnhancementTab, type ManagerNavigationIntent } from "./enhancement-navigation";
+import { managerNavigationDestination, type ManagerNavigationIntent } from "./enhancement-navigation";
 import { DEFAULT_AUTO_COMPACT_PERCENT, autoCompactOptions, normalizeAutoCompactPercent } from "./auto-compact";
 import { defaultWhaleBalanceSettings, normalizeWhaleBalanceSettings, whaleBalanceSettingsIssue, type WhaleBalanceIssue, type WhaleBalanceProtocol, type WhaleBalanceSettings } from "./whale-settings";
 import {
-  applyDictationPreset,
   defaultDictationSettings,
-  dictationPreset,
-  dictationSettingsIssue,
   normalizeDictationSettings,
   type DictationSettings,
-  type DictationSettingsIssue,
-  type DictationPreset,
 } from "./dictation-settings";
 import {
   builtinEntryToImportDocument,
@@ -529,11 +524,6 @@ type RelayProfileTestResult = CommandResult<{
   completionStatus: "completed" | "incomplete" | "failed";
 }>;
 
-type StepwiseTestResult = CommandResult<{
-  itemCount: number;
-  error: string;
-}>;
-
 type RelayProfileModelsResult = CommandResult<{
   models: string[];
   endpoint: string;
@@ -887,8 +877,6 @@ const defaultSettings: BackendSettings = {
 export function App() {
 
   const [route, setRoute] = useState<Route>(() => loadInitialRoute());
-  const [enhancementTab, setEnhancementTab] = useState<EnhancementTab>("general");
-  const [pendingEnhancementSection, setPendingEnhancementSection] = useState<ManagerNavigationIntent["section"] | null>(null);
   const [notice, setNotice] = useState<{ title: string; message: string; status?: Status } | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     title: string;
@@ -1238,10 +1226,6 @@ export function App() {
       if (!navigation) return false;
       const destination = managerNavigationDestination(navigation);
       await refreshSettings(true);
-      if (destination.route === "enhance") {
-        setEnhancementTab(destination.section ?? "general");
-      }
-      setPendingEnhancementSection(destination.section);
       setRoute(destination.route);
       return true;
     } catch (error) {
@@ -1346,11 +1330,6 @@ export function App() {
       showNotice(t("Codex 用量挂件"), whaleIssue, "failed");
       return;
     }
-    const dictationIssue = dictationSettingsValidationMessage(dictationSettingsIssue(next.dictation));
-    if (dictationIssue) {
-      showNotice(t("语音输入"), dictationIssue, "failed");
-      return;
-    }
     const result = await run(() => call<SettingsResult>("save_settings", { settings: next }));
     if (result) {
       if (isSuccessStatus(result.status)) {
@@ -1366,11 +1345,6 @@ export function App() {
     const whaleIssue = whaleBalanceValidationMessage(whaleBalanceSettingsIssue(normalized));
     if (whaleIssue) {
       showNotice(t("Codex 用量挂件"), whaleIssue, "failed");
-      return null;
-    }
-    const dictationIssue = dictationSettingsValidationMessage(dictationSettingsIssue(normalized.dictation));
-    if (dictationIssue) {
-      showNotice(t("语音输入"), dictationIssue, "failed");
       return null;
     }
     const result = await run(() => call<SettingsResult>("save_settings", { settings: normalized }));
@@ -1745,11 +1719,6 @@ export function App() {
     return result ?? null;
   };
 
-  const testStepwiseSettings = async (settings: BackendSettings) => {
-    const result = await run(() => call<StepwiseTestResult>("test_stepwise_settings", { settings }));
-    if (result) showNotice(t("测试连接"), result.message, result.status);
-  };
-
   const fetchRelayProfileModels = async (profile: RelayProfile) => {
     const result = await run(() => call<RelayProfileModelsResult>("fetch_relay_profile_models", { profile }));
     if (result) showNotice(t("模型列表"), result.message, result.status);
@@ -1955,26 +1924,6 @@ export function App() {
   }, [route]);
 
   useEffect(() => {
-    if (route !== "enhance" || !pendingEnhancementSection) return;
-    let secondFrame = 0;
-    const firstFrame = window.requestAnimationFrame(() => {
-      secondFrame = window.requestAnimationFrame(() => {
-        const target = document.getElementById(ENHANCEMENT_SECTION_IDS[pendingEnhancementSection]);
-        if (!target) return;
-        target.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-        setPendingEnhancementSection(null);
-      });
-    });
-    return () => {
-      window.cancelAnimationFrame(firstFrame);
-      if (secondFrame) window.cancelAnimationFrame(secondFrame);
-    };
-  }, [pendingEnhancementSection, route]);
-
-  useEffect(() => {
     const timer = window.setInterval(() => {
       void refreshPendingProviderImport(true);
     }, 1200);
@@ -2084,7 +2033,6 @@ export function App() {
       extractRelayCommonConfig,
       testRelayProfile,
       diagnoseRelayProfile,
-      testStepwiseSettings,
       fetchRelayProfileModels,
       switchRelayProfile,
       relaySwitching,
@@ -2223,8 +2171,6 @@ export function App() {
           {route === "enhance" ? (
             <EnhanceScreen
               dirty={settingsDirty}
-              activeTab={enhancementTab}
-              onTabChange={setEnhancementTab}
               form={settingsForm}
               onFormChange={setSettingsForm}
               actions={actions}
@@ -2453,7 +2399,6 @@ type Actions = {
   extractRelayCommonConfig: (configContents: string) => Promise<ExtractRelayCommonConfigResult | null>;
   testRelayProfile: (profile: RelayProfile) => Promise<void>;
   diagnoseRelayProfile: (profile: RelayProfile) => Promise<ProviderDoctorResult | null>;
-  testStepwiseSettings: (settings: BackendSettings) => Promise<void>;
   fetchRelayProfileModels: (profile: RelayProfile) => Promise<string[] | null>;
   switchRelayProfile: (settings: BackendSettings, previousActiveRelayId?: string) => Promise<void>;
   relaySwitching: boolean;
@@ -3074,352 +3019,13 @@ function WhaleBalanceSettingsFields({ form, onFormChange }: {
   );
 }
 
-type DictationLocalModelState = {
-  phase: string;
-  modelReady: boolean;
-  completedBytes?: number;
-  totalBytes: number;
-  message?: string;
-};
-
-type GlobalDictationHotkeyState = {
-  enabled: boolean;
-  hotkey: string;
-};
-// 后端失败分支的 payload 是 `{}`：只在确实带有热键字段时才当作新状态。
-function hotkeyStateFrom(result: Partial<GlobalDictationHotkeyState> | null | undefined): GlobalDictationHotkeyState | null {
-  if (!result || typeof result.hotkey !== "string") return null;
-  return { enabled: result.enabled === true, hotkey: result.hotkey };
-}
-
-function DictationSettingsPanel({ form, onFormChange }: {
-  form: BackendSettings;
-  onFormChange: (value: BackendSettings) => void;
-}) {
-  const [dictationPresetSelection, setDictationPresetSelection] = useState<DictationPreset>(() => dictationPreset(form.dictation));
-  useEffect(() => setDictationPresetSelection(dictationPreset(form.dictation)), [form.dictation.baseUrl]);
-  const [localModelState, setLocalModelState] = useState<DictationLocalModelState | null>(null);
-  const [localModelDownloading, setLocalModelDownloading] = useState(false);
-  const [localModelError, setLocalModelError] = useState("");
-  const [globalHotkey, setGlobalHotkey] = useState<GlobalDictationHotkeyState>({ enabled: false, hotkey: "Ctrl+Shift+Space" });
-  const [globalHotkeyBusy, setGlobalHotkeyBusy] = useState(false);
-  useEffect(() => {
-    void invoke<CommandResult<GlobalDictationHotkeyState>>("load_global_dictation_hotkey")
-      .then((result) => { const next = hotkeyStateFrom(result); if (next) setGlobalHotkey(next); })
-      .catch(() => {});
-  }, []);
-  useEffect(() => {
-    if (form.dictation.provider !== "sensevoice") return;
-    let active = true;
-    const refresh = () => invoke<DictationLocalModelState>("dictation_local_model_status")
-      .then((state) => { if (active) { setLocalModelState(state); } })
-      .catch(() => { if (active) setLocalModelError(t("无法读取本地模型状态，请重试。")); });
-    void refresh();
-    const timer = window.setInterval(() => { void refresh(); }, 1000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, [form.dictation.provider]);
-  const downloadLocalModel = async () => {
-    setLocalModelDownloading(true);
-    setLocalModelError("");
-    try {
-      const result = await invoke<CommandResult<DictationLocalModelState>>("download_dictation_local_model");
-      if (result.status !== "ok") setLocalModelError(result.message);
-      else setLocalModelState(result);
-    } catch {
-      setLocalModelError(t("本地模型下载失败，请重试。"));
-    } finally {
-      setLocalModelDownloading(false);
-    }
-  };
-  const downloading = localModelDownloading || localModelState?.phase === "downloading";
-  const saveGlobalHotkey = async () => {
-    setGlobalHotkeyBusy(true);
-    try {
-      const result = await invoke<CommandResult<GlobalDictationHotkeyState>>("set_global_dictation_hotkey", globalHotkey);
-      // 校验/保存失败时后端 payload 为空对象，不能用它覆盖用户刚输入的热键。
-      const next = hotkeyStateFrom(result);
-      if (next) setGlobalHotkey(next);
-      window.alert(result.message);
-    } catch (error) {
-      window.alert(String(error));
-    } finally {
-      setGlobalHotkeyBusy(false);
-    }
-  };
-  const updateDictation = (patch: Partial<DictationSettings>) => onFormChange({
-    ...form,
-    dictation: { ...form.dictation, ...patch },
-  });
-  const dictationIssue = dictationSettingsValidationMessage(dictationSettingsIssue(form.dictation));
-  return (
-    <Panel className="enhance-service-panel">
-      <CardHead title={t("语音输入")} detail={t("独立的语音转文字服务，与代码模型和供应商配置无关。")} />
-      <CardContent className="settings-content">
-        <div className="settings-block enhance-service-block" id={ENHANCEMENT_SECTION_IDS.dictation}>
-          <FeatureToggle
-            title={t("启用语音输入")}
-            detail={t("停止录音后，可将转写文字插入或发送到当前会话。")}
-            disabled={!form.enhancementsEnabled}
-            checked={form.dictation.enabled}
-            onChange={(enabled) => updateDictation({ enabled })}
-          />
-          <label className="switch-row compact">
-            <input
-              checked={globalHotkey.enabled}
-              disabled={globalHotkeyBusy || !form.enhancementsEnabled}
-              onChange={(event) => setGlobalHotkey((current) => ({ ...current, enabled: event.currentTarget.checked }))}
-              type="checkbox"
-            />
-            <span><strong>{t("全局听写热键")}</strong><small>{t("Windows 首版：按一次开始录音，再按一次停止并插入文字。")}</small></span>
-            <ToggleVisual />
-          </label>
-          <div className="form-row">
-            <Field label={t("全局热键") }>
-              <Input value={globalHotkey.hotkey} onChange={(event) => setGlobalHotkey((current) => ({ ...current, hotkey: event.currentTarget.value }))} placeholder="Ctrl+Shift+Space" />
-            </Field>
-            <Button disabled={globalHotkeyBusy} onClick={() => void saveGlobalHotkey()} type="button" variant="secondary">{t("保存全局热键")}</Button>
-          </div>
-          <p className="field-hint">{t("热键冲突会在保存时明确报告；macOS 首版暂不注册系统级热键。")}</p>
-          <div className="form-row">
-            <Field label={t("语音服务预设")}>
-              <AppSelect
-                value={dictationPresetSelection}
-                onChange={(value) => {
-                  setDictationPresetSelection(value);
-                  onFormChange({ ...form, dictation: applyDictationPreset(form.dictation, value) });
-                }}
-                options={[
-                  { value: "sensevoice", label: t("本地 SenseVoice（离线）") },
-                  { value: "groq", label: "Groq" },
-                  { value: "openai", label: t("OpenAI 兼容") },
-                  { value: "local", label: t("本地服务") },
-                  { value: "custom", label: t("自定义") },
-                ]}
-              />
-            </Field>
-            <Field label={t("语音模型")}>
-              <Input
-                value={form.dictation.model}
-                onChange={(event) => updateDictation({ model: event.currentTarget.value })}
-                placeholder="whisper-large-v3-turbo"
-                spellCheck={false}
-              />
-            </Field>
-          </div>
-          {form.dictation.provider === "sensevoice" ? <>
-            <p className="field-hint">{t("SenseVoiceSmall 在本机 CPU 上运行。请手动下载约 229 MiB 模型，下载并校验完成后才可录音转写；音频不会离开本机。")}</p>
-            <div className="form-row">
-              <Button type="button" disabled={downloading} onClick={() => { void downloadLocalModel(); }}>
-                <Download className="h-4 w-4" />
-                {downloading ? t("正在下载并校验…") : localModelState?.modelReady ? t("校验或重新下载模型") : t("下载本地模型")}
-              </Button>
-              <span className="field-hint" role="status">
-                {downloading
-                  ? `${Math.min(100, Math.floor((localModelState?.completedBytes || 0) / (localModelState?.totalBytes || 239549735) * 100))}%`
-                  : localModelState?.modelReady ? t("本地模型已下载") : t("本地模型尚未下载")}
-              </span>
-            </div>
-            {localModelError || localModelState?.phase === "failed" ? <p className="field-hint" role="alert">{localModelError || localModelState?.message}</p> : null}
-          </> : <>
-            <Field label="Base URL">
-              <Input
-                value={form.dictation.baseUrl}
-                onChange={(event) => updateDictation({ baseUrl: event.currentTarget.value })}
-                placeholder="https://api.groq.com/openai/v1"
-                spellCheck={false}
-              />
-            </Field>
-            <p className="field-hint">{t("填写服务的 API 基础地址，转写请求会发送到 /audio/transcriptions。可修改预设地址和模型。")}</p>
-            <Field label="API Key">
-              <Input
-                type="password"
-                autoComplete="off"
-                value={form.dictation.apiKey}
-                onChange={(event) => updateDictation({ apiKey: event.currentTarget.value })}
-              />
-            </Field>
-            <p className="field-hint">{t("可填写 API Key 或环境变量名称。本地服务不要求认证时可留空。")}</p>
-          </>}
-          <details className="stepwise-advanced enhance-service-advanced">
-            <summary>{t("高级参数")}</summary>
-            <Field label={t("API Key 环境变量")}>
-              <Input
-                value={form.dictation.apiKeyEnv}
-                onChange={(event) => updateDictation({ apiKeyEnv: event.currentTarget.value })}
-                placeholder="GROQ_API_KEY"
-                spellCheck={false}
-              />
-            </Field>
-            <div className="form-row">
-              <Field label={t("语音语言")}>
-                <Input
-                  value={form.dictation.language}
-                  onChange={(event) => updateDictation({ language: event.currentTarget.value })}
-                  placeholder={t("留空自动识别，例如 zh 或 en")}
-                  spellCheck={false}
-                />
-              </Field>
-              <Field label={t("转写超时（秒）")}>
-                <Input
-                  type="number"
-                  min={1}
-                  max={600}
-                  value={form.dictation.timeoutSeconds}
-                  onChange={(event) => updateDictation({ timeoutSeconds: clampNumber(Number(event.currentTarget.value), 1, 600) })}
-                />
-              </Field>
-            </div>
-          </details>
-          {dictationIssue ? <p className="field-hint" role="alert">{dictationIssue}</p> : null}
-          <div className="hint-line enhance-service-note">
-            <Info className="h-4 w-4" />
-            <span>{form.dictation.provider === "sensevoice"
-              ? t("下载模型并保存配置后，可在 Codex 输入框录音，停止后在本机转写并插入文字。")
-              : t("保存后 Codex 输入框底部会显示麦克风图标，停止录音后可插入或发送文字。录音会发送到上面填写的服务地址，无需重启。")}</span>
-          </div>
-        </div>
-      </CardContent>
-    </Panel>
-  );
-}
-
-function StepwiseSettingsPanel({ form, onFormChange, actions }: {
-  form: BackendSettings;
-  onFormChange: (value: BackendSettings) => void;
-  actions: Actions;
-}) {
-  return (
-    <Panel className="enhance-service-panel">
-      <CardHead title={t("下一步建议")} detail={t("控制下一步建议与回答大纲。")} />
-      <CardContent className="settings-content">
-        <div className="settings-block stepwise-settings-block" id={ENHANCEMENT_SECTION_IDS.stepwise}>
-          <div className="enhance-service-toggles">
-            <FeatureToggle title={t("下一步建议")} detail={t("根据当前回答生成下一步建议。")} checked={form.codexAppStepwiseEnabled} disabled={!form.enhancementsEnabled} onChange={(value) => onFormChange({ ...form, codexAppStepwiseEnabled: value })} />
-            <FeatureToggle title={t("回答大纲")} detail={t("整理当前回答的结构。")} checked={form.codexAppAnswerOutlineEnabled} disabled={!form.enhancementsEnabled} onChange={(value) => onFormChange({ ...form, codexAppAnswerOutlineEnabled: value })} />
-            <FeatureToggle title={t("建议直接发送")} detail={t("点击建议后直接发送到当前会话。")} checked={form.codexAppStepwiseDirectSend} disabled={!form.enhancementsEnabled} onChange={(value) => onFormChange({ ...form, codexAppStepwiseDirectSend: value })} />
-          </div>
-          <div className="stepwise-settings-section">{t("连接")}</div>
-          <div className="form-row">
-            <Field label="Base URL">
-              <Input
-                value={form.codexAppStepwiseBaseUrl}
-                onChange={(event) => onFormChange({ ...form, codexAppStepwiseBaseUrl: event.currentTarget.value })}
-                placeholder="https://api.example.com/v1"
-              />
-            </Field>
-            <Field label="Model">
-              <Input
-                value={form.codexAppStepwiseModel}
-                onChange={(event) => onFormChange({ ...form, codexAppStepwiseModel: event.currentTarget.value })}
-                placeholder={t("例如 gpt-5.4-mini")}
-              />
-            </Field>
-          </div>
-          <div className="form-row">
-            <Field label={t("协议")}>
-              <AppSelect
-                value={form.codexAppStepwiseProtocol}
-                onChange={(value) => onFormChange({ ...form, codexAppStepwiseProtocol: value })}
-                options={[
-                  { value: "auto", label: t("自动兼容") },
-                  { value: "chat_completions", label: "Chat Completions" },
-                  { value: "responses", label: "Responses API" },
-                  { value: "anthropic_messages", label: "Anthropic Messages" },
-                ]}
-              />
-            </Field>
-            <Field label={t("模式")}>
-              <AppSelect
-                value={form.codexAppStepwiseGenerationMode}
-                onChange={(value) => onFormChange({ ...form, codexAppStepwiseGenerationMode: value })}
-                options={[
-                  { value: "auto", label: t("自动生成") },
-                  { value: "manual", label: t("手动刷新") },
-                ]}
-              />
-            </Field>
-          </div>
-          <Field label="API Key">
-            <Input
-              type="password"
-              value={form.codexAppStepwiseApiKey}
-              onChange={(event) => onFormChange({ ...form, codexAppStepwiseApiKey: event.currentTarget.value })}
-            />
-          </Field>
-          <details className="stepwise-advanced">
-            <summary>{t("高级参数")}</summary>
-            <div className="form-row">
-              <Field label={t("API Key 环境变量")}>
-                <Input
-                  value={form.codexAppStepwiseApiKeyEnv}
-                  onChange={(event) => onFormChange({ ...form, codexAppStepwiseApiKeyEnv: event.currentTarget.value })}
-                />
-              </Field>
-              <Field label={t("最多建议数")}>
-                <Input
-                  max={6}
-                  min={0}
-                  type="number"
-                  value={form.codexAppStepwiseMaxItems}
-                  onChange={(event) =>
-                    onFormChange({ ...form, codexAppStepwiseMaxItems: clampNumber(Number(event.currentTarget.value), 0, 6) })
-                  }
-                />
-              </Field>
-            </div>
-            <div className="form-row">
-              <Field label={t("超时毫秒")}>
-                <Input
-                  min={1000}
-                  type="number"
-                  value={form.codexAppStepwiseTimeoutMs}
-                  onChange={(event) =>
-                    onFormChange({ ...form, codexAppStepwiseTimeoutMs: clampNumber(Number(event.currentTarget.value), 1000, 60000) })
-                  }
-                />
-              </Field>
-              <Field label={t("最大输入字符")}>
-                <Input
-                  min={1000}
-                  type="number"
-                  value={form.codexAppStepwiseMaxInputChars}
-                  onChange={(event) =>
-                    onFormChange({ ...form, codexAppStepwiseMaxInputChars: clampNumber(Number(event.currentTarget.value), 1000, 24000) })
-                  }
-                />
-              </Field>
-            </div>
-            <Field label={t("最大输出 tokens")}>
-              <Input
-                min={100}
-                type="number"
-                value={form.codexAppStepwiseMaxOutputTokens}
-                onChange={(event) =>
-                  onFormChange({ ...form, codexAppStepwiseMaxOutputTokens: clampNumber(Number(event.currentTarget.value), 100, 4000) })
-                }
-              />
-            </Field>
-          </details>
-          <div className="toolbar stepwise-settings-actions">
-            <Button variant="secondary" onClick={() => void actions.testStepwiseSettings(form)}>{t("测试连接")}</Button>
-          </div>
-        </div>
-      </CardContent>
-    </Panel>
-  );
-}
-
 function EnhanceScreen({
   dirty,
-  activeTab,
-  onTabChange,
   form,
   onFormChange,
   actions,
 }: {
   dirty: boolean;
-  activeTab: EnhancementTab;
-  onTabChange: (tab: EnhancementTab) => void;
   form: BackendSettings;
   onFormChange: (value: BackendSettings) => void;
   actions: Actions;
@@ -3431,15 +3037,6 @@ function EnhanceScreen({
     void actions.saveSettingsValue(next, true);
   };
   const masterEnabled = form.enhancementsEnabled;
-  const tabs: Array<{ value: EnhancementTab; label: string }> = [
-    { value: "general", label: t("常用增强") },
-    { value: "dictation", label: t("语音输入") },
-    { value: "stepwise", label: t("下一步建议") },
-  ];
-  const selectTab = (tab: EnhancementTab) => {
-    onTabChange(tab);
-    document.getElementById("enhance-page-controls")?.scrollIntoView({ block: "start" });
-  };
   return (
     <div className="settings-page enhance-page">
       <div className="enhance-page-controls" id="enhance-page-controls">
@@ -3464,34 +3061,8 @@ function EnhanceScreen({
             </Button>
           </div>
         </div>
-        <div className="enhance-tabs" role="tablist" aria-label={t("Codex增强")}>
-          {tabs.map((tab, index) => (
-            <button
-              key={tab.value}
-              id={`enhance-tab-${tab.value}`}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tab.value}
-              aria-controls={`enhance-pane-${tab.value}`}
-              tabIndex={activeTab === tab.value ? 0 : -1}
-              onClick={() => selectTab(tab.value)}
-              onKeyDown={(event) => {
-                const nextIndex = event.key === "ArrowRight" ? (index + 1) % tabs.length
-                  : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length
-                    : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null;
-                if (nextIndex === null) return;
-                event.preventDefault();
-                const nextTab = tabs[nextIndex].value;
-                selectTab(nextTab);
-                document.getElementById(`enhance-tab-${nextTab}`)?.focus();
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
       </div>
-      <div className="enhance-tab-panel" id="enhance-pane-general" role="tabpanel" aria-labelledby="enhance-tab-general" hidden={activeTab !== "general"}>
+      <div className="enhance-general">
         <Panel className="enhance-panel">
           <CardContent className="enhance-content">
             <div className="enhance-feature-groups">
@@ -3570,18 +3141,12 @@ function EnhanceScreen({
           </CardContent>
         </Panel>
       </div>
-      <div className="enhance-tab-panel" id="enhance-pane-dictation" role="tabpanel" aria-labelledby="enhance-tab-dictation" hidden={activeTab !== "dictation"}>
-        <DictationSettingsPanel form={form} onFormChange={onFormChange} />
-      </div>
-      <div className="enhance-tab-panel" id="enhance-pane-stepwise" role="tabpanel" aria-labelledby="enhance-tab-stepwise" hidden={activeTab !== "stepwise"}>
-        <StepwiseSettingsPanel form={form} onFormChange={onFormChange} actions={actions} />
-      </div>
     </div>
   );
 }
 
 // 增强总开关关闭后仍生效的独立补丁。不受总开关禁用，所以不放进 FeatureGroup 的
-// masterEnabled 门控里；位置在该页「常用增强」标签内，关闭增强时提到最前面。
+// masterEnabled 门控里；关闭增强时提到最前面。
 function StandaloneModeGroup({
   form,
   onFormChange,
@@ -7744,7 +7309,7 @@ function routeSubtitle(route: Route) {
     sessions: t("查看、删除和修复 Codex 本地会话"),
     context: t("独立管理 MCP 服务器与插件"),
     skills: t("从 GitHub 仓库安装 Skill 到 Codex"),
-    enhance: t("管理常用功能、语音输入与下一步建议。"),
+    enhance: t("管理 Codex 常用增强功能。"),
   };
   return subtitles[route];
 }
@@ -8504,13 +8069,6 @@ function normalizeSettings(settings: BackendSettings): BackendSettings {
     relayProfiles: profiles,
     activeRelayId,
   });
-}
-
-function dictationSettingsValidationMessage(issue: DictationSettingsIssue | null): string | null {
-  if (issue === "baseUrl") return t("语音 Base URL 必须是 HTTP(S) 基础地址，不能包含账号密码、查询参数或片段。");
-  if (issue === "model") return t("启用语音输入时需要填写语音模型。");
-  if (issue === "apiKeyEnv") return t("语音 API Key 环境变量名称只能包含字母、数字和下划线，且不能以数字开头。");
-  return null;
 }
 
 function normalizeStepwiseProtocol(value: StepwiseProtocol | undefined): StepwiseProtocol {

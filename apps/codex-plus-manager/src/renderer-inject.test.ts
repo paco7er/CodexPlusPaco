@@ -1202,7 +1202,7 @@ it("opens Stepwise configuration in the manager enhancement page", async () => {
 });
 
 describe("Stepwise generation mode contracts", () => {
-  it("exposes automatic and manual generation in manager enhancements", async () => {
+  it("preserves automatic and manual runtime settings after the manager panels retire", async () => {
     const app = await readFile(new URL("./App.tsx", import.meta.url), "utf8");
     const renderer = await readFile(
       new URL("../../../assets/inject/renderer-inject.js", import.meta.url),
@@ -1215,11 +1215,6 @@ describe("Stepwise generation mode contracts", () => {
     assert.match(app, /codexAppStepwiseGenerationMode: "auto",/);
     assert.match(app, /codexAppAnswerOutlineEnabled: false,/);
     assert.match(renderer, /answerOutline: false,/);
-    assert.match(app, /<Field label=\{t\("模式"\)\}>/);
-    assert.match(app, /\{ value: "auto", label: t\("自动生成"\) \}/);
-    assert.match(app, /\{ value: "manual", label: t\("手动刷新"\) \}/);
-    assert.match(app, /\{ value: "auto", label: t\("自动兼容"\) \}/);
-    assert.match(app, /\{ value: "anthropic_messages", label: "Anthropic Messages" \}/);
     assert.match(app, /function normalizeStepwiseProtocol\(/);
     assert.match(app, /return value === "manual" \? "manual" : "auto";/);
   });
@@ -1359,15 +1354,6 @@ describe("Stepwise generation mode contracts", () => {
     assert.match(stepwise, /VIEW_INDICATOR_MS = 220/);
   });
 
-  it("keeps Stepwise Manager controls at one height", async () => {
-    const styles = await readFile(new URL("./styles.css", import.meta.url), "utf8");
-
-    assert.match(styles, /\.stepwise-settings-block\s*\{[\s\S]*?--stepwise-control-height:\s*40px;/);
-    assert.match(
-      styles,
-      /\.stepwise-settings-block input[^,]*,[\s\S]*?\.stepwise-settings-block \.app-select-trigger,[\s\S]*?\.stepwise-settings-block \.field-select,[\s\S]*?\.stepwise-settings-block \.select-input\s*\{[\s\S]*?height:\s*var\(--stepwise-control-height\);[\s\S]*?min-height:\s*var\(--stepwise-control-height\);/,
-    );
-  });
 });
 
 // issue #2256/#2255：app-server model request patch 的 miss 熔断以前被 provider

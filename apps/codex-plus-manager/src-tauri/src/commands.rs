@@ -15,46 +15,6 @@ use tauri::Emitter;
 
 use crate::install::{self, InstallActionResult};
 
-#[tauri::command]
-pub fn dictation_local_model_status() -> Value {
-    codex_plus_core::dictation::local_model_status()
-}
-
-/// 只注册为管理器命令，不开放给用户脚本或公开 HTTP 路由。
-#[tauri::command]
-pub async fn download_dictation_local_model() -> CommandResult<Value> {
-    match codex_plus_core::dictation::prepare_local_model().await {
-        Ok(state) => ok("本地 SenseVoice 模型下载并校验完成。", state),
-        Err(error) => failed(&error.message, json!({})),
-    }
-}
-
-#[tauri::command]
-pub fn load_global_dictation_hotkey() -> CommandResult<Value> {
-    ok(
-        "全局听写热键设置已读取。",
-        serde_json::to_value(codex_plus_core::global_dictation::load_config()).unwrap_or_else(|_| json!({})),
-    )
-}
-
-#[tauri::command]
-pub fn set_global_dictation_hotkey(enabled: bool, hotkey: String) -> CommandResult<Value> {
-    let config = codex_plus_core::global_dictation::GlobalDictationConfig {
-        enabled,
-        hotkey: hotkey.trim().to_string(),
-    };
-    match crate::global_dictation::save_and_apply_config(&config) {
-        Ok(()) => ok(
-            if enabled { "全局听写热键已开启。" } else { "全局听写热键已关闭。" },
-            serde_json::to_value(config).unwrap_or_else(|_| json!({})),
-        ),
-        Err(error) => failed(
-            &format!("更新全局听写热键失败：{error:#}"),
-            serde_json::to_value(codex_plus_core::global_dictation::load_config()).unwrap_or_else(|_| json!({})),
-        ),
-    }
-}
-
 #[derive(Debug, Clone, Serialize)]
 pub struct CommandResult<T>
 where
@@ -230,13 +190,6 @@ pub struct RelayProfileTestPayload {
     pub response_preview: String,
     pub protocol_valid: bool,
     pub completion_status: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StepwiseTestPayload {
-    pub item_count: usize,
-    pub error: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -3785,65 +3738,6 @@ pub async fn test_relay_profile(profile: RelayProfile) -> CommandResult<RelayPro
                 completion_status: "failed".into(),
             },
         ),
-    }
-}
-
-#[tauri::command]
-pub async fn test_stepwise_settings(
-    settings: BackendSettings,
-) -> CommandResult<StepwiseTestPayload> {
-    let configured_protocol = codex_plus_core::settings::normalize_stepwise_protocol(
-        &settings.codex_app_stepwise_protocol,
-    );
-    match codex_plus_core::stepwise::test_connection(&settings).await {
-        Ok(result) => {
-            let error = result
-                .get("error")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_string();
-            let item_count = result
-                .get("items")
-                .and_then(Value::as_array)
-                .map(Vec::len)
-                .unwrap_or_default();
-            let protocol = result
-                .get("protocol")
-                .and_then(Value::as_str)
-                .unwrap_or(&configured_protocol)
-                .to_string();
-            if error.is_empty() {
-                ok(
-                    &format!(
-                        "下一步建议连接正常（{}），测试返回 {item_count} 条建议。",
-                        stepwise_protocol_label(&protocol)
-                    ),
-                    StepwiseTestPayload { item_count, error },
-                )
-            } else {
-                failed(
-                    &format!("下一步建议测试失败：{error}"),
-                    StepwiseTestPayload { item_count, error },
-                )
-            }
-        }
-        Err(error) => failed(
-            &format!("下一步建议测试失败：{error}"),
-            StepwiseTestPayload {
-                item_count: 0,
-                error: error.to_string(),
-            },
-        ),
-    }
-}
-
-fn stepwise_protocol_label(protocol: &str) -> &str {
-    match protocol {
-        "chat_completions" => "Chat Completions",
-        "responses" => "Responses",
-        "anthropic_messages" => "Anthropic Messages",
-        "auto" => "自动兼容",
-        _ => protocol,
     }
 }
 

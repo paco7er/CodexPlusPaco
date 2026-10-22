@@ -15,10 +15,6 @@ pub fn apply_config() -> anyhow::Result<()> {
     update_config(&config, |_| Ok(()))
 }
 
-pub fn save_and_apply_config(config: &GlobalDictationConfig) -> anyhow::Result<()> {
-    update_config(config, codex_plus_core::global_dictation::save_config)
-}
-
 fn update_config(
     config: &GlobalDictationConfig,
     persist: impl FnOnce(&GlobalDictationConfig) -> anyhow::Result<()>,

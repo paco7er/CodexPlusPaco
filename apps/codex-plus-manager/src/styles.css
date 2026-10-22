@@ -3722,66 +3722,6 @@ details.relay-fold[open] > .relay-fold-body {
   font-weight: 700;
 }
 
-.stepwise-settings-block .form-row {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.stepwise-settings-block {
-  --stepwise-control-height: 40px;
-}
-
-.stepwise-settings-block input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
-.stepwise-settings-block .app-select-trigger,
-.stepwise-settings-block .field-select,
-.stepwise-settings-block .select-input {
-  height: var(--stepwise-control-height);
-  min-height: var(--stepwise-control-height);
-}
-
-.stepwise-settings-section {
-  margin: -4px 0 12px;
-  color: hsl(var(--muted-foreground));
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.stepwise-advanced {
-  margin-top: 2px;
-  border-top: 1px solid hsl(var(--border));
-}
-
-.stepwise-advanced summary {
-  display: flex;
-  align-items: center;
-  min-height: 36px;
-  color: hsl(var(--muted-foreground));
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
-  list-style: none;
-}
-
-.stepwise-advanced summary::-webkit-details-marker {
-  display: none;
-}
-
-.stepwise-advanced summary::after {
-  content: "›";
-  margin-left: 6px;
-  font-size: 15px;
-  transform: rotate(90deg);
-  transition: transform 120ms ease;
-}
-
-.stepwise-advanced[open] summary::after {
-  transform: rotate(270deg);
-}
-
-.stepwise-settings-actions {
-  justify-content: flex-end;
-  margin-top: 2px;
-}
-
 .settings-block .toolbar {
   margin-top: 0;
   margin-bottom: 12px;
@@ -5651,8 +5591,7 @@ select {
 }
 
 .divider,
-.settings-block,
-.stepwise-advanced {
+.settings-block {
   border-color: hsl(var(--border) / 0.6);
 }
 
@@ -6510,7 +6449,7 @@ select {
   }
 }
 
-/* 增强页共用总开关与保存入口，服务配置通过页内标签切换。 */
+/* 增强页的总开关与保存入口固定在顶部。 */
 .enhance-page-controls {
   position: sticky;
   top: 0;
@@ -6567,55 +6506,11 @@ select {
   color: hsl(var(--brand-accent));
 }
 
-.enhance-tabs {
-  display: flex;
-  gap: 20px;
-  padding: 0 18px;
-  border-top: 1px solid hsl(var(--border) / 0.65);
-}
-
-.enhance-tabs button {
-  position: relative;
-  border: 0;
-  background: transparent;
-  color: hsl(var(--muted-foreground));
-  padding: 11px 2px;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 550;
-  cursor: pointer;
-}
-
-.enhance-tabs button:hover,
-.enhance-tabs button[aria-selected="true"] {
-  color: hsl(var(--brand-accent));
-}
-
-.enhance-tabs button[aria-selected="true"]::after {
-  content: "";
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: hsl(var(--brand-accent));
-}
-
-.enhance-tabs button:focus-visible {
-  outline: 2px solid hsl(var(--brand-accent));
-  outline-offset: 3px;
-  border-radius: 3px;
-}
-
-.enhance-tab-panel {
+.enhance-general {
   min-width: 0;
 }
 
-.enhance-tab-panel[hidden] {
-  display: none;
-}
-
-.enhance-tab-panel .panel {
+.enhance-general .panel {
   width: 100%;
 }
 
@@ -6666,8 +6561,7 @@ select {
   grid-column: 1 / -1;
 }
 
-.enhance-feature-groups .feature-toggle,
-.enhance-service-panel .feature-toggle {
+.enhance-feature-groups .feature-toggle {
   border: 0;
   border-radius: 6px;
   background: hsl(var(--surface-raised) / 0.55);
@@ -6710,102 +6604,11 @@ select {
   font-size: 11px;
 }
 
-.enhance-service-panel .panel-head {
-  align-items: flex-start;
-  flex-direction: column;
-  gap: 4px;
-  padding: 18px 20px 14px;
-}
-
-.enhance-service-panel .settings-content {
-  padding: 0 20px 20px;
-}
-
-.enhance-service-panel .settings-content .settings-block {
-  display: grid;
-  gap: 12px;
-  border-top: 0;
-  padding-top: 14px;
-}
-
-.enhance-service-panel .form-row {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
-}
-
-.enhance-service-panel .field input,
-.enhance-service-panel .app-select-trigger {
-  height: 36px;
-  min-height: 36px;
-}
-
-.enhance-service-panel .stepwise-settings-block {
-  --stepwise-control-height: 36px;
-}
-
-.enhance-service-panel .field,
-.enhance-service-panel .form-row,
-.enhance-service-panel .field-hint {
-  margin: 0;
-}
-
-.enhance-service-panel .field-hint {
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.enhance-service-toggles {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 4px;
-}
-
-.enhance-service-panel .stepwise-advanced {
-  margin: 0;
-  padding: 10px 12px;
-  border: 1px solid hsl(var(--border));
-  border-radius: 6px;
-  background: hsl(var(--surface-raised) / 0.3);
-}
-
-.enhance-service-panel .stepwise-advanced summary {
-  min-height: 22px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.enhance-service-panel .stepwise-advanced[open] > .field,
-.enhance-service-panel .stepwise-advanced[open] > .form-row {
-  margin-top: 12px;
-}
-
-.enhance-service-note {
-  align-items: flex-start;
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.enhance-service-note svg {
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-
-.enhance-page #enhance-dictation,
-.enhance-page #enhance-stepwise {
-  scroll-margin-top: 120px;
-}
-
 @media (max-width: 1080px) {
   .enhance-feature-groups .feature-group:first-child .feature-switch-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .enhance-service-toggles {
-    grid-template-columns: 1fr;
-    gap: 6px;
-  }
 }
 
 @media (max-width: 760px) {
@@ -6818,10 +6621,6 @@ select {
   .enhance-save-actions {
     width: 100%;
     justify-content: space-between;
-  }
-
-  .enhance-tabs {
-    padding-inline: 12px;
   }
 
   .enhance-feature-groups .feature-group-head {
@@ -6875,29 +6674,6 @@ select {
   color: hsl(var(--muted-foreground));
   font-size: 12px;
   line-height: 1.45;
-}
-
-.settings-content .stepwise-settings-block {
-  display: grid;
-  gap: 10px;
-}
-
-.settings-content .stepwise-settings-block .section-title {
-  margin: 0;
-  color: hsl(var(--foreground));
-  font-size: 14px;
-  font-weight: 650;
-}
-
-.settings-content .stepwise-settings-section {
-  margin: -4px 0 0;
-  color: hsl(var(--muted-foreground));
-  font-size: 12px;
-}
-
-.settings-content .stepwise-settings-actions {
-  justify-content: flex-start;
-  margin: 0;
 }
 
 .settings-save-bar {
