@@ -96,6 +96,8 @@ test("retired enhancements have no settings, navigation or command references in
     "whaleBalanceSettingsIssue", "supportsPetRealMouseLook", "setPersistedEnhanceFlag",
     "挂件与桌宠", "独立模式", "Codex 用量挂件", "活动进度条右侧布局", "桌宠跟随真实鼠标", "官方额度解锁",
     "API 余额（可选）", "如果使用官方模式或官方混入 API 模式，通常不需要开启插件市场解锁。",
+    "对话与输入", "Markdown 导出", "粘贴修复", "强制中文界面", "容量错误自动重试",
+    "打字特效（彩虹 P）", "会话 ID 标识", "对话居中宽度", "切换对话保留位置", "用量状态栏",
   ]);
   const references = descendants(app)
     .filter((node) => ts.isIdentifier(node) || ts.isStringLiteral(node))
@@ -111,7 +113,7 @@ test("remaining enhancements use the master switch and keep their complete featu
   for (const toggle of toggles) assert.equal(attribute(toggle, "disabled"), "!masterEnabled");
   assert.equal(attribute(fieldControl(enhance, "form.codexAppPluginMarketplaceUnlock"), "disabled"), "!masterEnabled");
   const groups = elements(enhance).filter((element) => element.tagName.getText(app) === "FeatureGroup");
-  assert.deepEqual(groups.map((element) => attribute(element, "title")), ['t("插件与模型")', 't("对话与输入")']);
+  assert.deepEqual(groups.map((element) => attribute(element, "title")), ['t("插件与模型")']);
   for (const group of groups) assert.equal(isConditional(group, enhance), false, "remaining groups stay visible when enhancements are off");
 
   const visibleEnglish = descendants(app).filter((node) => ts.isStringLiteral(node)
@@ -158,11 +160,14 @@ test("enhancement saving is an explicit permanent top action", () => {
   assert.ok(general && saves[0].pos < general.pos);
 });
 
-test("retired widget and standalone controls cannot reappear or autosave from enhancements", () => {
+test("retired enhancement controls cannot reappear or autosave from enhancements", () => {
   const enhance = component("EnhanceScreen");
   const controls = elements(enhance);
+  assert.ok(!controls.some((element) => attribute(element, "title") === 't("会话删除")'));
   for (const field of ["codexAppWhaleWidgetEnabled", "codexAppWhaleBalanceProtocol", "codexAppWhaleBalancePath", "codexAppWhaleBalanceField",
-    "codexAppWhaleBalanceCurrency", "codexAppWhaleBalanceScale", "codexAppPetRealMouseLook", "codexAppActivityOverlayRight", "codexAppStandaloneQuotaUnlock"]) {
+    "codexAppWhaleBalanceCurrency", "codexAppWhaleBalanceScale", "codexAppPetRealMouseLook", "codexAppActivityOverlayRight", "codexAppStandaloneQuotaUnlock",
+    "codexAppSessionDelete", "codexAppMarkdownExport", "codexAppPasteFix", "codexAppForceChineseLocale", "codexAppCapacityAutoRetry",
+    "codexAppTypingEffect", "codexAppThreadIdBadge", "codexAppConversationView", "codexAppThreadScrollRestore", "codexAppUsageStatusLine"]) {
     assert.ok(!controls.some((element) => attribute(element, "checked") === `form.${field}` || attribute(element, "value") === `form.${field}`), field);
   }
   assert.ok(!descendants(enhance).filter(ts.isCallExpression)
