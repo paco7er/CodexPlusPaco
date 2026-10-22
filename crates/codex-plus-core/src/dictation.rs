@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 
 use crate::settings::{BackendSettings, DictationProvider, DictationSettings};
 
-/// 总开关只控制运行时能力，不修改用户保存的语音开关或独立密钥。
+/// 语音增强已退役，不修改用户保存的旧配置或独立密钥。
 pub(crate) fn effective_settings(settings: &BackendSettings) -> DictationSettings {
     let mut effective = settings.dictation.clone();
     // 兼容早期版本把本地 SenseVoice 保存成 API provider + local:// URL 的配置。
@@ -24,7 +24,7 @@ pub(crate) fn effective_settings(settings: &BackendSettings) -> DictationSetting
     if is_local_sensevoice(&effective) {
         effective.provider = DictationProvider::SenseVoice;
     }
-    effective.enabled &= settings.enhancements_enabled;
+    effective.enabled = false;
     effective
 }
 
@@ -1664,6 +1664,6 @@ mod enhancement_switch_tests {
         assert!(settings.dictation.enabled);
         assert_eq!(settings.dictation.api_key, "fake-independent-asr-key");
         settings.enhancements_enabled = true;
-        assert!(effective_settings(&settings).enabled);
+        assert!(!effective_settings(&settings).enabled);
     }
 }

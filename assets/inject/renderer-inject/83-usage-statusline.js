@@ -467,10 +467,12 @@
     codexPlusUsageSchedule(codexPlusUsageWarmupIntervalMs);
   }
 
-  codexPlusUsageInstallStyle();
-  codexPlusUsageObserve();
-  codexPlusUsageSyncPlacement();
-  codexPlusUsageSchedule(600);
+  if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) {
+    codexPlusUsageInstallStyle();
+    codexPlusUsageObserve();
+    codexPlusUsageSyncPlacement();
+    codexPlusUsageSchedule(600);
+  }
   window.__codexPlusUsageStatusLineRuntime = {
     version: 2,
     sync: () => codexPlusUsageSchedule(0),

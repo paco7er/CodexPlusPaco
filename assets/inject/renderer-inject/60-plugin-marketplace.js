@@ -32,6 +32,7 @@
     }
     const patchedFilter = function codexPluginBuildFlavorFilterPatch(callback, thisArg) {
       const filtered = originalFilter.call(this, callback, thisArg);
+      if (!codexPluginMarketplacePatchEnabled()) return filtered;
       if (filtered.length === this.length) return filtered;
       if (isCodexPluginBuildFlavorFilter(callback, this, filtered)) {
         sendCodexPlusDiagnostic("plugin_build_flavor_filter_bypassed", { pluginCount: this.length });
@@ -205,6 +206,7 @@
     const originalSendRequest = client.__codexPluginMarketplaceOriginalSendRequest || client.sendRequest.bind(client);
     client.__codexPluginMarketplaceOriginalSendRequest = originalSendRequest;
     client.sendRequest = async function codexPluginMarketplacePatchedSendRequest(method, params, options) {
+      if (!codexPluginMarketplacePatchEnabled()) return await originalSendRequest(method, params, options);
       const managed = codexPlusPluginNativeInterceptClient(method, params, options,
         (nextOptions) => originalSendRequest(method, params, nextOptions), client.hostId);
       if (managed) return await managed;
@@ -449,6 +451,7 @@
     if (!bridge.__codexPluginMarketplaceOriginalSendMessageFromView) {
       bridge.__codexPluginMarketplaceOriginalSendMessageFromView = bridge.sendMessageFromView.bind(bridge);
       bridge.sendMessageFromView = function codexPluginMarketplacePatchedSendMessageFromView(message) {
+        if (!codexPluginMarketplacePatchEnabled()) return bridge.__codexPluginMarketplaceOriginalSendMessageFromView(message);
         if (codexPlusPluginNativeInterceptOutgoing(message)) return Promise.resolve();
         let nextMessage = message;
         try {
@@ -474,6 +477,7 @@
     if (!window.__codexPluginMarketplaceOriginalDispatchEvent) {
       window.__codexPluginMarketplaceOriginalDispatchEvent = originalDispatchEvent;
       window.dispatchEvent = function patchedCodexPluginMarketplaceDispatchEvent(event) {
+        if (!codexPluginMarketplacePatchEnabled()) return originalDispatchEvent.call(this, event);
         try {
           const detail = event?.detail;
           if (event?.type === "codex-message-from-view" && event.__codexForwardedViaBridge
@@ -501,6 +505,7 @@
     if (!window.__codexPluginMarketplaceResponseListenerInstalled) {
       window.__codexPluginMarketplaceResponseListenerInstalled = true;
       window.addEventListener("message", (event) => {
+        if (!codexPluginMarketplacePatchEnabled()) return;
         try {
           patchPluginMarketplaceResponseData(event?.data);
         } catch (error) {
@@ -589,6 +594,10 @@
   }
 
   function codexPluginMarketplacePatchEnabled() {
+    // 已装入的补丁跨重注入保留，通过最新闭包读取开关，避免旧心跳停用后配置冻结。
+    if (typeof window.__codexPlusPluginMarketplaceEnabled === "function") {
+      return window.__codexPlusPluginMarketplaceEnabled();
+    }
     return codexPlusBackendSettingsLoaded && !!codexPlusSettings().pluginMarketplaceUnlock;
   }
 

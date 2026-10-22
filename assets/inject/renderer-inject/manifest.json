@@ -3,7 +3,7 @@
     {
       "name": "00-prelude.js",
       "description": "IIFE 开头、环境守卫、平台探测与常量",
-      "lines": 526
+      "lines": 535
     },
     {
       "name": "01-registry.js",
@@ -13,7 +13,7 @@
     {
       "name": "10-style.js",
       "description": "样式注入、默认设置、后端设置映射与持久化",
-      "lines": 1258
+      "lines": 1260
     },
     {
       "name": "20-menu.js",
@@ -33,7 +33,7 @@
     {
       "name": "40-backend-settings.js",
       "description": "后端设置读写、心跳同步、Codex 增强 UI",
-      "lines": 1311
+      "lines": 1321
     },
     {
       "name": "50-navigation.js",
@@ -43,7 +43,7 @@
     {
       "name": "60-plugin-marketplace.js",
       "description": "插件市场请求/响应补丁、本地兜底与合并",
-      "lines": 1897
+      "lines": 1906
     },
     {
       "name": "61-plugin-market-ui.js",
@@ -63,7 +63,7 @@
     {
       "name": "71-model-picker-groups.js",
       "description": "原生模型选择器按供应商分组折叠（聚合供应商场景）",
-      "lines": 1036
+      "lines": 1038
     },
     {
       "name": "80-session-share.js",
@@ -83,12 +83,12 @@
     {
       "name": "83-usage-statusline.js",
       "description": "输入框下方用量状态栏：生成速度、缓存命中率与上下文占用",
-      "lines": 491
+      "lines": 493
     },
     {
       "name": "84-proxy-request-status.js",
       "description": "输入框上方的请求避震状态条：正在请求 / 等待上游 / 正在重试 / 正在生成",
-      "lines": 280
+      "lines": 282
     },
     {
       "name": "90-action-groups.js",
@@ -108,7 +108,7 @@
     {
       "name": "93-dictation.js",
       "description": "独立 ASR 听写入口、录音、取消重试与原生输入框回填",
-      "lines": 604
+      "lines": 605
     },
     {
       "name": "94-typing-effects.js",
@@ -118,7 +118,7 @@
     {
       "name": "95-conversation-view.js",
       "description": "会话视图运行时、官方用量策略重写、扫描主循环",
-      "lines": 937
+      "lines": 943
     },
     {
       "name": "96-whale-compat.js",
@@ -133,17 +133,17 @@
     {
       "name": "98-scan-schedule.js",
       "description": "扫描相关性判定与调度，启动重试",
-      "lines": 174
+      "lines": 178
     },
     {
       "name": "98-avatar-overlay-layout.js",
       "description": "Codex 原生活动悬浮层右侧布局与波形镜像",
-      "lines": 54
+      "lines": 55
     },
     {
       "name": "99-startup.js",
       "description": "启动序列：resize 处理、MutationObserver 与事件绑定",
-      "lines": 38
+      "lines": 43
     },
     {
       "name": "99-tail.js",

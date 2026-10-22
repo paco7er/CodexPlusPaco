@@ -542,7 +542,7 @@
   }
 
   // 注入脚本重跑（页面未刷新）时按已记录的 id 恢复样式表；首次加载 Set 为空，不做任何事。
-  if (deletedSessionRowIds.size) renderDeletedSessionRowStyle();
+  if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true && deletedSessionRowIds.size) renderDeletedSessionRowStyle();
 
   function removeDeletedRow(row, button, ref, requestContext) {
     // 删除响应期间，React 可能复用或替换 sidebar 行；不能删除其新身份的 DOM。

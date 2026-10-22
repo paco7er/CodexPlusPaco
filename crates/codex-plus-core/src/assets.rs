@@ -1,13 +1,17 @@
+#[cfg(test)]
 use base64::Engine;
 use serde_json::{Value, json};
 
 use crate::settings::BackendSettings;
 
 const RENDERER_SCRIPT: &str = include_str!("../../../assets/inject/renderer-inject.js");
+#[cfg(test)]
 const WHALE_DEFAULT_IMAGE: &[u8] =
     include_bytes!("../../../assets/inject/upstream/whale-widget/DSniang1.png");
+#[cfg(test)]
 const WHALE_RUNTIME: &str =
     include_str!("../../../assets/inject/upstream/whale-widget/full-widget-codex.js");
+#[cfg(test)]
 const WHALE_MEDIA: &[(&str, &str, &[u8])] = &[
     ("DSniang1.png", "image/png", WHALE_DEFAULT_IMAGE),
     (
@@ -57,6 +61,7 @@ const WHALE_MEDIA: &[(&str, &str, &[u8])] = &[
     ),
 ];
 
+#[cfg(test)]
 fn whale_assets_json() -> String {
     let values: serde_json::Map<String, Value> = WHALE_MEDIA
         .iter()
@@ -65,6 +70,7 @@ fn whale_assets_json() -> String {
     Value::Object(values).to_string()
 }
 
+#[cfg(test)]
 fn whale_runtime_script() -> String {
     // 直接注入函数声明；完整引擎使用词法宿主，不要求 renderer 开放 unsafe-eval。
     format!(
@@ -247,50 +253,15 @@ fn renderer_after_document_ready(script: &str) -> String {
     )
 }
 
-pub fn injection_script_with_settings(helper_port: u16, settings: &BackendSettings) -> String {
+pub fn injection_script_with_settings(helper_port: u16, _settings: &BackendSettings) -> String {
     let helper_url = format!("http://127.0.0.1:{helper_port}");
-    let paste_fix = paste_fix_enabled_config(settings);
-    let force_chinese_locale = force_chinese_locale_config(settings);
-    let hide_official_usage_alert = hide_official_usage_alert_config(settings);
-    // Fast 的新文档脚本需要 Page.enable；DOM 增强必须等正常文档就绪，不能访问空的根节点。
-    let renderer_runtime = if settings.enhancements_enabled && settings.codex_app_native_fast_unlock {
-        renderer_after_document_ready(renderer_script())
-    } else {
-        renderer_script().to_string()
-    };
-    let stepwise_runtime =
-        if settings.codex_app_stepwise_enabled || settings.codex_app_answer_outline_enabled {
-            stepwise_script()
-        } else {
-            ""
-        };
+    // 旧设置保留兼容读取，生产注入只启动插件市场，不能由旧开关重新拼入其他运行时。
     format!(
-        "window.__CODEX_SESSION_DELETE_HELPER__ = {};\nwindow.__CODEX_PLUS_VERSION__ = {};\nwindow.__CODEX_PLUS_BUILD__ = {};\nwindow.__CODEX_PLUS_PASTE_FIX__ = {};\nwindow.__CODEX_PLUS_FORCE_CHINESE_LOCALE__ = {};\nwindow.__CODEX_PLUS_HIDE_OFFICIAL_USAGE_ALERT__ = {};\n{}\n{}",
+        "window.__CODEX_SESSION_DELETE_HELPER__ = {};\nwindow.__CODEX_PLUS_VERSION__ = {};\nwindow.__CODEX_PLUS_BUILD__ = {};\nwindow.__CODEX_PLUS_MARKETPLACE_ONLY__ = true;\nwindow.__CODEX_PLUS_PASTE_FIX__ = {{ enabled: false }};\nwindow.__CODEX_PLUS_FORCE_CHINESE_LOCALE__ = {{ enabled: false }};\nwindow.__CODEX_PLUS_HIDE_OFFICIAL_USAGE_ALERT__ = false;\n{}",
         serde_json::to_string(&helper_url).expect("helper URL should serialize"),
         serde_json::to_string(crate::version::VERSION).expect("version should serialize"),
         serde_json::to_string(DIAGNOSTIC_BUILD_ID).expect("build id should serialize"),
-        serde_json::to_string(&paste_fix).expect("paste fix config should serialize"),
-        serde_json::to_string(&force_chinese_locale)
-            .expect("force Chinese locale config should serialize"),
-        serde_json::to_string(&hide_official_usage_alert)
-            .expect("usage alert config should serialize"),
-        format!(
-            "window.__CODEX_PLUS_WHALE_IMAGE__ = {};\n{}\n{}\n{}\n{}",
-            serde_json::to_string(&image_data_uri("image/png", WHALE_DEFAULT_IMAGE))
-                .expect("whale image should serialize"),
-            whale_runtime_script(),
-            include_str!("../../../assets/inject/composer-readiness.js"),
-            format!(
-                "{}\nwindow.__codexPlusNativeFastUnlock.runtime.update({});",
-                native_fast_unlock_script(),
-                json!({
-                    "enhancementsEnabled": settings.enhancements_enabled,
-                    "codexAppNativeFastUnlock": settings.codex_app_native_fast_unlock,
-                }),
-            ),
-            renderer_runtime
-        ),
-        stepwise_runtime,
+        renderer_after_document_ready(renderer_script()),
     )
 }
 
@@ -298,6 +269,7 @@ pub fn paste_fix_enabled_config(settings: &BackendSettings) -> Value {
     json!({ "enabled": settings.codex_app_paste_fix })
 }
 
+#[cfg(test)]
 fn image_data_uri(mime_type: &str, bytes: &[u8]) -> String {
     format!(
         "data:{mime_type};base64,{}",
@@ -335,16 +307,24 @@ mod tests {
     }
 
     #[test]
-    fn whale_character_is_embedded_for_offline_and_live_enable() {
-        let script = injection_script(57321);
-        let prefix = "window.__CODEX_PLUS_WHALE_IMAGE__ = ";
-        let value = script.split_once(prefix).unwrap().1.lines().next().unwrap();
-        let uri: String = serde_json::from_str(value.trim_end_matches(';')).unwrap();
-        let bytes = base64::engine::general_purpose::STANDARD
-            .decode(uri.strip_prefix("data:image/png;base64,").unwrap())
-            .unwrap();
-        assert_eq!(bytes, WHALE_DEFAULT_IMAGE);
-        assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n");
+    fn legacy_settings_cannot_inject_retired_assets() {
+        let defaults = injection_script(57321);
+        let settings = BackendSettings {
+            codex_app_native_fast_unlock: true,
+            codex_app_stepwise_enabled: true,
+            codex_app_answer_outline_enabled: true,
+            codex_app_whale_widget_enabled: true,
+            codex_app_force_chinese_locale: true,
+            codex_app_paste_fix: true,
+            ..BackendSettings::default()
+        };
+        let script = injection_script_with_settings(57321, &settings);
+        assert_eq!(script, defaults);
+        assert!(script.contains("window.__CODEX_PLUS_MARKETPLACE_ONLY__ = true;"));
+        assert!(!script.contains("window.__CODEX_PLUS_WHALE_ENGINE__ = function("));
+        assert!(!script.contains("window.__CODEX_PLUS_WHALE_IMAGE__ = "));
+        assert!(!script.contains("window.__codexPlusNativeFastUnlock.runtime.update("));
+        assert!(!script.contains("window.__codexStepwisePanel ="));
     }
 
     #[test]

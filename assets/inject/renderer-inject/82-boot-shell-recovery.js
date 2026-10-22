@@ -83,4 +83,4 @@
     }, bootShellRecoveryPollMs);
   }
 
-  installBootShellRecovery();
+  if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) installBootShellRecovery();

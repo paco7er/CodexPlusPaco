@@ -186,6 +186,10 @@
   }
 
   function scanLightweight() {
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) {
+      scheduleBackendHeartbeat();
+      return;
+    }
     installStyle();
     installCodexServiceTierDispatcherPatch();
     installCodexAppServerClientPrototypePatch();
@@ -212,6 +216,7 @@
   }
 
   function officialUsagePolicy() {
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) return { official: false, hideAlerts: false, unlockSend: false };
     // 新一代设置尚未返回时沿用最后一次真实配置，避免重新注入短暂恢复额度锁。
     if (!codexPlusBackendSettingsLoaded && officialUsageRuntime.lastPolicy) return officialUsageRuntime.lastPolicy;
     const profile = codexRemoteSessionActiveProfile();
@@ -906,6 +911,7 @@
         }
       }
     }
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) return;
     if (typeof syncCodexPlusWhaleWidget === "function") runScanStep(syncCodexPlusWhaleWidget);
     refreshThreadIdBadges();
     sessionRows().forEach(tryAttachButton);
@@ -931,7 +937,7 @@
       window.__codexSessionDeleteScanPending = true;
       return;
     }
-    void installDictationSupportPatch();
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) void installDictationSupportPatch();
     runScanStep(scanLightweight);
     scheduleDeferredScan();
   }

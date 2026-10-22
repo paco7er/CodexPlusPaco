@@ -11,6 +11,7 @@
   registerCodexPlusExtensionSelector('[data-codex-plus-ext="builtin-dictation"]');
 
   function codexPlusDictationEnabled() {
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) return false;
     return codexPlusBackendSettingsLoaded && codexPlusBackendSettings.enhancementsEnabled !== false
       && codexPlusBackendSettings.dictation?.enabled === true;
   }
@@ -591,13 +592,13 @@
       void startCodexPlusDictation(null);
     }
   };
-  document.addEventListener("keydown", codexPlusDictationKeyHandler, true);
+  if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) document.addEventListener("keydown", codexPlusDictationKeyHandler, true);
   const codexPlusDictationDispose = () => {
     cancelCodexPlusDictation();
     document.removeEventListener("keydown", codexPlusDictationKeyHandler, true);
     document.querySelectorAll('[data-codex-plus-ext="builtin-dictation"]').forEach((node) => node.remove());
   };
-  window.addEventListener("pagehide", codexPlusDictationDispose, { once: true });
+  if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) window.addEventListener("pagehide", codexPlusDictationDispose, { once: true });
   window.__codexPlusDictationRuntime = { dispose: () => {
     window.removeEventListener("pagehide", codexPlusDictationDispose);
     codexPlusDictationDispose();

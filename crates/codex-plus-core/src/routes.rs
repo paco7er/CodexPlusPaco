@@ -460,11 +460,11 @@ impl CoreSettingsService {
 #[async_trait]
 impl BridgeSettingsService for CoreSettingsService {
     async fn get_settings(&self) -> anyhow::Result<BackendSettings> {
-        self.store.load()
+        self.store.load().map(BackendSettings::marketplace_only_enhancements)
     }
 
     async fn set_settings(&self, payload: Value) -> anyhow::Result<BackendSettings> {
-        self.store.update(payload)
+        self.store.update(payload).map(BackendSettings::marketplace_only_enhancements)
     }
 
     async fn codex_app_version(&self) -> anyhow::Result<String> {

@@ -97,19 +97,20 @@ fn injection_script_prefixes_helper_url_and_metadata() {
 /// 那条路径把入口的出现押在单次 DOM 变更上，变更被过滤掉就再无触发。
 /// 这里钉住不依赖 DOM 事件的有界重试兜底。
 #[test]
-fn injection_script_retries_sidebar_nav_after_startup() {
+fn injection_script_keeps_legacy_nav_retry_out_of_marketplace_startup() {
     let script = assets::injection_script(57321);
 
     assert!(script.contains("scheduleSidebarNavStartupRetry"));
     // 必须在首次 scan 之后调用，否则等于重复第一次必然失败的尝试
     let scan_at = script.find("\n  scan();").expect("startup scan call");
     let retry_at = script
-        .find("\n  scheduleSidebarNavStartupRetry();")
+        .find("\n    scheduleSidebarNavStartupRetry();")
         .expect("startup retry call");
     assert!(retry_at > scan_at);
     // 有界：插上就停、超时就放弃，不留常驻定时器
     assert!(script.contains("clearInterval(window.__codexPlusSidebarNavRetryTimer)"));
     assert!(script.contains("attempts > 20"));
+    assert!(script.contains("if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) {\n    syncOfficialUsagePolicy();\n    scheduleSidebarNavStartupRetry();"));
 }
 
 /// 原生返回的既有旧配置继续使用友好显示名，不重新注入或注册插件市场。
@@ -135,7 +136,7 @@ fn injection_script_omits_stepwise_runtime_when_disabled() {
 }
 
 #[test]
-fn injection_script_includes_stepwise_runtime_for_outline_only() {
+fn injection_script_omits_retired_runtime_for_legacy_outline_only() {
     let settings = BackendSettings {
         codex_app_stepwise_enabled: false,
         codex_app_answer_outline_enabled: true,
@@ -143,18 +144,18 @@ fn injection_script_includes_stepwise_runtime_for_outline_only() {
     };
     let script = assets::injection_script_with_settings(57321, &settings);
 
-    assert!(script.contains("const API_KEY = \"__codexStepwisePanel\";"));
+    assert!(!script.contains("const API_KEY = \"__codexStepwisePanel\";"));
 }
 
 #[test]
-fn injection_script_includes_stepwise_runtime_when_enabled() {
+fn injection_script_omits_retired_stepwise_runtime_despite_legacy_setting() {
     let settings = BackendSettings {
         codex_app_stepwise_enabled: true,
         ..Default::default()
     };
     let script = assets::injection_script_with_settings(57321, &settings);
 
-    assert!(script.contains("const API_KEY = \"__codexStepwisePanel\";"));
+    assert!(!script.contains("const API_KEY = \"__codexStepwisePanel\";"));
 }
 
 #[test]
@@ -175,7 +176,7 @@ fn stepwise_runtime_bumps_version_when_reinjection_contract_changes() {
 }
 
 #[test]
-fn injection_script_includes_one_runtime_when_both_features_are_enabled() {
+fn injection_script_omits_retired_runtime_when_both_legacy_features_are_enabled() {
     let settings = BackendSettings {
         codex_app_stepwise_enabled: true,
         codex_app_answer_outline_enabled: true,
@@ -183,9 +184,9 @@ fn injection_script_includes_one_runtime_when_both_features_are_enabled() {
     };
     let script = assets::injection_script_with_settings(57321, &settings);
 
-    assert!(script.contains("const API_KEY = \"__codexStepwisePanel\";"));
-    assert!(script.contains("Answer Outline parser:"));
-    assert_eq!(script.matches("window[API_KEY] = {").count(), 1);
+    assert!(!script.contains("const API_KEY = \"__codexStepwisePanel\";"));
+    assert!(!script.contains("Answer Outline parser:"));
+    assert_eq!(script.matches("window[API_KEY] = {").count(), 0);
 }
 
 #[test]
@@ -488,7 +489,7 @@ fn official_login_usage_alert_setting_controls_renderer_injection() {
         57321,
         &settings(RelayMode::Official, false, true)
     )
-    .contains("window.__CODEX_PLUS_HIDE_OFFICIAL_USAGE_ALERT__ = true;"));
+    .contains("window.__CODEX_PLUS_HIDE_OFFICIAL_USAGE_ALERT__ = false;"));
     assert!(assets::injection_script_with_settings(
         57321,
         &settings(RelayMode::Official, false, false)
@@ -514,7 +515,7 @@ fn usage_status_rewrite_targets_the_main_rate_limit_cache() {
 }
 
 #[test]
-fn official_usage_status_unlocks_external_relay_and_hides_alerts_only_when_enabled() {
+fn legacy_official_usage_helpers_preserve_their_contract() {
     let cases = run_official_usage_status_harness();
 
     assert_eq!(cases["pureApiAllowed"], false);
@@ -560,7 +561,8 @@ fn run_official_usage_status_harness() -> serde_json::Value {
     let temp = tempfile::tempdir().expect("temp dir should be created");
     let script_path = temp.path().join("renderer-inject.js");
     let harness_path = temp.path().join("usage-status-harness.cjs");
-    std::fs::write(&script_path, assets::injection_script(57321))
+    // 只验证保留的兼容函数；生产注入已禁止启动额度增强。
+    std::fs::write(&script_path, assets::renderer_script())
         .expect("injection script should be written");
     let mut harness = std::fs::File::create(&harness_path).expect("harness should be created");
     write!(
@@ -907,7 +909,7 @@ fn injection_script_menu_exposes_marketplace_plugin_switch_only() {
 }
 
 #[test]
-fn injection_script_menu_exposes_stepwise_switch_and_syncs_panel() {
+fn legacy_stepwise_definitions_remain_but_production_does_not_start_panel() {
     let settings = BackendSettings {
         codex_app_stepwise_enabled: true,
         ..Default::default()
@@ -921,8 +923,8 @@ fn injection_script_menu_exposes_stepwise_switch_and_syncs_panel() {
     assert!(script.contains("function syncStepwisePanel"));
     assert!(script.contains("window.__codexStepwisePanel?.syncSettings"));
     assert!(script.contains("if (key === \"stepwise\") syncStepwisePanel(value)"));
-    assert!(script.contains("if (patch?.enabled === true)"));
-    assert!(script.contains("activateRuntime();"));
+    assert!(script.contains("window.__CODEX_PLUS_MARKETPLACE_ONLY__ = true;"));
+    assert!(!script.contains("activateRuntime();"));
 }
 
 #[test]
@@ -2764,7 +2766,8 @@ fn injection_script_guards_temporary_new_thread_ids_before_delete() {
     ));
     assert!(script.contains("const openDeleteConfirm = (event) => openDeleteConfirmForRow(row, deleteButton, sessionRefFromRow(row), event)"));
     assert!(script.contains("会话仍在同步，请稍后重试"));
-    assert!(script.contains("attributeFilter: [\"data-app-action-sidebar-thread-id\", \"href\"]"));
+    assert!(script.contains(": [\"data-app-action-sidebar-thread-id\", \"href\"]"));
+    assert!(script.contains("? [\"disabled\", \"aria-disabled\", \"data-disabled\"]"));
 
     let cases = run_session_ref_contract_harness();
     assert_eq!(
@@ -3470,7 +3473,8 @@ fn run_native_tier_and_provider_contract_harness() -> serde_json::Value {
     let temp = tempfile::tempdir().expect("temp dir should be created");
     let script_path = temp.path().join("renderer-inject.js");
     let harness_path = temp.path().join("service-tier-harness.cjs");
-    std::fs::write(&script_path, assets::injection_script(57321))
+    // 兼容实现单独验证，不使用仅启动插件市场的生产注入入口。
+    std::fs::write(&script_path, assets::renderer_script())
         .expect("injection script should be written");
     let mut harness = std::fs::File::create(&harness_path).expect("harness should be created");
     write!(

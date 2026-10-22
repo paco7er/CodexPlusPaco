@@ -966,9 +966,11 @@ pub async fn install_bridge(
     let generation = next_bridge_generation(websocket_url);
     session = session.with_generation(generation.clone());
     let mut registered_script_ids = Vec::new();
-    let native_fast_requested = crate::settings::SettingsStore::default()
+    let settings = crate::settings::SettingsStore::default()
         .load()
-        .is_ok_and(|settings| settings.enhancements_enabled && settings.codex_app_native_fast_unlock);
+        .unwrap_or_default()
+        .marketplace_only_enhancements();
+    let native_fast_requested = settings.enhancements_enabled && settings.codex_app_native_fast_unlock;
 
     let install_result: anyhow::Result<()> = async {
         if native_fast_requested {
@@ -1047,13 +1049,19 @@ pub async fn install_bridge(
         json!({ "generation": generation.id }),
     );
 
-    if let Err(error) = native_fast::install(websocket_url, generation.clone()).await {
+    if native_fast_requested
+        && let Err(error) = native_fast::install(websocket_url, generation.clone()).await
+    {
         let _ = crate::diagnostic_log::append_diagnostic_log(
             "bridge.native_fast_interceptor_failed",
             json!({ "message": error.to_string() }),
         );
     }
-    spawn_app_server_client_capture(websocket_url, generation.clone());
+    if settings.enhancements_enabled
+        && (settings.codex_app_model_whitelist_unlock || settings.codex_app_session_delete)
+    {
+        spawn_app_server_client_capture(websocket_url, generation.clone());
+    }
 
     let mut pending_calls = FuturesUnordered::new();
     session.enqueue_binding_calls(&mut pending_calls);

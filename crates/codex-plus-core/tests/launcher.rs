@@ -1214,7 +1214,7 @@ async fn launch_lifecycle_runs_enabled_maintenance_without_applying_relay_profil
 }
 
 #[tokio::test]
-async fn native_fast_reload_runs_only_after_successful_opt_in_launch_injection() {
+async fn retired_native_fast_never_reloads_even_with_legacy_opt_in() {
     for (enhancements, native_fast, injection_ok) in [
         (true, true, true),
         (true, false, true),
@@ -1249,18 +1249,7 @@ async fn native_fast_reload_runs_only_after_successful_opt_in_launch_injection()
         handle.wait_for_codex_exit().await.unwrap();
         let events = events.lock().unwrap();
         let reload = events.iter().position(|event| event == "native-fast:9229");
-        assert_eq!(reload.is_some(), enhancements && native_fast && injection_ok);
-        if let Some(reload) = reload {
-            let injection = events
-                .iter()
-                .position(|event| event == "inject:9229:57321")
-                .unwrap();
-            assert!(injection < reload);
-            assert_eq!(
-                events.iter().filter(|event| *event == "native-fast:9229").count(),
-                1
-            );
-        }
+        assert!(reload.is_none());
     }
 }
 
@@ -2416,8 +2405,7 @@ async fn isolated_quota_gate_is_not_started_when_status_save_fails() {
 }
 
 #[tokio::test]
-async fn isolated_quota_gate_stops_on_exit_monitor_error_and_explicit_restart() {
-    use tokio::io::AsyncReadExt;
+async fn legacy_isolated_quota_setting_does_not_start_a_cdp_task() {
     for (wait_error, explicit_stop) in [(false, false), (true, false), (false, true)] {
         let temp = tempfile::tempdir().unwrap();
         let app_dir = temp.path().join("Codex.app");
@@ -2445,26 +2433,11 @@ async fn isolated_quota_gate_stops_on_exit_monitor_error_and_explicit_restart() 
         )
         .await
         .unwrap();
-        let (mut stream, _) =
-            tokio::time::timeout(std::time::Duration::from_secs(2), listener.accept())
-                .await
-                .unwrap()
-                .unwrap();
-        let mut buffer = [0; 2048];
-        stream.read(&mut buffer).await.unwrap();
         if explicit_stop {
             handle.stop_isolated_api_quota_gate().await;
         } else {
             assert_eq!(handle.wait_for_codex_exit().await.is_err(), wait_error);
         }
-        // 同一端口仍被保留，旧会话不允许再探测或注入它。
-        assert_eq!(
-            tokio::time::timeout(std::time::Duration::from_secs(1), stream.read(&mut buffer),)
-                .await
-                .unwrap()
-                .unwrap(),
-            0
-        );
         assert!(
             tokio::time::timeout(std::time::Duration::from_millis(550), listener.accept(),)
                 .await
@@ -2595,7 +2568,7 @@ async fn default_launch_hooks_provider_sync_enabled_returns_explicit_error() {
 }
 
 #[tokio::test]
-async fn native_browser_lifecycle_uses_one_settings_snapshot_and_stops_on_success_or_failure() {
+async fn retired_native_browser_setting_does_not_start_monitor() {
     for fail in [false, true] {
         let temp = tempfile::tempdir().unwrap();
         let app_dir = temp.path().join("Codex.app");
@@ -2632,10 +2605,7 @@ async fn native_browser_lifecycle_uses_one_settings_snapshot_and_stops_on_succes
                 .count(),
             1
         );
-        let start = events
-            .iter()
-            .position(|event| event == "native-browser:start:true")
-            .unwrap();
+        assert!(!events.iter().any(|event| event.starts_with("native-browser:start:")));
         let launch = events
             .iter()
             .position(|event| event == "launch:9229")
@@ -2644,7 +2614,7 @@ async fn native_browser_lifecycle_uses_one_settings_snapshot_and_stops_on_succes
             .iter()
             .position(|event| event == "native-browser:stop")
             .unwrap();
-        assert!(start < launch && launch < stop);
+        assert!(launch < stop);
     }
 }
 

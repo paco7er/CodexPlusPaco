@@ -1134,9 +1134,10 @@
   }
 
   function codexPlusSettings() {
-    if (codexPlusBackendSettings.enhancementsEnabled === false) {
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true || codexPlusBackendSettings.enhancementsEnabled === false) {
       return {
-        pluginMarketplaceUnlock: false,
+        pluginMarketplaceUnlock: codexPlusBackendSettings.enhancementsEnabled !== false
+          && codexPlusBackendSettings.codexAppPluginMarketplaceUnlock !== false,
         modelWhitelistUnlock: false,
         sessionDelete: false,
         markdownExport: false,
@@ -1172,6 +1173,7 @@
   }
 
   function setCodexPlusSetting(key, value) {
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true && key !== "pluginMarketplaceUnlock") return;
     const backendKey = codexPlusBackendSettingMap[key];
     if (backendKey) {
       if (key === "stepwise") syncStepwisePanel(value);

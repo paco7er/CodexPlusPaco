@@ -22,6 +22,7 @@
   }
 
   function scanRelevantSelector() {
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) return `${selectors.pluginNavButton}, ${selectors.disabledInstallButton}`;
     return [
       selectors.sidebarThread,
       '[data-app-action-sidebar-section-heading="Chats"]',
@@ -47,13 +48,14 @@
     if (isExtensionUiNode(node)) return false;
     const relevantSelector = scanRelevantSelector();
     return !!node.closest?.(relevantSelector) ||
-      nodeOrAncestorLooksLikeCodexUserBubble(node);
+      (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true && nodeOrAncestorLooksLikeCodexUserBubble(node));
   }
 
   function isScanRelevantNode(node) {
     if (node.nodeType !== 1) return false;
     if (isExtensionUiNode(node)) return false;
-    return nodeSelfOrAncestorMatchesScanRelevance(node) || !!node.querySelector?.(scanRelevantSelector()) || nodeLooksLikeCodexUserBubble(node);
+    return nodeSelfOrAncestorMatchesScanRelevance(node) || !!node.querySelector?.(scanRelevantSelector())
+      || (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true && nodeLooksLikeCodexUserBubble(node));
   }
 
   function isChatContentMutation(mutation) {
@@ -169,6 +171,8 @@
 
   void loadBackendSettingsForStartup();
   scan();
-  syncOfficialUsagePolicy();
-  scheduleSidebarNavStartupRetry();
+  if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) {
+    syncOfficialUsagePolicy();
+    scheduleSidebarNavStartupRetry();
+  }
   window.removeEventListener("resize", window.__codexPlusResizeHandler);

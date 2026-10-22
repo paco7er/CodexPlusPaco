@@ -11,7 +11,9 @@ struct RegisteredHotkey<H> {
 static REGISTRATION: OnceLock<Mutex<Option<RegisteredHotkey<GlobalHotkeyHandle>>>> = OnceLock::new();
 
 pub fn apply_config() -> anyhow::Result<()> {
-    let config = codex_plus_core::global_dictation::load_config();
+    let mut config = codex_plus_core::global_dictation::load_config();
+    // 旧配置仍可读取，但已退役的增强不能注册系统热键。
+    config.enabled = false;
     update_config(&config, |_| Ok(()))
 }
 

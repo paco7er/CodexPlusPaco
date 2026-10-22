@@ -967,8 +967,10 @@
     }, delay);
   }
 
-  codexPlusModelPickerInstallStyle();
-  codexPlusModelPickerSchedule(300);
+  if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) {
+    codexPlusModelPickerInstallStyle();
+    codexPlusModelPickerSchedule(300);
+  }
   window.__codexPlusModelPickerGroupsRuntime = {
     version: 1,
     sync: () => codexPlusModelPickerSchedule(0),

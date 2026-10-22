@@ -50,7 +50,7 @@ test("reinjection retires stale skin callbacks even when one callback throws", (
 
 test("reinjection removes the old multi-launch identity without reinstalling it", () => {
   const source = read("../../../assets/inject/renderer-inject/99-startup.js");
-  const end = source.indexOf("  installCodexConfigReadDeadline();");
+  const end = source.indexOf("  if (window.__CODEX_PLUS_MARKETPLACE_ONLY__");
   assert.ok(end > 0);
   let removed = 0;
   const window: Record<string, unknown> = {

@@ -6,6 +6,15 @@
   const codexPlusIsWindowsPlatform = /\bWindows\b/i.test(navigator.userAgent || "");
   const codexPlusIsMacPlatform = /\bMacintosh\b/i.test(navigator.userAgent || "");
   const codexPlusSupportsPetRealMouseLook = codexPlusIsWindowsPlatform || codexPlusIsMacPlatform;
+  if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) {
+    // 重注入先停掉旧版本的常驻运行时，随后只启动插件市场。
+    window.__codexPlusNativeFastUnlock?.runtime?.update?.({ enhancementsEnabled: false, codexAppNativeFastUnlock: false });
+    window.__codexStepwisePanel?.syncSettings?.({ enabled: false, answerOutlineEnabled: false });
+    window.__codexPlusModelPickerGroupsRuntime?.releaseDom?.();
+    window.__codexPlusPetRealMouseLook?.stop?.();
+    clearTimeout(window.__codexPlusCapacityAutoRetry?.state?.timer);
+    clearInterval(window.__codexPlusSidebarNavRetryTimer);
+  }
 
   // 热重注入只退出旧皮肤运行时，不读取或删除用户主题文件。
   function retireLegacySkinRuntime() {
@@ -1837,9 +1846,10 @@
   }
 
   function codexPlusSettings() {
-    if (codexPlusBackendSettings.enhancementsEnabled === false) {
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true || codexPlusBackendSettings.enhancementsEnabled === false) {
       return {
-        pluginMarketplaceUnlock: false,
+        pluginMarketplaceUnlock: codexPlusBackendSettings.enhancementsEnabled !== false
+          && codexPlusBackendSettings.codexAppPluginMarketplaceUnlock !== false,
         modelWhitelistUnlock: false,
         sessionDelete: false,
         markdownExport: false,
@@ -1875,6 +1885,7 @@
   }
 
   function setCodexPlusSetting(key, value) {
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true && key !== "pluginMarketplaceUnlock") return;
     const backendKey = codexPlusBackendSettingMap[key];
     if (backendKey) {
       if (key === "stepwise") syncStepwisePanel(value);
@@ -3287,7 +3298,7 @@
       }
       codexPlusBackendSettings = { ...codexPlusBackendSettings, ...settings };
       codexPlusBackendSettingsLoaded = true;
-      globalThis.window?.__codexPlusNativeFastUnlock?.runtime?.update?.({
+      if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) globalThis.window?.__codexPlusNativeFastUnlock?.runtime?.update?.({
         enhancementsEnabled: codexPlusBackendSettings.enhancementsEnabled !== false,
         codexAppNativeFastUnlock: codexPlusBackendSettings.codexAppNativeFastUnlock === true,
       });
@@ -3296,7 +3307,7 @@
     }
     // 设置已加载成功；语音 UI 的异常不应使 provider/Fast 刷新误判为失败。
     // service-tier harness 在 70 分片提前返回，尚未初始化 93 分片的录音状态。
-    if (!window.__CODEX_PLUS_TEST_SERVICE_TIER__) runScanStep(installCodexPlusDictation);
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true && !window.__CODEX_PLUS_TEST_SERVICE_TIER__) runScanStep(installCodexPlusDictation);
     return true;
   }
   // 原生准备会话时会读取本地配置；该 fetch 没有默认超时，丢失响应会同时
@@ -3368,6 +3379,7 @@
   }
   async function loadBackendSettings() {
     const loaded = await loadBackendSettingsState();
+    if (globalThis.window?.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) return loaded;
     if (loaded && codexRemoteSessionProviderOverrideEnabled()) {
       void loadCodexModelCatalog();
     }
@@ -3401,6 +3413,10 @@
     try {
       const previousConversationView = !!codexPlusSettings().conversationView;
       const loaded = await loadBackendSettingsState();
+      if (globalThis.window?.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) {
+        if (loaded) scan();
+        return;
+      }
       if (loaded) {
         syncOfficialUsagePolicy();
         runScanStep(syncCodexPlusTypingEffects);
@@ -3418,6 +3434,8 @@
   }
 
   async function setBackendSetting(key, value) {
+    if (globalThis.window?.__CODEX_PLUS_MARKETPLACE_ONLY__ === true
+        && !["enhancementsEnabled", "codexAppPluginMarketplaceUnlock"].includes(key)) return;
     const seq = ++codexPlusBackendSettingsSeq;
     codexPlusBackendSettings = { ...codexPlusBackendSettings, [key]: value };
     codexPlusBackendSettingsLoaded = true;
@@ -3427,7 +3445,7 @@
       const settings = await postJson("/settings/set", { [key]: value });
       if (seq === codexPlusBackendSettingsSeq) {
         codexPlusBackendSettings = { ...codexPlusBackendSettings, ...settings };
-        globalThis.window?.__codexPlusNativeFastUnlock?.runtime?.update?.({
+        if (globalThis.window?.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) globalThis.window?.__codexPlusNativeFastUnlock?.runtime?.update?.({
           enhancementsEnabled: codexPlusBackendSettings.enhancementsEnabled !== false,
           codexAppNativeFastUnlock: codexPlusBackendSettings.codexAppNativeFastUnlock === true,
         });
@@ -3439,6 +3457,7 @@
   }
 
   function refreshCodexPlusBackendToggles() {
+    if (globalThis.window?.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) { scan(); return; }
     globalThis.__CODEX_PLUS_ACTIVITY_OVERLAY_SYNC__?.();
     globalThis.__CODEX_PLUS_USAGE_STATUSLINE_SYNC__?.();
     document.querySelectorAll(".codex-plus-toggle[data-codex-backend-setting]").forEach((button) => {
@@ -3537,7 +3556,7 @@
       if (nextStatus?.status === "ok") {
         codexPlusBackendFailureCount = 0;
         codexPlusBackendStatus = window.__codexPlusBackendStatus = nextStatus;
-        if (typeof nextStatus.hideOfficialUsageAlert === "boolean") {
+        if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true && typeof nextStatus.hideOfficialUsageAlert === "boolean") {
           window.__CODEX_PLUS_HIDE_OFFICIAL_USAGE_ALERT__ = nextStatus.hideOfficialUsageAlert;
           syncOfficialUsagePolicy();
         }
@@ -4470,6 +4489,7 @@
   }
 
   function installCodexPlusSidebarNavigation() {
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) return;
     document.querySelectorAll(`#${codexPlusMenuId}, [data-codex-plus-menu="true"]`).forEach((node) => node.remove());
     // 旧版的侧边栏会话列表在 aside 里带 role="navigation"。新版把这个 role 挪去了
     // 缩略图面板/演示目录，所以留一条限定在 aside 内的兜底。
@@ -4618,6 +4638,7 @@
    * Codex 的 rail 渲染晚于注入，所以这里每次 scan 都会被调用；靠 id 判存避免重复插入。
    */
   function installCodexPlusRailNavigation() {
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) return false;
     document.getElementById(codexPlusRailExtensionsId)?.remove();
     document.querySelectorAll(`#${codexPlusMenuId}, [data-codex-plus-menu="true"]`).forEach((node) => node.remove());
     const rail = document.querySelector(codexPlusRailSelector);
@@ -4899,6 +4920,7 @@
     }
     const patchedFilter = function codexPluginBuildFlavorFilterPatch(callback, thisArg) {
       const filtered = originalFilter.call(this, callback, thisArg);
+      if (!codexPluginMarketplacePatchEnabled()) return filtered;
       if (filtered.length === this.length) return filtered;
       if (isCodexPluginBuildFlavorFilter(callback, this, filtered)) {
         sendCodexPlusDiagnostic("plugin_build_flavor_filter_bypassed", { pluginCount: this.length });
@@ -5072,6 +5094,7 @@
     const originalSendRequest = client.__codexPluginMarketplaceOriginalSendRequest || client.sendRequest.bind(client);
     client.__codexPluginMarketplaceOriginalSendRequest = originalSendRequest;
     client.sendRequest = async function codexPluginMarketplacePatchedSendRequest(method, params, options) {
+      if (!codexPluginMarketplacePatchEnabled()) return await originalSendRequest(method, params, options);
       const managed = codexPlusPluginNativeInterceptClient(method, params, options,
         (nextOptions) => originalSendRequest(method, params, nextOptions), client.hostId);
       if (managed) return await managed;
@@ -5316,6 +5339,7 @@
     if (!bridge.__codexPluginMarketplaceOriginalSendMessageFromView) {
       bridge.__codexPluginMarketplaceOriginalSendMessageFromView = bridge.sendMessageFromView.bind(bridge);
       bridge.sendMessageFromView = function codexPluginMarketplacePatchedSendMessageFromView(message) {
+        if (!codexPluginMarketplacePatchEnabled()) return bridge.__codexPluginMarketplaceOriginalSendMessageFromView(message);
         if (codexPlusPluginNativeInterceptOutgoing(message)) return Promise.resolve();
         let nextMessage = message;
         try {
@@ -5341,6 +5365,7 @@
     if (!window.__codexPluginMarketplaceOriginalDispatchEvent) {
       window.__codexPluginMarketplaceOriginalDispatchEvent = originalDispatchEvent;
       window.dispatchEvent = function patchedCodexPluginMarketplaceDispatchEvent(event) {
+        if (!codexPluginMarketplacePatchEnabled()) return originalDispatchEvent.call(this, event);
         try {
           const detail = event?.detail;
           if (event?.type === "codex-message-from-view" && event.__codexForwardedViaBridge
@@ -5368,6 +5393,7 @@
     if (!window.__codexPluginMarketplaceResponseListenerInstalled) {
       window.__codexPluginMarketplaceResponseListenerInstalled = true;
       window.addEventListener("message", (event) => {
+        if (!codexPluginMarketplacePatchEnabled()) return;
         try {
           patchPluginMarketplaceResponseData(event?.data);
         } catch (error) {
@@ -5456,6 +5482,10 @@
   }
 
   function codexPluginMarketplacePatchEnabled() {
+    // 已装入的补丁跨重注入保留，通过最新闭包读取开关，避免旧心跳停用后配置冻结。
+    if (typeof window.__codexPlusPluginMarketplaceEnabled === "function") {
+      return window.__codexPlusPluginMarketplaceEnabled();
+    }
     return codexPlusBackendSettingsLoaded && !!codexPlusSettings().pluginMarketplaceUnlock;
   }
 
@@ -9576,8 +9606,10 @@
     }, delay);
   }
 
-  codexPlusModelPickerInstallStyle();
-  codexPlusModelPickerSchedule(300);
+  if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) {
+    codexPlusModelPickerInstallStyle();
+    codexPlusModelPickerSchedule(300);
+  }
   window.__codexPlusModelPickerGroupsRuntime = {
     version: 1,
     sync: () => codexPlusModelPickerSchedule(0),
@@ -10187,7 +10219,7 @@
   }
 
   // 注入脚本重跑（页面未刷新）时按已记录的 id 恢复样式表；首次加载 Set 为空，不做任何事。
-  if (deletedSessionRowIds.size) renderDeletedSessionRowStyle();
+  if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true && deletedSessionRowIds.size) renderDeletedSessionRowStyle();
 
   function removeDeletedRow(row, button, ref, requestContext) {
     // 删除响应期间，React 可能复用或替换 sidebar 行；不能删除其新身份的 DOM。
@@ -10751,7 +10783,7 @@
     maxAttempts: capacityAutoRetryMaxAttempts,
   };
 
-  syncCodexPlusCapacityAutoRetry();
+  if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) syncCodexPlusCapacityAutoRetry();
   /**
    * Codex 启动壳自救。
    *
@@ -10837,7 +10869,7 @@
     }, bootShellRecoveryPollMs);
   }
 
-  installBootShellRecovery();
+  if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) installBootShellRecovery();
   /**
    * 输入框下方用量状态栏：生成速度 / 缓存命中率 / 上下文占用。
    *
@@ -11307,10 +11339,12 @@
     codexPlusUsageSchedule(codexPlusUsageWarmupIntervalMs);
   }
 
-  codexPlusUsageInstallStyle();
-  codexPlusUsageObserve();
-  codexPlusUsageSyncPlacement();
-  codexPlusUsageSchedule(600);
+  if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) {
+    codexPlusUsageInstallStyle();
+    codexPlusUsageObserve();
+    codexPlusUsageSyncPlacement();
+    codexPlusUsageSchedule(600);
+  }
   window.__codexPlusUsageStatusLineRuntime = {
     version: 2,
     sync: () => codexPlusUsageSchedule(0),
@@ -11586,17 +11620,19 @@
     if (!codexPlusProxyStatusState.disposed) codexPlusProxyStatusRender();
   }
 
-  codexPlusProxyStatusInstallStyle();
-  codexPlusProxyStatusRender();
-  codexPlusProxyStatusState.pollTimer = window.setInterval(
-    () => void codexPlusProxyStatusRefresh(),
-    codexPlusProxyStatusPollMs,
-  );
-  codexPlusProxyStatusState.tickTimer = window.setInterval(() => {
-    codexPlusProxyStatusState.nowMs = Date.now();
+  if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) {
+    codexPlusProxyStatusInstallStyle();
     codexPlusProxyStatusRender();
-  }, codexPlusProxyStatusTickMs);
-  void codexPlusProxyStatusRefresh();
+    codexPlusProxyStatusState.pollTimer = window.setInterval(
+      () => void codexPlusProxyStatusRefresh(),
+      codexPlusProxyStatusPollMs,
+    );
+    codexPlusProxyStatusState.tickTimer = window.setInterval(() => {
+      codexPlusProxyStatusState.nowMs = Date.now();
+      codexPlusProxyStatusRender();
+    }, codexPlusProxyStatusTickMs);
+    void codexPlusProxyStatusRefresh();
+  }
 
   window.__codexPlusProxyRequestStatusRuntime = {
     refresh: codexPlusProxyStatusRefresh,
@@ -13105,6 +13141,7 @@
   registerCodexPlusExtensionSelector('[data-codex-plus-ext="builtin-dictation"]');
 
   function codexPlusDictationEnabled() {
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) return false;
     return codexPlusBackendSettingsLoaded && codexPlusBackendSettings.enhancementsEnabled !== false
       && codexPlusBackendSettings.dictation?.enabled === true;
   }
@@ -13685,13 +13722,13 @@
       void startCodexPlusDictation(null);
     }
   };
-  document.addEventListener("keydown", codexPlusDictationKeyHandler, true);
+  if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) document.addEventListener("keydown", codexPlusDictationKeyHandler, true);
   const codexPlusDictationDispose = () => {
     cancelCodexPlusDictation();
     document.removeEventListener("keydown", codexPlusDictationKeyHandler, true);
     document.querySelectorAll('[data-codex-plus-ext="builtin-dictation"]').forEach((node) => node.remove());
   };
-  window.addEventListener("pagehide", codexPlusDictationDispose, { once: true });
+  if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) window.addEventListener("pagehide", codexPlusDictationDispose, { once: true });
   window.__codexPlusDictationRuntime = { dispose: () => {
     window.removeEventListener("pagehide", codexPlusDictationDispose);
     codexPlusDictationDispose();
@@ -14283,6 +14320,10 @@
   }
 
   function scanLightweight() {
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) {
+      scheduleBackendHeartbeat();
+      return;
+    }
     installStyle();
     installCodexServiceTierDispatcherPatch();
     installCodexAppServerClientPrototypePatch();
@@ -14309,6 +14350,7 @@
   }
 
   function officialUsagePolicy() {
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) return { official: false, hideAlerts: false, unlockSend: false };
     // 新一代设置尚未返回时沿用最后一次真实配置，避免重新注入短暂恢复额度锁。
     if (!codexPlusBackendSettingsLoaded && officialUsageRuntime.lastPolicy) return officialUsageRuntime.lastPolicy;
     const profile = codexRemoteSessionActiveProfile();
@@ -15003,6 +15045,7 @@
         }
       }
     }
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) return;
     if (typeof syncCodexPlusWhaleWidget === "function") runScanStep(syncCodexPlusWhaleWidget);
     refreshThreadIdBadges();
     sessionRows().forEach(tryAttachButton);
@@ -15028,7 +15071,7 @@
       window.__codexSessionDeleteScanPending = true;
       return;
     }
-    void installDictationSupportPatch();
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) void installDictationSupportPatch();
     runScanStep(scanLightweight);
     scheduleDeferredScan();
   }
@@ -15653,6 +15696,7 @@
   }
 
   function scanRelevantSelector() {
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) return `${selectors.pluginNavButton}, ${selectors.disabledInstallButton}`;
     return [
       selectors.sidebarThread,
       '[data-app-action-sidebar-section-heading="Chats"]',
@@ -15678,13 +15722,14 @@
     if (isExtensionUiNode(node)) return false;
     const relevantSelector = scanRelevantSelector();
     return !!node.closest?.(relevantSelector) ||
-      nodeOrAncestorLooksLikeCodexUserBubble(node);
+      (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true && nodeOrAncestorLooksLikeCodexUserBubble(node));
   }
 
   function isScanRelevantNode(node) {
     if (node.nodeType !== 1) return false;
     if (isExtensionUiNode(node)) return false;
-    return nodeSelfOrAncestorMatchesScanRelevance(node) || !!node.querySelector?.(scanRelevantSelector()) || nodeLooksLikeCodexUserBubble(node);
+    return nodeSelfOrAncestorMatchesScanRelevance(node) || !!node.querySelector?.(scanRelevantSelector())
+      || (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true && nodeLooksLikeCodexUserBubble(node));
   }
 
   function isChatContentMutation(mutation) {
@@ -15800,13 +15845,16 @@
 
   void loadBackendSettingsForStartup();
   scan();
-  syncOfficialUsagePolicy();
-  scheduleSidebarNavStartupRetry();
+  if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) {
+    syncOfficialUsagePolicy();
+    scheduleSidebarNavStartupRetry();
+  }
   window.removeEventListener("resize", window.__codexPlusResizeHandler);
   // Optional right-side layout for Codex's native message navigation rail.
   // The native page recreates the rail and preview card during navigation, so
   // this uses stable data attributes instead of retaining DOM node references.
   (() => {
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) return;
     const styleId = "codex-plus-avatar-overlay-layout-style";
     const root = document.documentElement;
     const enabledAttribute = "data-codex-plus-activity-overlay-right";
@@ -15861,39 +15909,44 @@
   document.getElementById("codex-plus-instance-identity")?.remove();
   delete window.__CODEX_PLUS_INSTANCE_LABEL__;
   delete window.__CODEX_PLUS_INSTANCE_ID__;
-  installCodexConfigReadDeadline();
-  installCodexPlusForceChineseLocale();
-  runScanStep(installCodexPlusTypingEffects);
-  runScanStep(syncCodexPlusWhaleWidget);
-  let codexPlusResizeRafId = 0;
-  window.__codexPlusResizeHandler = () => {
-    cancelAnimationFrame(codexPlusResizeRafId);
-    codexPlusResizeRafId = requestAnimationFrame(() => {
-      syncActionGroupsLayout(true);
-      runScanStep(refreshConversationView);
-    });
-  };
-  window.addEventListener("resize", window.__codexPlusResizeHandler);
+  if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) {
+    installCodexConfigReadDeadline();
+    installCodexPlusForceChineseLocale();
+    runScanStep(installCodexPlusTypingEffects);
+    runScanStep(syncCodexPlusWhaleWidget);
+    let codexPlusResizeRafId = 0;
+    window.__codexPlusResizeHandler = () => {
+      cancelAnimationFrame(codexPlusResizeRafId);
+      codexPlusResizeRafId = requestAnimationFrame(() => {
+        syncActionGroupsLayout(true);
+        runScanStep(refreshConversationView);
+      });
+    };
+    window.addEventListener("resize", window.__codexPlusResizeHandler);
+  }
   window.__codexSessionDeleteObserver?.disconnect();
   window.__codexSessionDeleteObserver = new MutationObserver(scheduleScan);
   window.__codexSessionDeleteObserver.observe(document.body || document.documentElement, {
     childList: true,
     subtree: true,
-    // Codex may promote a newly-created row from a temporary client ID to its
-    // persisted UUID without replacing the DOM node. Re-scan those rows so the
-    // action button and its delete reference are rebuilt from the canonical ID.
     attributes: true,
-    attributeFilter: ["data-app-action-sidebar-thread-id", "href"],
+    attributeFilter: window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true
+      ? ["disabled", "aria-disabled", "data-disabled"]
+      : ["data-app-action-sidebar-thread-id", "href"],
   });
   document.removeEventListener("pointerdown", window.__codexSessionActionTriggerHandler, true);
-  window.__codexSessionActionTriggerHandler = rememberSessionActionTrigger;
-  document.addEventListener("pointerdown", window.__codexSessionActionTriggerHandler, true);
   document.removeEventListener("click", window.__codexSessionActionTriggerClickHandler, true);
-  window.__codexSessionActionTriggerClickHandler = rememberSessionActionTrigger;
-  document.addEventListener("click", window.__codexSessionActionTriggerClickHandler, true);
+  if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) {
+    window.__codexSessionActionTriggerHandler = rememberSessionActionTrigger;
+    document.addEventListener("pointerdown", window.__codexSessionActionTriggerHandler, true);
+    window.__codexSessionActionTriggerClickHandler = rememberSessionActionTrigger;
+    document.addEventListener("click", window.__codexSessionActionTriggerClickHandler, true);
+  }
   // 对外接口层在此刻挂载：此时所有分片都已执行完毕，闭包里的函数全部就绪。
   // 放在 99-tail 收尾之前，确保 IIFE 结束前 window.codexPlus 已经可用——
   // 用户脚本的注入晚于本脚本，不会撞上这个时间点。
+  window.__codexPlusPluginMarketplaceEnabled = () => codexPlusBackendSettingsLoaded
+    && !!codexPlusSettings().pluginMarketplaceUnlock;
   window.codexPlus = buildCodexPlusExtensionApi();
 })();
 

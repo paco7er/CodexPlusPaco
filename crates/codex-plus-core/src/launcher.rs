@@ -646,7 +646,7 @@ where
     let hooks = hooks.into_launch_hooks();
     let mut debug_port = hooks.select_debug_port(options.debug_port);
     let mut helper_port = hooks.select_helper_port(options.helper_port);
-    let settings = hooks.load_settings().await?;
+    let settings = hooks.load_settings().await?.marketplace_only_enhancements();
     let app_dir = hooks.resolve_app_dir(options.app_dir.as_deref(), &settings)?;
     let status_store = options.status_store.clone();
     let mut helper_started = false;
@@ -1350,8 +1350,6 @@ impl LaunchHooks for DefaultLaunchHooks {
         let bridge_reinjector = self.bridge_reinjector.lock().await.clone();
         let (shutdown, mut shutdown_rx) = tokio::sync::oneshot::channel();
         let task = tokio::spawn(async move {
-            #[cfg(any(windows, target_os = "macos"))]
-            let pet_cursor_task = tokio::spawn(run_pet_real_mouse_cursor_driver(debug_port));
             let mut observed_browser_id: Option<String> = None;
             let mut bridge_health_failures = 0u8;
             let mut bridge_reinject_backoff = BridgeReinjectBackoff::default();
@@ -1372,25 +1370,16 @@ impl LaunchHooks for DefaultLaunchHooks {
                         if let Some(current) = current_browser_id {
                             observed_browser_id = Some(current);
                         }
-                        let (pet_result, _) = tokio::join!(
-                            sync_pet_real_mouse_overlay(debug_port, helper_port),
-                            check_and_reinject_bridge_inner(
-                                debug_port,
-                                helper_port,
-                                identity_changed,
-                                bridge_reinjector.clone(),
-                                &mut bridge_health_failures,
-                                &mut bridge_reinject_backoff,
-                            ),
-                        );
-                        record_pet_overlay_sync_result(debug_port, helper_port, pet_result);
+                        check_and_reinject_bridge_inner(
+                            debug_port,
+                            helper_port,
+                            identity_changed,
+                            bridge_reinjector.clone(),
+                            &mut bridge_health_failures,
+                            &mut bridge_reinject_backoff,
+                        ).await;
                     }
                 }
-            }
-            #[cfg(any(windows, target_os = "macos"))]
-            {
-                pet_cursor_task.abort();
-                let _ = pet_cursor_task.await;
             }
         });
         if let Some(runtime) = self

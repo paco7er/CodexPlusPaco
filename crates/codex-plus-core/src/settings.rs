@@ -854,6 +854,34 @@ impl Default for BackendSettings {
 }
 
 impl BackendSettings {
+    /// 只约束运行时快照，保留磁盘中的旧字段和供应商配置以兼容历史数据。
+    pub fn marketplace_only_enhancements(mut self) -> Self {
+        self.codex_app_standalone_quota_unlock = false;
+        self.codex_app_model_whitelist_unlock = false;
+        self.codex_app_session_delete = false;
+        self.codex_app_markdown_export = false;
+        self.codex_app_session_share = false;
+        self.codex_app_usage_status_line = false;
+        self.codex_app_paste_fix = false;
+        self.codex_app_force_chinese_locale = false;
+        self.codex_app_typing_effect = "off".to_string();
+        self.codex_app_thread_id_badge = false;
+        self.codex_app_conversation_view = false;
+        self.codex_app_thread_scroll_restore = false;
+        self.codex_app_native_menu_placement = false;
+        self.codex_app_native_browser_require_identification = false;
+        self.codex_app_native_fast_unlock = false;
+        self.codex_app_pet_real_mouse_look = false;
+        self.codex_app_activity_overlay_right = false;
+        self.codex_app_capacity_auto_retry = false;
+        self.codex_app_whale_widget_enabled = false;
+        self.codex_app_stepwise_enabled = false;
+        self.codex_app_answer_outline_enabled = false;
+        self.codex_app_stepwise_direct_send = false;
+        self.dictation.enabled = false;
+        self
+    }
+
     pub fn active_relay_profile(&self) -> RelayProfile {
         if self.active_relay_id == default_active_relay_id()
             && self.relay_profiles.len() == 1

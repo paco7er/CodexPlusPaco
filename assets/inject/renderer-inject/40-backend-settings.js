@@ -1,5 +1,6 @@
   async function loadBackendSettings() {
     const loaded = await loadBackendSettingsState();
+    if (globalThis.window?.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) return loaded;
     if (loaded && codexRemoteSessionProviderOverrideEnabled()) {
       void loadCodexModelCatalog();
     }
@@ -33,6 +34,10 @@
     try {
       const previousConversationView = !!codexPlusSettings().conversationView;
       const loaded = await loadBackendSettingsState();
+      if (globalThis.window?.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) {
+        if (loaded) scan();
+        return;
+      }
       if (loaded) {
         syncOfficialUsagePolicy();
         runScanStep(syncCodexPlusTypingEffects);
@@ -50,6 +55,8 @@
   }
 
   async function setBackendSetting(key, value) {
+    if (globalThis.window?.__CODEX_PLUS_MARKETPLACE_ONLY__ === true
+        && !["enhancementsEnabled", "codexAppPluginMarketplaceUnlock"].includes(key)) return;
     const seq = ++codexPlusBackendSettingsSeq;
     codexPlusBackendSettings = { ...codexPlusBackendSettings, [key]: value };
     codexPlusBackendSettingsLoaded = true;
@@ -59,7 +66,7 @@
       const settings = await postJson("/settings/set", { [key]: value });
       if (seq === codexPlusBackendSettingsSeq) {
         codexPlusBackendSettings = { ...codexPlusBackendSettings, ...settings };
-        globalThis.window?.__codexPlusNativeFastUnlock?.runtime?.update?.({
+        if (globalThis.window?.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true) globalThis.window?.__codexPlusNativeFastUnlock?.runtime?.update?.({
           enhancementsEnabled: codexPlusBackendSettings.enhancementsEnabled !== false,
           codexAppNativeFastUnlock: codexPlusBackendSettings.codexAppNativeFastUnlock === true,
         });
@@ -71,6 +78,7 @@
   }
 
   function refreshCodexPlusBackendToggles() {
+    if (globalThis.window?.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) { scan(); return; }
     globalThis.__CODEX_PLUS_ACTIVITY_OVERLAY_SYNC__?.();
     globalThis.__CODEX_PLUS_USAGE_STATUSLINE_SYNC__?.();
     document.querySelectorAll(".codex-plus-toggle[data-codex-backend-setting]").forEach((button) => {
@@ -169,7 +177,7 @@
       if (nextStatus?.status === "ok") {
         codexPlusBackendFailureCount = 0;
         codexPlusBackendStatus = window.__codexPlusBackendStatus = nextStatus;
-        if (typeof nextStatus.hideOfficialUsageAlert === "boolean") {
+        if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ !== true && typeof nextStatus.hideOfficialUsageAlert === "boolean") {
           window.__CODEX_PLUS_HIDE_OFFICIAL_USAGE_ALERT__ = nextStatus.hideOfficialUsageAlert;
           syncOfficialUsagePolicy();
         }
@@ -1102,6 +1110,7 @@
   }
 
   function installCodexPlusSidebarNavigation() {
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) return;
     document.querySelectorAll(`#${codexPlusMenuId}, [data-codex-plus-menu="true"]`).forEach((node) => node.remove());
     // 旧版的侧边栏会话列表在 aside 里带 role="navigation"。新版把这个 role 挪去了
     // 缩略图面板/演示目录，所以留一条限定在 aside 内的兜底。
@@ -1250,6 +1259,7 @@
    * Codex 的 rail 渲染晚于注入，所以这里每次 scan 都会被调用；靠 id 判存避免重复插入。
    */
   function installCodexPlusRailNavigation() {
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) return false;
     document.getElementById(codexPlusRailExtensionsId)?.remove();
     document.querySelectorAll(`#${codexPlusMenuId}, [data-codex-plus-menu="true"]`).forEach((node) => node.remove());
     const rail = document.querySelector(codexPlusRailSelector);

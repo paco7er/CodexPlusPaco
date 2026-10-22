@@ -2,6 +2,7 @@
   // The native page recreates the rail and preview card during navigation, so
   // this uses stable data attributes instead of retaining DOM node references.
   (() => {
+    if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) return;
     const styleId = "codex-plus-avatar-overlay-layout-style";
     const root = document.documentElement;
     const enabledAttribute = "data-codex-plus-activity-overlay-right";

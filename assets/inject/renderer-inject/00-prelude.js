@@ -6,6 +6,15 @@
   const codexPlusIsWindowsPlatform = /\bWindows\b/i.test(navigator.userAgent || "");
   const codexPlusIsMacPlatform = /\bMacintosh\b/i.test(navigator.userAgent || "");
   const codexPlusSupportsPetRealMouseLook = codexPlusIsWindowsPlatform || codexPlusIsMacPlatform;
+  if (window.__CODEX_PLUS_MARKETPLACE_ONLY__ === true) {
+    // 重注入先停掉旧版本的常驻运行时，随后只启动插件市场。
+    window.__codexPlusNativeFastUnlock?.runtime?.update?.({ enhancementsEnabled: false, codexAppNativeFastUnlock: false });
+    window.__codexStepwisePanel?.syncSettings?.({ enabled: false, answerOutlineEnabled: false });
+    window.__codexPlusModelPickerGroupsRuntime?.releaseDom?.();
+    window.__codexPlusPetRealMouseLook?.stop?.();
+    clearTimeout(window.__codexPlusCapacityAutoRetry?.state?.timer);
+    clearInterval(window.__codexPlusSidebarNavRetryTimer);
+  }
 
   // 热重注入只退出旧皮肤运行时，不读取或删除用户主题文件。
   function retireLegacySkinRuntime() {

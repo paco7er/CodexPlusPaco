@@ -919,7 +919,7 @@ fn log_launcher_guard_fallback(fallback_lock_path: &Path) {
 
 async fn activate_existing_codex_app(options: &LaunchOptions) -> anyhow::Result<()> {
     let hooks = LauncherHooks::default();
-    let settings = hooks.load_settings().await?;
+    let settings = hooks.load_settings().await?.marketplace_only_enhancements();
     let app_dir = hooks.resolve_app_dir(options.app_dir.as_deref(), &settings)?;
     let has_pending_recovery = hooks.has_pending_remote_control_session_recoveries();
     let blocking_process_ids = if has_pending_recovery {
@@ -1039,18 +1039,13 @@ impl LaunchHooks for LauncherHooks {
 
     async fn start_native_browser_compatibility(
         &self,
-        settings: &codex_plus_core::settings::BackendSettings,
+        _settings: &codex_plus_core::settings::BackendSettings,
     ) {
         let started = std::time::Instant::now();
-        let monitor = codex_plus_core::native_browser::start_monitor(
-            settings.enhancements_enabled
-                && settings.codex_app_native_browser_require_identification,
-        )
-        .await;
-        *self
-            .browser_monitor
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = monitor;
+        // 恢复本工具此前管理的兼容补丁后退出，不再保留浏览器增强轮询。
+        if let Some(monitor) = codex_plus_core::native_browser::start_monitor(false).await {
+            monitor.stop().await;
+        }
         let _ = codex_plus_core::diagnostic_log::append_diagnostic_log(
             "launcher.startup_phase",
             json!({"phase": "native_browser", "elapsed_ms": started.elapsed().as_millis()}),
