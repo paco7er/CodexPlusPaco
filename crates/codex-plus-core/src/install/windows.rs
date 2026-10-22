@@ -202,11 +202,6 @@ fn register_url_protocol(manager_path: &str) -> anyhow::Result<()> {
         URL_PROTOCOL_SUBKEY,
         "URL:Codex++ Import Protocol",
         manager_path,
-    )?;
-    register_url_protocol_key(
-        DREAM_SKIN_URL_PROTOCOL_SUBKEY,
-        "URL:DreamSkin Community Theme Protocol",
-        manager_path,
     )
 }
 

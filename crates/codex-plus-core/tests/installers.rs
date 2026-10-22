@@ -68,7 +68,7 @@ fn macos_bundle_metadata_has_one_native_gui_app_with_url_protocols() {
         app.info_plist
             .contains("<string>com.bigpizzav3.codexplusplus</string>")
     );
-    assert!(app.info_plist.contains("<string>dreamskin</string>"));
+    assert!(!app.info_plist.contains("<string>dreamskin</string>"));
     assert!(app.info_plist.contains("<string>codexplusplus</string>"));
     assert!(
         app.info_plist

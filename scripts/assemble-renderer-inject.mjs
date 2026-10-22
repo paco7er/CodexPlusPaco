@@ -4,7 +4,7 @@
  *
  * 为什么保留单体产物：
  *   - crates/codex-plus-core/src/assets.rs 用 include_str! 按路径读取
- *   - apps/codex-plus-manager/src/renderer-inject.test.ts（19 处）、dream-skin.test.ts（4 处）
+ *   - apps/codex-plus-manager/src/renderer-inject.test.ts 等契约测试
  *     也按路径读取，改成读分片要动大量既有断言
  * 所以分片是唯一真实来源，单体文件是生成物；漂移由 `assemble --check` 与
  * renderer-inject.test.ts 里的 drift 用例把守。

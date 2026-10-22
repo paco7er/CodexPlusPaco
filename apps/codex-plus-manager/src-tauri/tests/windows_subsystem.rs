@@ -194,7 +194,7 @@ fn manager_launch_button_uses_the_embedded_runtime() {
         .split("fn start_embedded_launcher(")
         .nth(1)
         .unwrap()
-        .split("pub fn start_weixin_connect_from_saved_settings")
+        .split("pub fn query_builtin_model_metadata")
         .next()
         .unwrap();
     assert!(body.contains("codex_plus_launcher::start"));

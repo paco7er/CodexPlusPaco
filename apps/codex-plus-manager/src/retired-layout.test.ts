@@ -19,7 +19,7 @@ function fixture() {
     loadBackendSettings: async () => {}, syncStepwisePanel: () => {},
   });
   const start = style.indexOf("  function defaultCodexPlusSettings()");
-  const end = style.indexOf("  // Dream skin runtime", start);
+  const end = style.indexOf("  function setCodexPlusSetting", start);
   const setterStart = style.indexOf("  function setCodexPlusSetting(");
   const setterEnd = style.indexOf("  function syncStepwisePanel(", setterStart);
   assert.ok(start >= 0 && end > start && setterStart >= 0 && setterEnd > setterStart);

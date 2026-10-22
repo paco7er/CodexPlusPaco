@@ -69,22 +69,7 @@ const demoSettings = {
   codexAppStepwiseMaxInputChars: 6000,
   codexAppStepwiseMaxOutputTokens: 500,
   codexAppStepwiseTimeoutMs: 8000,
-  codexAppDreamSkinEnabled: false,
-  codexAppDreamSkinPaused: false,
-  codexAppDreamSkinTheme: "pink",
-  codexAppDreamSkinThemeConfig: {},
-  codexAppDreamSkinImagePath: "",
   codexGoalsEnabled: false,
-  weixinConnectEnabled: false,
-  weixinConnectBaseUrl: "https://ilinkai.weixin.qq.com",
-  weixinConnectToken: "",
-  weixinConnectAccountId: "",
-  weixinConnectAllowFrom: "",
-  weixinConnectRouteTag: "",
-  weixinConnectWorkDir: "",
-  weixinConnectModel: "",
-  weixinConnectSandbox: "read-only",
-  weixinConnectCodexPath: "",
   relayBaseUrl: "",
   relayApiKey: "",
   relayProfiles: [{
@@ -177,20 +162,14 @@ export async function invoke<T = unknown>(command: string, args: Record<string, 
     case "check_env_conflicts": return ok({ conflicts: [] }) as T;
     case "load_provider_sync_targets": return ok({ currentProvider: "deepseek", targets: [] }) as T;
     case "load_pending_provider_import": return ok({ pending: null }) as T;
-    case "load_pending_dream_skin_community": return ok({ versionId: "" }) as T;
     case "load_watcher_state": return ok({ enabled: false, running: false, status: "disabled", message: "演示模式" }) as T;
     case "load_auto_takeover_state": return ok({ running: false, enabled: false, message: "演示模式" }) as T;
     case "native_browser_status": return {
       compatibility: { state: "not_started", detail: "" },
       connection: { state: "unavailable", browsers: [], failedChecks: 0 },
     } as T;
-    case "dream_skin_status": return ok({ state: "disabled", enabled: false, paused: false, liveApplied: false, checks: [] }) as T;
-    case "list_dream_skin_themes": return ok({ themes: [], activeDraft: { config: {}, imagePath: "", builtin: true } }) as T;
-    case "refresh_dream_skin_market": return ok({ themes: [], schemaVersion: 1, updatedAt: "", repositoryUrl: "", cached: false, warning: "" }) as T;
-    case "refresh_dream_skin_community": return ok({ items: [], total: 0, fetchedAt: "", cached: false, warning: "", installedThemeId: "" }) as T;
     case "refresh_script_market": return ok({ market: { status: "ok", message: "演示模式", scripts: [] }, user_scripts: { enabled: true, skip_next_start: false, scripts: [] } }) as T;
     case "load_ccs_providers": return ok({ providers: [] }) as T;
-    case "weixin_connect_status": return ok({ state: "disconnected", message: "演示模式", accountId: "", hasToken: false, lastPeerId: "", lastMessageAtMs: 0, processedMessages: 0 }) as T;
     case "load_local_sessions":
     case "list_local_sessions": return ok({ dbPath: "演示模式", dbPaths: [], sessions: [], offset: 0, limit: 50, hasMore: false, totalCount: 0 }) as T;
     case "load_relay_environment":

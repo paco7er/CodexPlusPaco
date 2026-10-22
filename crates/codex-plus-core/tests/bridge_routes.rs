@@ -1520,7 +1520,6 @@ impl LaunchHooks for ContextHooks {
         _debug_port: u16,
         _settings: &BackendSettings,
         _extra_args: &[String],
-        _instance: &codex_plus_core::launcher::LaunchInstance,
     ) -> anyhow::Result<CodexLaunch> {
         Ok(CodexLaunch::Process {
             command: vec!["codex".to_string()],

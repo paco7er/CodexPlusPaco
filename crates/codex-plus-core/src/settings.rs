@@ -486,127 +486,6 @@ pub enum RelayMode {
     Aggregate,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DreamSkinColors {
-    pub background: String,
-    pub panel: String,
-    pub panel_alt: String,
-    pub accent: String,
-    pub accent_alt: String,
-    pub secondary: String,
-    pub highlight: String,
-    pub text: String,
-    pub muted: String,
-    pub line: String,
-}
-
-impl Default for DreamSkinColors {
-    fn default() -> Self {
-        Self {
-            background: "#F7F4F5".to_string(),
-            panel: "#FFFFFF".to_string(),
-            panel_alt: "#FFF7F8".to_string(),
-            accent: "#E25563".to_string(),
-            accent_alt: "#F07A86".to_string(),
-            secondary: "#F3A8AF".to_string(),
-            highlight: "#C93D4C".to_string(),
-            text: "#2B2224".to_string(),
-            muted: "#8A7A7D".to_string(),
-            line: "rgba(196, 120, 128, .22)".to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DreamSkinThemeConfig {
-    #[serde(default = "default_dream_skin_schema_version")]
-    pub schema_version: u8,
-    #[serde(default = "default_dream_skin_id")]
-    pub id: String,
-    #[serde(default = "default_dream_skin_name")]
-    pub name: String,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub style_preset: String,
-    #[serde(default = "default_dream_skin_brand_subtitle")]
-    pub brand_subtitle: String,
-    #[serde(default = "default_dream_skin_tagline")]
-    pub tagline: String,
-    #[serde(default = "default_dream_skin_project_prefix")]
-    pub project_prefix: String,
-    #[serde(default = "default_dream_skin_project_label")]
-    pub project_label: String,
-    #[serde(default = "default_dream_skin_status_text")]
-    pub status_text: String,
-    #[serde(default = "default_dream_skin_quote")]
-    pub quote: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub colors: Option<DreamSkinColors>,
-    #[serde(flatten)]
-    pub extra_fields: Map<String, Value>,
-}
-
-impl Default for DreamSkinThemeConfig {
-    fn default() -> Self {
-        let mut extra_fields = Map::new();
-        #[cfg(windows)]
-        {
-            extra_fields.insert(
-                "image".to_string(),
-                Value::String("dream-reference.jpg".to_string()),
-            );
-            extra_fields.insert("appearance".to_string(), Value::String("auto".to_string()));
-            extra_fields.insert(
-                "art".to_string(),
-                serde_json::json!({
-                    "focusX": 0.72,
-                    "focusY": 0.45,
-                    "safeArea": "left",
-                    "taskMode": "ambient"
-                }),
-            );
-        }
-        #[cfg(not(windows))]
-        {
-            extra_fields.insert(
-                "image".to_string(),
-                Value::String("portal-hero.png".to_string()),
-            );
-            extra_fields.insert(
-                "promoTitle".to_string(),
-                Value::String("感谢 Passion8 赞助".to_string()),
-            );
-            extra_fields.insert(
-                "promoSub".to_string(),
-                Value::String("passion8.cc".to_string()),
-            );
-            extra_fields.insert(
-                "promoUrl".to_string(),
-                Value::String("https://passion8.cc/register?aff=TuPe".to_string()),
-            );
-        }
-        Self {
-            schema_version: default_dream_skin_schema_version(),
-            id: default_dream_skin_id(),
-            name: default_dream_skin_name(),
-            style_preset: String::new(),
-            brand_subtitle: default_dream_skin_brand_subtitle(),
-            tagline: default_dream_skin_tagline(),
-            project_prefix: default_dream_skin_project_prefix(),
-            project_label: default_dream_skin_project_label(),
-            status_text: default_dream_skin_status_text(),
-            quote: default_dream_skin_quote(),
-            colors: if cfg!(windows) {
-                None
-            } else {
-                Some(DreamSkinColors::default())
-            },
-            extra_fields,
-        }
-    }
-}
-
 /// 独立的听写服务配置；不复用编码供应商的密钥。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
@@ -825,48 +704,8 @@ pub struct BackendSettings {
         deserialize_with = "deserialize_stepwise_timeout_ms"
     )]
     pub codex_app_stepwise_timeout_ms: u64,
-    #[serde(rename = "codexAppDreamSkinEnabled", default)]
-    pub codex_app_dream_skin_enabled: bool,
-    #[serde(rename = "codexAppDreamSkinPaused", default)]
-    pub codex_app_dream_skin_paused: bool,
-    #[serde(
-        rename = "codexAppDreamSkinTheme",
-        default = "default_dream_skin_theme",
-        deserialize_with = "deserialize_dream_skin_theme"
-    )]
-    pub codex_app_dream_skin_theme: String,
-    #[serde(rename = "codexAppDreamSkinThemeConfig", default)]
-    pub codex_app_dream_skin_theme_config: DreamSkinThemeConfig,
-    #[serde(rename = "codexAppDreamSkinImagePath", default)]
-    pub codex_app_dream_skin_image_path: String,
     #[serde(rename = "codexGoalsEnabled", default)]
     pub codex_goals_enabled: bool,
-    #[serde(rename = "weixinConnectEnabled", default)]
-    pub weixin_connect_enabled: bool,
-    #[serde(
-        rename = "weixinConnectBaseUrl",
-        default = "default_weixin_connect_base_url"
-    )]
-    pub weixin_connect_base_url: String,
-    #[serde(rename = "weixinConnectToken", default)]
-    pub weixin_connect_token: String,
-    #[serde(rename = "weixinConnectAccountId", default)]
-    pub weixin_connect_account_id: String,
-    #[serde(rename = "weixinConnectAllowFrom", default)]
-    pub weixin_connect_allow_from: String,
-    #[serde(rename = "weixinConnectRouteTag", default)]
-    pub weixin_connect_route_tag: String,
-    #[serde(rename = "weixinConnectWorkDir", default)]
-    pub weixin_connect_work_dir: String,
-    #[serde(rename = "weixinConnectModel", default)]
-    pub weixin_connect_model: String,
-    #[serde(
-        rename = "weixinConnectSandbox",
-        default = "default_weixin_connect_sandbox"
-    )]
-    pub weixin_connect_sandbox: String,
-    #[serde(rename = "weixinConnectCodexPath", default)]
-    pub weixin_connect_codex_path: String,
     #[serde(rename = "relayBaseUrl", default = "default_relay_base_url")]
     pub relay_base_url: String,
     #[serde(rename = "relayApiKey", default)]
@@ -989,22 +828,7 @@ impl Default for BackendSettings {
             codex_app_stepwise_max_input_chars: default_stepwise_max_input_chars(),
             codex_app_stepwise_max_output_tokens: default_stepwise_max_output_tokens(),
             codex_app_stepwise_timeout_ms: default_stepwise_timeout_ms(),
-            codex_app_dream_skin_enabled: false,
-            codex_app_dream_skin_paused: false,
-            codex_app_dream_skin_theme: default_dream_skin_theme(),
-            codex_app_dream_skin_theme_config: DreamSkinThemeConfig::default(),
-            codex_app_dream_skin_image_path: String::new(),
             codex_goals_enabled: false,
-            weixin_connect_enabled: false,
-            weixin_connect_base_url: default_weixin_connect_base_url(),
-            weixin_connect_token: String::new(),
-            weixin_connect_account_id: String::new(),
-            weixin_connect_allow_from: String::new(),
-            weixin_connect_route_tag: String::new(),
-            weixin_connect_work_dir: String::new(),
-            weixin_connect_model: String::new(),
-            weixin_connect_sandbox: default_weixin_connect_sandbox(),
-            weixin_connect_codex_path: String::new(),
             relay_base_url: default_relay_base_url(),
             relay_api_key: String::new(),
             relay_profiles: default_relay_profiles(),
@@ -1274,109 +1098,6 @@ pub fn default_stepwise_timeout_ms() -> u64 {
     8000
 }
 
-pub fn default_dream_skin_theme() -> String {
-    "pink".to_string()
-}
-
-fn default_dream_skin_schema_version() -> u8 {
-    1
-}
-
-#[cfg(windows)]
-fn default_dream_skin_id() -> String {
-    "preset-arina-hashimoto".to_string()
-}
-
-#[cfg(not(windows))]
-fn default_dream_skin_id() -> String {
-    "custom-1784123441349".to_string()
-}
-
-#[cfg(windows)]
-fn default_dream_skin_name() -> String {
-    "桥本有菜".to_string()
-}
-
-#[cfg(not(windows))]
-fn default_dream_skin_name() -> String {
-    "Dream Skin".to_string()
-}
-
-pub fn resolve_dream_skin_style_preset(id: &str, style_preset: &str) -> String {
-    let style_preset = style_preset.trim();
-    if !style_preset.is_empty() && style_preset != "dream-original" {
-        return style_preset.to_string();
-    }
-
-    match id.trim() {
-        "caishen-lite" => "caishen-lite",
-        "caishen-max" => "caishen-max",
-        "caishen-readable" => "caishen-readable",
-        "export-night" => "export-night",
-        "global-founder-bright" => "global-founder-bright",
-        "mythic-guardian-noir" => "mythic-guardian-noir",
-        "codex-snow-skin" => "codex-snow",
-        "glass-vision" => "glass-vision",
-        "preset-midnight-aurora" => "midnight-aurora",
-        "preset-amber-dusk" => "amber-dusk",
-        "preset-forest-mist" => "forest-mist",
-        "preset-cyber-neon" => "cyber-neon",
-        "preset-sakura-dawn" => "sakura-dawn",
-        _ => "dream-original",
-    }
-    .to_string()
-}
-
-fn default_dream_skin_brand_subtitle() -> String {
-    "CODEX DREAM SKIN".to_string()
-}
-
-#[cfg(windows)]
-fn default_dream_skin_tagline() -> String {
-    "把柔光与玫瑰带进今天的工作台。".to_string()
-}
-
-#[cfg(not(windows))]
-fn default_dream_skin_tagline() -> String {
-    "把喜欢的画面变成可交互的 Codex 工作台。".to_string()
-}
-
-fn default_dream_skin_project_prefix() -> String {
-    "选择项目 · ".to_string()
-}
-
-fn default_dream_skin_project_label() -> String {
-    "◉  选择项目".to_string()
-}
-
-#[cfg(windows)]
-fn default_dream_skin_status_text() -> String {
-    "DREAM SKIN ONLINE".to_string()
-}
-
-#[cfg(not(windows))]
-fn default_dream_skin_status_text() -> String {
-    "THEME ONLINE".to_string()
-}
-
-#[cfg(windows)]
-fn default_dream_skin_quote() -> String {
-    "MAKE SOMETHING WONDERFUL".to_string()
-}
-
-#[cfg(not(windows))]
-fn default_dream_skin_quote() -> String {
-    "Make something wonderful".to_string()
-}
-
-fn normalize_dream_skin_theme(value: &str) -> String {
-    match value.trim() {
-        "pink" | "luckyGod" | "redWhite" | "clearGlass" | "inspiration" | "purpleNight"
-        | "miku" | "blackGold" => value.trim().to_string(),
-        _ => default_dream_skin_theme(),
-    }
-}
-
 pub fn clamp_stepwise_max_items(value: u8) -> u8 {
     value.min(6)
 }
@@ -1416,14 +1137,6 @@ fn default_whale_balance_scale() -> f64 {
 
 pub fn default_relay_base_url() -> String {
     String::new()
-}
-
-fn default_weixin_connect_base_url() -> String {
-    crate::connect::DEFAULT_WEIXIN_BASE_URL.to_string()
-}
-
-fn default_weixin_connect_sandbox() -> String {
-    "read-only".to_string()
 }
 
 pub fn default_active_relay_id() -> String {
@@ -1528,15 +1241,6 @@ where
     Ok(Option::<String>::deserialize(deserializer)?
         .map(|value| normalize_stepwise_generation_mode(&value))
         .unwrap_or_else(default_stepwise_generation_mode))
-}
-
-fn deserialize_dream_skin_theme<'de, D>(deserializer: D) -> Result<String, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    Ok(Option::<String>::deserialize(deserializer)?
-        .map(|value| normalize_dream_skin_theme(&value))
-        .unwrap_or_else(default_dream_skin_theme))
 }
 
 fn deserialize_stepwise_max_items<'de, D>(deserializer: D) -> Result<u8, D::Error>
@@ -2214,46 +1918,8 @@ fn merge_known_setting_fields(target: &mut Map<String, Value>, source: &Map<Stri
             Value::Number(serde_json::Number::from(clamp_stepwise_timeout_ms(value))),
         );
     }
-    merge_bool_setting(target, source, "codexAppDreamSkinEnabled");
-    merge_bool_setting(target, source, "codexAppDreamSkinPaused");
-    if let Some(value) = source.get("codexAppDreamSkinTheme").and_then(Value::as_str) {
-        target.insert(
-            "codexAppDreamSkinTheme".to_string(),
-            Value::String(normalize_dream_skin_theme(value)),
-        );
-    }
-    if let Some(value) = source.get("codexAppDreamSkinThemeConfig")
-        && serde_json::from_value::<DreamSkinThemeConfig>(value.clone()).is_ok()
-    {
-        target.insert("codexAppDreamSkinThemeConfig".to_string(), value.clone());
-    }
-    if let Some(value) = source
-        .get("codexAppDreamSkinImagePath")
-        .and_then(Value::as_str)
-    {
-        target.insert(
-            "codexAppDreamSkinImagePath".to_string(),
-            Value::String(value.trim().to_string()),
-        );
-    }
     if let Some(value) = source.get("codexGoalsEnabled").and_then(Value::as_bool) {
         target.insert("codexGoalsEnabled".to_string(), Value::Bool(value));
-    }
-    merge_bool_setting(target, source, "weixinConnectEnabled");
-    for key in [
-        "weixinConnectBaseUrl",
-        "weixinConnectToken",
-        "weixinConnectAccountId",
-        "weixinConnectAllowFrom",
-        "weixinConnectRouteTag",
-        "weixinConnectWorkDir",
-        "weixinConnectModel",
-        "weixinConnectSandbox",
-        "weixinConnectCodexPath",
-    ] {
-        if let Some(value) = source.get(key).and_then(Value::as_str) {
-            target.insert(key.to_string(), Value::String(value.trim().to_string()));
-        }
     }
     if let Some(value) = source.get("relayBaseUrl").and_then(Value::as_str) {
         target.insert("relayBaseUrl".to_string(), Value::String(value.to_string()));
@@ -2680,15 +2346,6 @@ fn normalize_settings_config_sections(mut settings: BackendSettings) -> BackendS
             *profile = normalized;
         }
     }
-    settings.codex_app_dream_skin_theme =
-        normalize_dream_skin_theme(&settings.codex_app_dream_skin_theme);
-    if settings.codex_app_dream_skin_theme_config == DreamSkinThemeConfig::default()
-        && settings.codex_app_dream_skin_theme != default_dream_skin_theme()
-    {
-        settings.codex_app_dream_skin_theme_config.id = settings.codex_app_dream_skin_theme.clone();
-    }
-    settings.codex_app_dream_skin_image_path =
-        settings.codex_app_dream_skin_image_path.trim().to_string();
     settings.codex_app_stepwise_base_url = settings
         .codex_app_stepwise_base_url
         .trim()
@@ -2706,33 +2363,6 @@ fn normalize_settings_config_sections(mut settings: BackendSettings) -> BackendS
     settings.codex_app_stepwise_generation_mode =
         normalize_stepwise_generation_mode(&settings.codex_app_stepwise_generation_mode);
     settings.codex_app_stepwise_model = settings.codex_app_stepwise_model.trim().to_string();
-    settings.weixin_connect_base_url = settings
-        .weixin_connect_base_url
-        .trim()
-        .trim_end_matches('/')
-        .to_string();
-    if settings.weixin_connect_base_url.is_empty() {
-        settings.weixin_connect_base_url = default_weixin_connect_base_url();
-    }
-    settings.weixin_connect_token = settings.weixin_connect_token.trim().to_string();
-    settings.weixin_connect_account_id = settings.weixin_connect_account_id.trim().to_string();
-    settings.weixin_connect_allow_from = settings.weixin_connect_allow_from.trim().to_string();
-    settings.weixin_connect_route_tag = settings.weixin_connect_route_tag.trim().to_string();
-    settings.weixin_connect_work_dir = settings.weixin_connect_work_dir.trim().to_string();
-    settings.weixin_connect_model = settings.weixin_connect_model.trim().to_string();
-    settings.weixin_connect_sandbox = match settings.weixin_connect_sandbox.trim() {
-        "workspace-write" => "workspace-write",
-        "danger-full-access" => "danger-full-access",
-        _ => "read-only",
-    }
-    .to_string();
-    settings.weixin_connect_codex_path = settings.weixin_connect_codex_path.trim().to_string();
-    // #2028 存量迁移：系统保护目录（WindowsApps）里的 CLI 无法被第三方进程执行，
-    // 早期版本点「使用桌面版内置 CLI」写入过这类路径；置空后启动时会自动
-    // 选用桌面版维护的标准 CLI，用户无需手动清理。
-    if crate::app_paths::is_windows_store_cli_path(&settings.weixin_connect_codex_path) {
-        settings.weixin_connect_codex_path = String::new();
-    }
     settings.codex_app_stepwise_max_items =
         clamp_stepwise_max_items(settings.codex_app_stepwise_max_items);
     settings.codex_app_stepwise_max_input_chars =
@@ -3037,13 +2667,6 @@ mod tests {
         assert_eq!(settings.codex_app_stepwise_max_input_chars, 6000);
         assert_eq!(settings.codex_app_stepwise_max_output_tokens, 500);
         assert_eq!(settings.codex_app_stepwise_timeout_ms, 8000);
-        assert!(!settings.weixin_connect_enabled);
-        assert_eq!(
-            settings.weixin_connect_base_url,
-            crate::connect::DEFAULT_WEIXIN_BASE_URL
-        );
-        assert!(settings.weixin_connect_token.is_empty());
-        assert_eq!(settings.weixin_connect_sandbox, "read-only");
     }
 
     #[test]
@@ -4050,58 +3673,6 @@ experimental_bearer_token = "sk-existing""#
     }
 
     #[test]
-    fn settings_store_update_persists_dream_skin_settings() {
-        let dir = temp_dir();
-        let store = SettingsStore::new(dir.join("settings.json"));
-
-        let updated = store
-            .update(json!({
-                "codexAppDreamSkinEnabled": true,
-                "codexAppDreamSkinTheme": "miku",
-                "codexAppDreamSkinImagePath": " C:\\Users\\me\\Pictures\\dream.webp "
-            }))
-            .unwrap();
-
-        assert!(updated.codex_app_dream_skin_enabled);
-        assert_eq!(updated.codex_app_dream_skin_theme, "miku");
-        assert_eq!(
-            updated.codex_app_dream_skin_image_path,
-            r"C:\Users\me\Pictures\dream.webp"
-        );
-        assert_eq!(store.load().unwrap(), updated);
-    }
-
-    #[test]
-    fn settings_store_defaults_invalid_dream_skin_theme_to_pink() {
-        let dir = temp_dir();
-        let store = SettingsStore::new(dir.join("settings.json"));
-
-        let updated = store
-            .update(json!({
-                "codexAppDreamSkinTheme": "unknown"
-            }))
-            .unwrap();
-
-        assert_eq!(updated.codex_app_dream_skin_theme, "pink");
-    }
-
-    #[test]
-    fn legacy_market_theme_ids_resolve_to_layout_presets() {
-        assert_eq!(
-            resolve_dream_skin_style_preset("preset-cyber-neon", "dream-original"),
-            "cyber-neon"
-        );
-        assert_eq!(
-            resolve_dream_skin_style_preset("codex-snow-skin", ""),
-            "codex-snow"
-        );
-        assert_eq!(
-            resolve_dream_skin_style_preset("custom-theme", "dream-original"),
-            "dream-original"
-        );
-    }
-
-    #[test]
     fn settings_store_update_persists_stepwise_settings() {
         let dir = temp_dir();
         let store = SettingsStore::new(dir.join("settings.json"));
@@ -4142,61 +3713,6 @@ experimental_bearer_token = "sk-existing""#
         assert_eq!(updated.codex_app_stepwise_max_output_tokens, 100);
         assert_eq!(updated.codex_app_stepwise_timeout_ms, 60000);
         assert_eq!(store.load().unwrap(), updated);
-    }
-
-    #[test]
-    fn settings_store_update_persists_weixin_connect_settings() {
-        let dir = temp_dir();
-        let store = SettingsStore::new(dir.join("settings.json"));
-
-        let updated = store
-            .update(json!({
-                "weixinConnectEnabled": true,
-                "weixinConnectBaseUrl": "https://ilink.example.test/",
-                "weixinConnectToken": " token ",
-                "weixinConnectAccountId": " bot-1 ",
-                "weixinConnectAllowFrom": " user@im.wechat ",
-                "weixinConnectRouteTag": " route ",
-                "weixinConnectWorkDir": " /workspace ",
-                "weixinConnectModel": " gpt-test ",
-                "weixinConnectSandbox": "workspace-write",
-                "weixinConnectCodexPath": " /usr/local/bin/codex "
-            }))
-            .unwrap();
-
-        assert!(updated.weixin_connect_enabled);
-        assert_eq!(
-            updated.weixin_connect_base_url,
-            "https://ilink.example.test"
-        );
-        assert_eq!(updated.weixin_connect_token, "token");
-        assert_eq!(updated.weixin_connect_account_id, "bot-1");
-        assert_eq!(updated.weixin_connect_allow_from, "user@im.wechat");
-        assert_eq!(updated.weixin_connect_route_tag, "route");
-        assert_eq!(updated.weixin_connect_work_dir, "/workspace");
-        assert_eq!(updated.weixin_connect_model, "gpt-test");
-        assert_eq!(updated.weixin_connect_sandbox, "workspace-write");
-        assert_eq!(updated.weixin_connect_codex_path, "/usr/local/bin/codex");
-        assert_eq!(store.load().unwrap(), updated);
-    }
-
-    /// #2028 存量迁移：系统保护目录（WindowsApps）里的 CLI 无法被第三方进程执行，
-    /// 旧版点「使用桌面版内置 CLI」写入过这类路径；归一化时置空，
-    /// 让连接启动时自动选用桌面版维护的标准 CLI。
-    #[test]
-    fn windows_store_codex_path_is_cleared_for_auto_resolution() {
-        let dir = temp_dir();
-        let store = SettingsStore::new(dir.join("settings.json"));
-
-        let updated = store
-            .update(json!({
-                "weixinConnectCodexPath":
-                    r"C:\Program Files\WindowsApps\OpenAI.Codex_26.915.4065.0_x64__2p2nqsd0c76g0\app\resources\codex.exe"
-            }))
-            .unwrap();
-
-        assert_eq!(updated.weixin_connect_codex_path, "");
-        assert_eq!(store.load().unwrap().weixin_connect_codex_path, "");
     }
 
     #[test]

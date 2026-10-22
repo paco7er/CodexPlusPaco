@@ -19,7 +19,7 @@ test("application rail and retired pages cannot be navigated to", () => {
   for (const id of ["recommendations", "agentCache", "agentCollaboration", "about", "settings"]) {
     assert.ok(!routeText.includes(`"${id}"`), id);
   }
-  for (const id of ["overview", "relay", "relayEnvironment", "requestLog", "multiLaunch", "context", "skills", "sessions", "weixin", "enhance", "dreamSkin", "userScripts", "pluginMarket", "maintenance"]) {
+  for (const id of ["overview", "relay", "relayEnvironment", "requestLog", "context", "skills", "sessions", "enhance", "userScripts", "pluginMarket", "maintenance"]) {
     assert.ok(routeText.includes(`"${id}"`), id);
   }
   assert.match(app, /<div className="shell">/);
@@ -36,7 +36,7 @@ test("retired commands and modules have no implementation or invoke handler", ()
   for (const module of ["ads", "agent_cache", "agent_collaboration", "update"]) {
     assert.ok(!core.includes(`pub mod ${module};`), module);
   }
-  for (const command of ["load_settings", "save_settings", "launch_codex_plus", "list_codex_multi_instances"]) {
+  for (const command of ["load_settings", "save_settings", "launch_codex_plus"]) {
     assert.ok(handlers.includes(`commands::${command},`), command);
   }
 });

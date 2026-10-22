@@ -140,15 +140,12 @@ Section "Install"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\CodexPlusPlus" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\CodexPlusPlus" "UninstallString" "$INSTDIR\uninstall.exe"
 
-  ; 注册 codexplusplus:// 与 dreamskin:// URL 协议（issue #2354）。
+  ; 注册供应商导入 URL 协议。
   ; 键名与值同 codex-plus-core 的 install::windows::register_url_protocol 保持一致，
   ; 应用内"修复快捷方式"会以相同键幂等覆盖，两边互不冲突。
   WriteRegStr HKCU "Software\Classes\codexplusplus" "" "URL:Codex++ Import Protocol"
   WriteRegStr HKCU "Software\Classes\codexplusplus" "URL Protocol" ""
   WriteRegStr HKCU "Software\Classes\codexplusplus\shell\open\command" "" '"$INSTDIR\codex-plus-plus.exe" "%1"'
-  WriteRegStr HKCU "Software\Classes\dreamskin" "" "URL:DreamSkin Community Theme Protocol"
-  WriteRegStr HKCU "Software\Classes\dreamskin" "URL Protocol" ""
-  WriteRegStr HKCU "Software\Classes\dreamskin\shell\open\command" "" '"$INSTDIR\codex-plus-plus.exe" "%1"'
 
   ; 仅迁移已经存在的自有开机项；不补建未启用的项，也不改 watcher.disabled。
   ; 新参数只打开界面，并由主程序检查禁用标记，旧 --debug-port 参数不再承担启动职责。

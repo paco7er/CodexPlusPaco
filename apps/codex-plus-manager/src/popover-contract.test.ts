@@ -51,18 +51,8 @@ describe("manager popover layer contract", () => {
     assert.match(reasoning, /document\.body/);
   });
 
-  it("搜索型下拉同样走 portal 弹层，不再各自维护外点监听", () => {
-    for (const name of ["SearchablePathPicker", "SearchableSessionPicker"]) {
-      const source = componentSource(name);
-      assert.match(source, /usePopoverLayer\(\{ open, onOpenChange: setOpen/, name);
-      assert.match(source, /weixin-search-menu weixin-search-menu-portal/, name);
-      assert.match(source, /document\.body/, name);
-      assert.doesNotMatch(source, /document\.addEventListener\("pointerdown"/, name);
-    }
-  });
-
   it("样式里保留 portal 弹层的层级与视口边界", () => {
-    assert.match(styles, /\.app-select-menu-portal,\n\.weixin-search-menu-portal \{/);
+    assert.match(styles, /\.app-select-menu-portal \{/);
     assert.match(styles, /z-index: 240/);
     assert.match(styles, /max-width: calc\(100vw - 16px\)/);
     // 菜单搬出单元格后，字号规则要挂在菜单自身的类名上，否则会退回默认字号。

@@ -3,7 +3,7 @@
     {
       "name": "00-prelude.js",
       "description": "IIFE 开头、环境守卫、平台探测与常量",
-      "lines": 500
+      "lines": 511
     },
     {
       "name": "01-registry.js",
@@ -12,8 +12,8 @@
     },
     {
       "name": "10-style.js",
-      "description": "样式注入、默认设置、后端设置映射、梦皮主题变量与持久化",
-      "lines": 2626
+      "description": "样式注入、默认设置、后端设置映射与持久化",
+      "lines": 1877
     },
     {
       "name": "20-menu.js",
@@ -118,7 +118,7 @@
     {
       "name": "95-conversation-view.js",
       "description": "会话视图运行时、官方用量策略重写、扫描主循环",
-      "lines": 938
+      "lines": 937
     },
     {
       "name": "96-whale-compat.js",
@@ -143,7 +143,7 @@
     {
       "name": "99-startup.js",
       "description": "启动序列：resize 处理、MutationObserver 与事件绑定",
-      "lines": 96
+      "lines": 38
     },
     {
       "name": "99-tail.js",

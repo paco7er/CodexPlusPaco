@@ -52,19 +52,6 @@ pub fn run() {
             }
         }
     }
-    if let Ok(settings) = codex_plus_core::settings::SettingsStore::default().load()
-        && let Err(error) = codex_plus_core::dream_skin::sync_default_dream_skin_base_theme(
-            settings.enhancements_enabled
-                && settings.codex_app_dream_skin_enabled
-                && !settings.codex_app_dream_skin_paused,
-            &settings.codex_app_dream_skin_theme_config,
-        )
-    {
-        let _ = codex_plus_core::diagnostic_log::append_diagnostic_log(
-            "manager.dream_skin_base_theme_sync_failed",
-            serde_json::json!({ "message": error.to_string() }),
-        );
-    }
     let autostart = std::env::args().any(|arg| arg == "--autostart");
     let start_minimized = autostart
         && codex_plus_core::watcher::watcher_start_minimized();
@@ -98,7 +85,6 @@ pub fn run() {
                 Ok(())
             });
             start_window_activation_listener(app.handle().clone());
-            commands::start_weixin_connect_from_saved_settings();
             register_main_window_events(main_window);
             commands::resume_existing_codex_background(
                 app.handle().clone(),
@@ -119,10 +105,6 @@ pub fn run() {
             commands::consume_pending_manager_navigation,
             commands::load_overview,
             commands::launch_codex_plus,
-            commands::launch_codex_multi_instance,
-            commands::list_codex_multi_instances,
-            commands::stop_codex_multi_instance,
-            commands::restart_codex_multi_instance,
             commands::restart_codex_plus,
             commands::load_settings,
             commands::load_request_logs,
@@ -134,36 +116,8 @@ pub fn run() {
             commands::native_browser_status,
             commands::save_settings,
             commands::test_vlm,
-            commands::weixin_connect_qr_start,
-            commands::weixin_connect_qr_status,
-            commands::weixin_connect_status,
-            commands::weixin_connect_start,
-            commands::weixin_connect_stop,
-            commands::find_desktop_codex_cli,
             commands::query_builtin_model_metadata,
             commands::builtin_model_metadata_index,
-            commands::dream_skin_status,
-            commands::import_dream_skin_image,
-            commands::reset_dream_skin_image,
-            commands::reset_dream_skin_theme,
-            commands::apply_dream_skin,
-            commands::restore_dream_skin,
-            commands::verify_dream_skin,
-            commands::list_dream_skin_themes,
-            commands::refresh_dream_skin_market,
-            commands::refresh_dream_skin_community,
-            commands::load_pending_dream_skin_community,
-            commands::confirm_pending_dream_skin_community,
-            commands::dismiss_pending_dream_skin_community,
-            commands::install_dream_skin_market_theme,
-            commands::install_dream_skin_community_theme,
-            commands::import_dream_skin_theme_package,
-            commands::load_dream_skin_theme,
-            commands::create_dream_skin_theme,
-            commands::save_dream_skin_theme,
-            commands::rename_dream_skin_theme,
-            commands::delete_dream_skin_theme,
-            commands::activate_dream_skin_theme,
             commands::load_ccs_providers,
             commands::import_ccs_providers,
             commands::load_pending_provider_import,
@@ -277,13 +231,6 @@ pub fn run() {
             }
             #[cfg(target_os = "macos")]
             match event {
-                tauri::RunEvent::Opened { urls } => {
-                    for url in urls {
-                        if handle_dream_skin_url(url.as_str()) {
-                            show_main_window(app_handle);
-                        }
-                    }
-                }
                 tauri::RunEvent::Reopen { .. } => {
                     show_main_window(app_handle);
                 }
@@ -300,28 +247,6 @@ pub fn run() {
                     "error": error.to_string()
                 }),
             );
-        }
-    }
-}
-
-pub fn handle_dream_skin_url(url: &str) -> bool {
-    if !url.starts_with("dreamskin://") {
-        return false;
-    }
-    match codex_plus_core::dream_skin_community::save_pending_community_link(url) {
-        Ok(version_id) => {
-            let _ = codex_plus_core::diagnostic_log::append_diagnostic_log(
-                "manager.dream_skin_link.pending",
-                serde_json::json!({ "versionId": version_id }),
-            );
-            true
-        }
-        Err(error) => {
-            let _ = codex_plus_core::diagnostic_log::append_diagnostic_log(
-                "manager.dream_skin_link.failed",
-                serde_json::json!({ "error": error.to_string() }),
-            );
-            false
         }
     }
 }

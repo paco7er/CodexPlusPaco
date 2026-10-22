@@ -84,7 +84,6 @@ create_app() {
       <key>CFBundleURLSchemes</key>
       <array>
         <string>codexplusplus</string>
-        <string>dreamskin</string>
       </array>
     </dict>
   </array>'

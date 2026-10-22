@@ -171,7 +171,7 @@ describe("renderer injection header compatibility", () => {
   it("uses the same plugin enhancement settings regardless of a legacy launch mode", async () => {
     const renderer = await readFile(new URL("../../../assets/inject/renderer-inject.js", import.meta.url), "utf8");
     const settingsStart = renderer.indexOf("  function defaultCodexPlusSettings()");
-    const settingsEnd = renderer.indexOf("  // Dream skin runtime", settingsStart);
+    const settingsEnd = renderer.indexOf("  function setCodexPlusSetting", settingsStart);
     const enabledStart = renderer.indexOf("  function codexPluginMarketplacePatchEnabled()");
     const enabledEnd = renderer.indexOf("  let cachedSessionRows", enabledStart);
     assert.ok(settingsStart >= 0 && settingsEnd > settingsStart && enabledStart >= 0 && enabledEnd > enabledStart);
@@ -777,23 +777,6 @@ return (loaded) => { codexPlusBackendSettingsLoaded = loaded; renderCodexPlusMen
     assert.match(renderer, /\.codex-plus-backend-label\[data-status="degraded"\]/);
   });
 
-  it("keeps Windows Dream Skin compatible with the modern Codex main surface", async () => {
-    const dreamSkinRenderer = await readFile(
-      new URL("../../../assets/inject/upstream/dream-skin/windows/renderer-inject.js", import.meta.url),
-      "utf8",
-    );
-    const cidalaRenderer = await readFile(
-      new URL("../../../assets/inject/upstream/cidala-tiger/windows/renderer-inject.js", import.meta.url),
-      "utf8",
-    );
-
-    assert.match(dreamSkinRenderer, /codex-dream-skin-selectors\/1/);
-    assert.match(dreamSkinRenderer, /MainContentSurface/);
-    assert.match(dreamSkinRenderer, /data-ds-part/);
-    assert.match(cidalaRenderer, /MainContentSurface/);
-    assert.match(cidalaRenderer, /data-codex-plus-dream-surface/);
-    assert.match(cidalaRenderer, /ensureShellMain/);
-  });
 });
 
 /** 从注入脚本里取出 `shouldScheduleScan`，配上可控的依赖来跑。 */

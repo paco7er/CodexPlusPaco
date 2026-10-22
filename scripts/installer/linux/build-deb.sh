@@ -135,7 +135,7 @@ Type=Application
 Categories=Development;Utility;
 Terminal=false
 StartupNotify=true
-MimeType=x-scheme-handler/codexplusplus;x-scheme-handler/dreamskin;
+MimeType=x-scheme-handler/codexplusplus;
 EOF
 
     # ── 复制文档 ──

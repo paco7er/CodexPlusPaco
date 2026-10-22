@@ -148,7 +148,7 @@ test("a recognized header without a unique action group leaves native controls u
 test("share backend defaults preserve old installations and obey master gating", () => {
   const style = fragment("10-style.js");
   const start = style.indexOf("  function defaultCodexPlusSettings()");
-  const end = style.indexOf("  // Dream skin runtime", start);
+  const end = style.indexOf("  function setCodexPlusSetting", start);
   const context = vm.createContext({ window: {}, localStorage: { getItem: () => "{}" },
     codexPlusBackendSettings: {}, conversationViewDefaultWidth: 900, codexPlusSettingsKey: "settings" });
   vm.runInContext(style.slice(start, end), context);
@@ -168,7 +168,7 @@ test("the in-app share toggle persists a backend update rather than a temporary 
     loadBackendSettings: async () => {}, syncStepwisePanel: () => {},
   });
   const start = style.indexOf("  function defaultCodexPlusSettings()");
-  const end = style.indexOf("  // Dream skin runtime", start);
+  const end = style.indexOf("  function setCodexPlusSetting", start);
   const setterStart = style.indexOf("  function setCodexPlusSetting(");
   const setterEnd = style.indexOf("  function syncStepwisePanel(", setterStart);
   vm.runInContext(`${style.slice(start, end)}\n${style.slice(setterStart, setterEnd)}`, context);

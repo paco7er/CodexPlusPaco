@@ -68,7 +68,7 @@ function settingsFixture() {
     localStorage: { getItem: () => null }, setBackendSetting: async (key: string, value: unknown) => writes.push([key, value]),
     loadBackendSettings: async () => {}, syncStepwisePanel: () => {},
   });
-  runInContext(style.slice(style.indexOf("  function defaultCodexPlusSettings()"), style.indexOf("  // Dream skin runtime")), context);
+  runInContext(style.slice(style.indexOf("  function defaultCodexPlusSettings()"), style.indexOf("  function setCodexPlusSetting")), context);
   runInContext(style.slice(style.indexOf("  function setCodexPlusSetting("), style.indexOf("  function syncStepwisePanel(")), context);
   return { context, writes };
 }

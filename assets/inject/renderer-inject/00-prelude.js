@@ -7,6 +7,20 @@
   const codexPlusIsMacPlatform = /\bMacintosh\b/i.test(navigator.userAgent || "");
   const codexPlusSupportsPetRealMouseLook = codexPlusIsWindowsPlatform || codexPlusIsMacPlatform;
 
+  // 热重注入只退出旧皮肤运行时，不读取或删除用户主题文件。
+  function retireLegacySkinRuntime() {
+    try { window.__CODEX_PLUS_CLEAR_DREAM_SKIN__?.(); } catch {}
+    try { window.__CODEX_PLUS_DREAM_SKIN_API_OBSERVER__?.disconnect?.(); } catch {}
+    delete window.__CODEX_PLUS_DREAM_SKIN_API_OBSERVER__;
+    for (const key of ["__CODEX_DREAM_SKIN_STATE__", "__CODEX_GLASS_VISION_SKIN_STATE__"]) {
+      try { window[key]?.cleanup?.(); } catch {}
+      delete window[key];
+    }
+    delete window.__CODEX_PLUS_CLEAR_DREAM_SKIN__;
+    delete window.__CODEX_PLUS_APPLY_DREAM_SKIN__;
+  }
+  retireLegacySkinRuntime();
+
   function codexPlusStatsigClients() {
     const root = window.__STATSIG__ || globalThis.__STATSIG__;
     if (!root || typeof root !== "object") return [];
@@ -452,9 +466,6 @@
   const codexThreadScrollRouteHooksVersion = "dispatcher:2";
   const codexThreadScrollListenerVersion = "4";
   const codexThreadScrollUserIntentVersion = "dispatcher:2";
-  const codexPlusDreamSkinStyleId = "codex-dream-skin-style";
-  const codexPlusDreamSkinPlatform = String(window.__CODEX_PLUS_DREAM_SKIN_PLATFORM__ || "macos");
-  const codexPlusDreamSkinRevision = String(window.__CODEX_PLUS_DREAM_SKIN_REVISION__ || "1");
   clearTimeout(window.__codexThreadScrollSaveTimer);
   window.__codexThreadScrollSaveTimer = null;
   (window.__codexThreadScrollRestoreTimers || []).forEach((timer) => clearTimeout(timer));

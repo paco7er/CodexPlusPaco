@@ -32,7 +32,7 @@ fn browser_identity_change_requires_two_distinct_observations() {
 }
 
 #[tokio::test]
-async fn launch_receipt_status_and_injection_follow_final_wrapper_port() {
+async fn launch_receipt_status_and_injection_follow_resolved_debug_port() {
     let temp = tempfile::tempdir().unwrap();
     let app = temp.path().join("Codex.app");
     std::fs::create_dir(&app).unwrap();
@@ -44,14 +44,10 @@ async fn launch_receipt_status_and_injection_follow_final_wrapper_port() {
     });
     let handle = launch_and_inject_with_hooks(
         LaunchOptions {
-            extra_args: Vec::new(),
             app_dir: Some(app),
             debug_port: 19450,
             helper_port: 19452,
             status_store: StatusStore::new(temp.path().join("status.json")),
-            codex_home: Some(temp.path().join("codex-home")),
-            sqlite_home: Some(temp.path().join("sqlite-home")),
-            state_dir: Some(temp.path().join("state")),
         },
         &hooks,
     )
@@ -1269,7 +1265,7 @@ async fn native_fast_reload_runs_only_after_successful_opt_in_launch_injection()
 }
 
 #[tokio::test]
-async fn launch_lifecycle_passes_internal_instance_args_to_codex_launch() {
+async fn launch_lifecycle_does_not_add_isolated_instance_arguments() {
     let temp = tempfile::tempdir().unwrap();
     let app_dir = temp.path().join("Codex.app");
     std::fs::create_dir_all(&app_dir).unwrap();
@@ -1282,7 +1278,6 @@ async fn launch_lifecycle_passes_internal_instance_args_to_codex_launch() {
             app_dir: Some(app_dir),
             debug_port: 9229,
             helper_port: 57321,
-            extra_args: vec!["--user-data-dir=isolated-instance".to_string()],
             status_store,
             ..Default::default()
         },
@@ -1296,7 +1291,7 @@ async fn launch_lifecycle_passes_internal_instance_args_to_codex_launch() {
         events
             .lock()
             .unwrap()
-            .contains(&"launch:9229:--user-data-dir=isolated-instance".to_string())
+            .contains(&"launch:9229".to_string())
     );
 }
 
@@ -2599,14 +2594,6 @@ async fn default_launch_hooks_provider_sync_enabled_returns_explicit_error() {
     );
 }
 
-#[test]
-fn paused_dream_skin_does_not_reapply_the_native_base_theme_on_launch() {
-    let source =
-        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/launcher.rs")).unwrap();
-
-    assert!(source.contains("!settings.codex_app_dream_skin_paused"));
-}
-
 #[tokio::test]
 async fn native_browser_lifecycle_uses_one_settings_snapshot_and_stops_on_success_or_failure() {
     for fail in [false, true] {
@@ -2915,7 +2902,6 @@ impl LaunchHooks for FakeHooks {
         debug_port: u16,
         _settings: &BackendSettings,
         extra_args: &[String],
-        _instance: &codex_plus_core::launcher::LaunchInstance,
     ) -> anyhow::Result<CodexLaunch> {
         assert!(app_dir.ends_with("Codex.app"));
         let launch_detail = if extra_args.is_empty() {

@@ -950,8 +950,7 @@ async fn activate_existing_codex_app(options: &LaunchOptions) -> anyhow::Result<
             &app_dir,
             options.debug_port,
             &settings,
-            &options.extra_args,
-            &codex_plus_core::launcher::LaunchInstance::from_options(&options),
+            &[],
         )
         .await;
     // 复用后台服务也属于用户主动启动；已有资源补丁由原服务持有，
@@ -1298,7 +1297,6 @@ impl LaunchHooks for LauncherHooks {
         debug_port: u16,
         settings: &codex_plus_core::settings::BackendSettings,
         extra_args: &[String],
-        instance: &codex_plus_core::launcher::LaunchInstance,
     ) -> anyhow::Result<codex_plus_core::launcher::CodexLaunch> {
         if self.attach_only {
             anyhow::ensure!(
@@ -1314,7 +1312,7 @@ impl LaunchHooks for LauncherHooks {
             });
         }
         self.core
-            .launch_codex(app_dir, debug_port, settings, extra_args, instance)
+            .launch_codex(app_dir, debug_port, settings, extra_args)
             .await
     }
 
@@ -2181,7 +2179,6 @@ mod tests {
                 port,
                 &codex_plus_core::settings::BackendSettings::default(),
                 &[],
-                &codex_plus_core::launcher::LaunchInstance::default(),
             )
             .await
             .unwrap();
@@ -2213,7 +2210,6 @@ mod tests {
                 port,
                 &codex_plus_core::settings::BackendSettings::default(),
                 &[],
-                &codex_plus_core::launcher::LaunchInstance::default(),
             )
             .await
             .unwrap_err();

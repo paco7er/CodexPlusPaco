@@ -4,21 +4,8 @@ fn main() {
     let args: Vec<_> = std::env::args_os().collect();
     // 旧 MCP 配置和安装器参数不能误启动 GUI，也不能退回执行已移除的功能。
     if retired_mode_requested(args.iter().map(|arg| arg.to_string_lossy())) {
-        eprintln!("此版本已移除 Agent 协作与自动更新，请移除旧的启动配置。");
+        eprintln!("此版本已移除多开、Agent 协作与自动更新，请移除旧的启动配置。");
         std::process::exit(1);
-    }
-    if let Some(options_path) = args
-        .windows(2)
-        .find(|window| window[0] == "--codex-plus-multi-worker")
-        .and_then(|window| window.get(1))
-    {
-        if let Err(error) = codex_plus_manager_lib::commands::run_codex_multi_worker(
-            std::path::Path::new(options_path),
-        ) {
-            eprintln!("Codex 多开 worker 失败：{error:#}");
-            std::process::exit(1);
-        }
-        return;
     }
     #[cfg(target_os = "macos")]
     if launched_from_legacy_manager_compat_bundle() {
@@ -34,11 +21,7 @@ fn main() {
         return;
     }
     for arg in std::env::args() {
-        if arg.starts_with("dreamskin://") {
-            if codex_plus_manager_lib::handle_dream_skin_url(&arg) {
-                codex_plus_manager_lib::focus_existing_manager_window();
-            }
-        } else if arg.starts_with("codexplusplus://") {
+        if arg.starts_with("codexplusplus://") {
             match codex_plus_core::provider_import::save_pending_provider_import_from_url(&arg) {
                 Ok(request) => {
                     let _ = codex_plus_core::diagnostic_log::append_diagnostic_log(
@@ -78,7 +61,7 @@ fn should_skip_autostart(args: impl IntoIterator<Item = String>, disabled: bool)
 
 fn retired_mode_requested(args: impl IntoIterator<Item = impl AsRef<str>>) -> bool {
     args.into_iter().any(|arg| {
-        matches!(arg.as_ref(), "--codex-plus-agent-mcp" | "--apply-codex-plus-update")
+        matches!(arg.as_ref(), "--codex-plus-agent-mcp" | "--apply-codex-plus-update" | "--codex-plus-multi-worker")
     })
 }
 
@@ -90,7 +73,8 @@ mod tests {
     fn retired_background_modes_never_fall_through_to_the_gui() {
         assert!(retired_mode_requested(["app", "--codex-plus-agent-mcp"]));
         assert!(retired_mode_requested(["app", "--apply-codex-plus-update", "plan.json"]));
-        assert!(!retired_mode_requested(["app", "--codex-plus-multi-worker", "options.json"]));
+        assert!(retired_mode_requested(["app", "--codex-plus-multi-worker", "options.json"]));
+        assert!(retired_mode_requested(["app", "--codex-plus-multi-worker"]));
         assert!(!retired_mode_requested(["app"]));
     }
 
