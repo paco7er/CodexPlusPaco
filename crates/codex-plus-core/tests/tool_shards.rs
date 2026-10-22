@@ -168,7 +168,7 @@ fn unknown_tool_shard_survives_load_and_save() {
     let store = SettingsStore::new(path.clone());
     let settings = store.load().unwrap();
 
-    assert_eq!(settings.active_tool, ToolId::Unknown("new-tool".into()));
+    assert_eq!(settings.active_tool, ToolId::Codex);
     let new_tool = settings.tool_config(&ToolId::Unknown("new-tool".into()));
     assert_eq!(new_tool.active_relay_id, "claude-a");
     assert_eq!(new_tool.relay_profiles[0].name, "Claude 供应商");
@@ -177,7 +177,48 @@ fn unknown_tool_shard_survives_load_and_save() {
     let raw: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
     assert_eq!(raw["tools"]["new-tool"]["activeRelayId"], "claude-a");
-    assert_eq!(raw["activeTool"], "new-tool");
+    assert_eq!(raw["activeTool"], "codex");
+}
+
+/// 已移除工具的工作区回到 Codex，但历史供应商经过读写后仍完整保留。
+#[test]
+fn retired_tool_settings_return_to_codex_and_preserve_profiles() {
+    for tool in ["claude", "grok"] {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("settings.json");
+        let shard = ToolConfig {
+            relay_profiles: vec![profile("legacy-a", "历史供应商")],
+            active_relay_id: "legacy-a".into(),
+            ..ToolConfig::default()
+        };
+        let original_shard = serde_json::to_value(&shard).unwrap();
+        let mut raw = serde_json::json!({
+            "activeTool": tool,
+            "claudeAppVoiceInput": true,
+            "claudeAppLocalization": true,
+            "tools": {},
+        });
+        raw["tools"][tool] = original_shard.clone();
+        std::fs::write(&path, serde_json::to_vec_pretty(&raw).unwrap()).unwrap();
+
+        let store = SettingsStore::new(path.clone());
+        let settings = store.load().unwrap();
+        assert_eq!(settings.active_tool, ToolId::Codex);
+        assert_eq!(settings.tool_config(&ToolId::parse(tool)), shard);
+        let active_settings = serde_json::to_value(&settings).unwrap();
+        assert!(active_settings.get("claudeAppVoiceInput").is_none());
+        assert!(active_settings.get("claudeAppLocalization").is_none());
+
+        store.save(&settings).unwrap();
+        let saved: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(saved["activeTool"], "codex");
+        assert_eq!(saved["tools"][tool], original_shard);
+        // 保存器保留未知旧字段，但它们已不属于当前设置模型，不再控制任何功能。
+        assert_eq!(saved["claudeAppVoiceInput"], true);
+        assert_eq!(saved["claudeAppLocalization"], true);
+        assert_eq!(store.load().unwrap().active_tool, ToolId::Codex);
+    }
 }
 
 /// 未知工具的分片在 Codex 保存流程里也不能被抹掉。

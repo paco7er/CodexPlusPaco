@@ -171,8 +171,6 @@ const overview = ok({
 const tools = ok({
   tools: [
     { id: "codex", name: "Codex", homeDir: "~/.codex", switchable: true, active: true, activeRelayName: "默认中转", relayCount: 3 },
-    { id: "grok", name: "Grok", homeDir: "~/.grok", switchable: false, active: false, activeRelayName: null, relayCount: 0 },
-    { id: "claude", name: "Claude", homeDir: "~/.claude", switchable: false, active: false, activeRelayName: null, relayCount: 0 },
   ],
   activeTool: "codex",
 });

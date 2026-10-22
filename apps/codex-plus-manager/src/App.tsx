@@ -401,7 +401,7 @@ type BackendSettings = WhaleBalanceSettings & {
   relayContextConfigContents: string;
   activeRelayId: string;
   relayTestModel: string;
-  /** 按工具分区的配置镜像，键为工具 id（codex / grok / …）。 */
+  /** 按工具分区的配置镜像，保留历史工具的配置。 */
   tools?: Record<string, ToolShard>;
   /** 侧栏当前聚焦的工具。只影响管理器的展示，不影响 Codex 的启动配置。 */
   activeTool?: string;
@@ -1144,11 +1144,9 @@ type ToolId = string;
 /** 品牌图标随应用打包，来源和许可见 assets/agents/LICENSE.txt。 */
 const TOOL_ICONS: Record<string, string> = {
   codex: new URL("./assets/agents/chatgpt.svg", import.meta.url).href,
-  grok: new URL("./assets/agents/grok.svg", import.meta.url).href,
-  claude: new URL("./assets/agents/claude.svg", import.meta.url).href,
 };
 
-type Route = "overview" | "relay" | "multiLaunch" | "grok" | "claude" | "relayEnvironment" | "requestLog" | "sessions" | "context" | "skills" | "weixin" | "enhance" | "dreamSkin" | "userScripts" | "pluginMarket" | "recommendations" | "agentCache" | "agentCollaboration" | "maintenance" | "about" | "settings";
+type Route = "overview" | "relay" | "multiLaunch" | "relayEnvironment" | "requestLog" | "sessions" | "context" | "skills" | "weixin" | "enhance" | "dreamSkin" | "userScripts" | "pluginMarket" | "recommendations" | "agentCache" | "agentCollaboration" | "maintenance" | "about" | "settings";
 type Theme = "dark" | "light";
 
 const MANAGER_NAVIGATION_EVENT = "manager-navigation-requested";
@@ -1156,19 +1154,17 @@ const MANAGER_NAVIGATION_EVENT = "manager-navigation-requested";
 /**
  * 导航项归属。
  *
- * - `"codex"` / `"grok"`：这一页只属于某个工具，切到别的工具时隐藏。
+ * - `"codex"`：这一页属于 Codex 工作区。
  *   绝大部分功能（会话、MCP、皮肤、脚本市场、安装维护…）都是 Codex 专属的。
  * - 不写 `tool`：与工具无关的应用级页面（设置、关于），任何工具下都显示。
  *
- * 新增页面时**必须**想清楚归属：默认可见会让 Codex 专属功能在 Grok 下露出来。
+ * 新增页面时明确区分工作区页面与应用级页面。
  */
 const routes: Array<{ id: Route; label: string; icon: LucideIcon; badge?: string; tool?: string }> = [
-  // 概览在两个工具下都可见：它承载共用的置顶推荐位，以及各自的状态。
+  // 概览承载置顶推荐位和 Codex 状态。
   { id: "overview", get label() { return t("概览"); }, icon: LayoutDashboard },
   { id: "relay", get label() { return t("供应商配置"); }, icon: KeyRound, tool: "codex" },
   { id: "multiLaunch", get label() { return t("Codex多开"); }, icon: Layers3, tool: "codex" },
-  { id: "grok", get label() { return t("Grok 配置"); }, icon: Blocks, tool: "grok" },
-  { id: "claude", get label() { return t("Claude 增强"); }, icon: Languages, tool: "claude" },
   { id: "sessions", get label() { return t("会话管理"); }, icon: MessageCircle, tool: "codex" },
   { id: "context", label: "MCP", icon: Network, tool: "codex" },
   { id: "skills", label: "Skills", icon: BookOpen, tool: "codex" },
@@ -1192,7 +1188,7 @@ const routes: Array<{ id: Route; label: string; icon: LucideIcon; badge?: string
 const navigationSections: Array<{ label: string; routes: Route[]; placement?: "bottom" }> = [
   {
     get label() { return t("工作区"); },
-    routes: ["overview", "relay", "relayEnvironment", "requestLog", "multiLaunch", "grok", "claude"],
+    routes: ["overview", "relay", "relayEnvironment", "requestLog", "multiLaunch"],
   },
   {
     get label() { return t("全局管理"); },
@@ -1492,10 +1488,8 @@ export function App() {
     setSettingsForm(next);
     // 供应商页是跟着工具走的，切工具后如果当前页不属于新工具就跳到它自己的页。
     const currentRoute = routes.find((candidate) => candidate.id === route);
-    if (toolId === "claude") {
-      setRoute("claude");
-    } else if (currentRoute?.tool && currentRoute.tool !== toolId) {
-      setRoute(toolId === "grok" ? "grok" : "relay");
+    if (currentRoute?.tool && currentRoute.tool !== toolId) {
+      setRoute("relay");
     }
     const result = await run(() => call<SettingsResult>("save_settings", { settings: next }));
     if (result) {
@@ -2353,7 +2347,6 @@ export function App() {
     }
     if (next === "multiLaunch") await refreshMultiLaunchInstances(true);
     if (next === "relayEnvironment") await refreshRelayEnvironment(true);
-    if (next === "grok") await refreshSettings(true);
     if (next === "sessions") {
       await refreshSettings(true);
       await refreshLocalSessions(true);
@@ -4007,7 +4000,7 @@ export function App() {
                 if (!item) return false;
                 return !item.tool || item.tool === activeTool;
               });
-              // 整节都被过滤掉时不渲染标题，免得 Grok 下出现一个空的分组标签。
+              // 整节都被过滤掉时不渲染空分组标题。
               if (visibleRoutes.length === 0) return null;
               return (
               <div className={`nav-section ${section.placement === "bottom" ? "nav-section-bottom" : ""}`} key={section.label}>
@@ -4106,10 +4099,6 @@ export function App() {
           {route === "requestLog" ? (
             <RequestLogScreen />
           ) : null}
-          {route === "grok" ? (
-            <GrokScreen settings={settings} form={settingsForm} actions={actions} />
-          ) : null}
-          {route === "claude" ? <ClaudeLocalizationScreen /> : null}
           {route === "sessions" ? (
             <ProjectSessionPage
               sessions={localSessions}
@@ -13090,247 +13079,6 @@ function Panel({ children, fill = false, className = "" }: { children: React.Rea
   );
 }
 
-type ClaudeLocalizationStatus = {
-  supported: boolean;
-  sourceApp: string;
-  copyApp: string;
-  sourceVersion: string;
-  copyVersion: string;
-  prepared: boolean;
-  needsRebuild: boolean;
-  running: boolean;
-  nodeAvailable: boolean;
-  pythonAvailable: boolean;
-  shellLocale: string | null;
-  catalogEntries: number;
-  voiceInput: boolean;
-  localization: boolean;
-};
-
-function ClaudeLocalizationScreen() {
-  const [status, setStatus] = useState<CommandResult<ClaudeLocalizationStatus> | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const mounted = useRef(true);
-  const pending = useRef(false);
-  useEffect(() => {
-    mounted.current = true;
-    return () => { mounted.current = false; };
-  }, []);
-  const accept = (result: CommandResult<ClaudeLocalizationStatus>) => {
-    if (!mounted.current) return;
-    if (result.status === "ok") setStatus(result);
-    else setError(result.message);
-  };
-  const refresh = async () => {
-    if (pending.current) return;
-    pending.current = true;
-    setBusy("detect"); setError(null);
-    try { accept(await invoke<CommandResult<ClaudeLocalizationStatus>>("claude_localization_status")); }
-    catch (cause) { if (mounted.current) setError(stringifyError(cause)); }
-    finally {
-      pending.current = false;
-      if (mounted.current) setBusy(null);
-    }
-  };
-  const act = async (action: "prepare" | "launch" | "restore" | "check") => {
-    if (pending.current) return;
-    pending.current = true;
-    setBusy(action); setError(null);
-    try {
-      const result = await invoke<CommandResult<ClaudeLocalizationStatus>>("claude_localization_action", { action });
-      // 失败响应里的 data 是空对象：直接覆盖状态会让下面的渲染读到不存在的字段
-      // （曾经就是这样整页白屏的），所以只有成功时才更新状态。
-      accept(result);
-    } catch (cause) { if (mounted.current) setError(stringifyError(cause)); }
-    finally {
-      pending.current = false;
-      if (mounted.current) setBusy(null);
-    }
-  };
-  const toggleVoiceInput = async (enabled: boolean) => {
-    if (pending.current) return;
-    pending.current = true;
-    setBusy("voiceInput"); setError(null);
-    try {
-      const result = await invoke<CommandResult<ClaudeLocalizationStatus>>(
-        "claude_localization_set_voice_input",
-        { enabled },
-      );
-      // 失败响应里的 data 是空对象：直接覆盖状态会让下面的渲染读到不存在的字段
-      // （曾经就是这样整页白屏的），所以只有成功时才更新状态。
-      accept(result);
-    } catch (cause) { if (mounted.current) setError(stringifyError(cause)); }
-    finally {
-      pending.current = false;
-      if (mounted.current) setBusy(null);
-    }
-  };
-  const toggleLocalization = async (enabled: boolean) => {
-    if (pending.current) return;
-    pending.current = true;
-    setBusy("localization"); setError(null);
-    try {
-      const result = await invoke<CommandResult<ClaudeLocalizationStatus>>(
-        "claude_localization_set_localization",
-        { enabled },
-      );
-      // 失败响应里的 data 是空对象：直接覆盖状态会让下面的渲染读到不存在的字段
-      // （曾经就是这样整页白屏的），所以只有成功时才更新状态。
-      accept(result);
-    } catch (cause) { if (mounted.current) setError(stringifyError(cause)); }
-    finally {
-      pending.current = false;
-      if (mounted.current) setBusy(null);
-    }
-  };
-  const s = status;
-  const canLaunch = Boolean(s?.prepared && !s.needsRebuild && s.nodeAvailable);
-  const statusTone = !s ? "pending" : s.prepared ? (s.needsRebuild ? "warn" : "ok") : "idle";
-  const statusText = busy === "detect" ? t("检测中…") : !s ? t("未检测") : !s.supported ? t("未检测到 Claude") : s.prepared ? (s.needsRebuild ? t("需要更新") : t("已准备")) : t("未准备");
-  return (
-    <div className="claude-localization-page">
-      {/* 左栏：增强项。每一项都跑在右边的受管副本上，汉化只是其中之一。 */}
-      <div className="claude-l10n-column">
-        <Panel>
-          <CardHead
-            title={t("增强功能")}
-            detail={t("各自独立开关，互不影响；副本只是它们共同的前置条件，改动在重启副本后应用。")}
-          />
-          <CardContent>
-            <label className="switch-row compact">
-              <input
-                checked={Boolean(s?.localization)}
-                disabled={busy !== null || !s?.supported}
-                onChange={(event) => void toggleLocalization(event.currentTarget.checked)}
-                type="checkbox"
-              />
-              <span>
-                <strong>{t("界面汉化")}</strong>
-                <small>{t("启动时注入官方中文词表，界面语言切到简体中文；关掉后副本按原语言启动。")}</small>
-              </span>
-              <ToggleVisual />
-            </label>
-            <label className="switch-row compact">
-              <input
-                checked={Boolean(s?.voiceInput)}
-                disabled={busy !== null || !s?.supported}
-                onChange={(event) => void toggleVoiceInput(event.currentTarget.checked)}
-                type="checkbox"
-              />
-              <span>
-                <strong>{t("语音输入")}</strong>
-                <small>{t("在 Claude 输入框右下角加一个麦克风入口，识别结果只写进输入框、不自动发送。")}</small>
-              </span>
-              <ToggleVisual />
-            </label>
-            {s?.supported && !s.prepared ? (
-              <p className="claude-l10n-hint">
-                {t("副本还没准备：开关会先存下来，等你在右边准备好副本并启动后生效。")}
-              </p>
-            ) : null}
-          </CardContent>
-        </Panel>
-      </div>
-      {/* 右栏：所有增强共同的前置条件。 */}
-      <div className="claude-l10n-column">
-      <Panel className="claude-l10n-hero">
-        <CardContent>
-          <div className="claude-l10n-hero-head">
-            <div className="claude-l10n-hero-title">
-              <span className="claude-l10n-hero-icon"><PackageOpen className="h-5 w-5" /></span>
-              <div>
-                <strong>{t("受管副本")}</strong>
-                <span className="claude-l10n-hero-subtitle">{t("所有增强的前置条件：官方 Claude.app 与 app.asar 保持原样，功能通过副本和启动时注入生效。")}</span>
-              </div>
-            </div>
-            <span className={`claude-l10n-status claude-l10n-status-${statusTone}`}>
-              <i aria-hidden="true" />
-              {statusText}
-            </span>
-          </div>
-          <div className="claude-l10n-steps" role="list">
-            <div className="claude-l10n-step" data-done={s?.prepared ? "true" : "false"} role="listitem">
-              <span className="claude-l10n-step-no" aria-hidden="true">{s?.prepared ? "✓" : "1"}</span>
-              <div className="claude-l10n-step-body">
-                <strong>{t("准备副本")}</strong>
-                <small>{t("用下面的按钮创建受管副本；官方 Claude.app 与 app.asar 保持原样。")}</small>
-              </div>
-            </div>
-            <div className="claude-l10n-step" data-done={s?.running ? "true" : "false"} role="listitem">
-              <span className="claude-l10n-step-no" aria-hidden="true">{s?.running ? "✓" : "2"}</span>
-              <div className="claude-l10n-step-body">
-                <strong>{t("启动 Claude 副本")}</strong>
-                <small>{t("增强只在副本里生效，官方版和登录态不受影响。")}</small>
-              </div>
-            </div>
-            <div className="claude-l10n-step" role="listitem">
-              <span className="claude-l10n-step-no" aria-hidden="true">3</span>
-              <div className="claude-l10n-step-body">
-                <strong>{t("在左边开启需要的增强")}</strong>
-                <small>{t("界面汉化与语音输入各自独立，改动在重启副本后应用。")}</small>
-              </div>
-            </div>
-          </div>
-          <div className="claude-l10n-stats">
-            <div className="claude-l10n-stat">
-              <span>{t("官方版本")}</span>
-              <strong title={s?.sourceVersion || undefined}>{!s ? t("未检测") : s.sourceVersion || t("未检测到")}</strong>
-            </div>
-            <div className="claude-l10n-stat">
-              <span>{t("副本版本")}</span>
-              <strong title={s?.copyVersion || undefined}>{s?.copyVersion || t("未准备")}</strong>
-            </div>
-            <div className="claude-l10n-stat">
-              <span>{t("外壳语言")}</span>
-              <strong>{s?.shellLocale || t("未设置")}</strong>
-            </div>
-            <div className="claude-l10n-stat">
-              <span>{t("官方词条")}</span>
-              <strong>{s?.catalogEntries != null ? `${s.catalogEntries.toLocaleString()} ${t("条")}` : t("未检测")}</strong>
-            </div>
-          </div>
-          <div className="claude-l10n-note" role="note">
-            <Info className="h-4 w-4" />
-            <span>{t("首次准备会创建独立副本并执行完整性校验；官方应用、登录态和 app.asar 不会被改写。macOS 可能需要钥匙串授权，Windows 会使用独立副本启动。")}</span>
-          </div>
-          {!s ? (
-            <p className="claude-l10n-hint">{t("点击“检测 Claude”读取安装状态；进入此页不会自动检测或修改应用。")}</p>
-          ) : !s.supported ? (
-            <p className="claude-l10n-hint">{t("未检测到 Claude，请先安装官方应用。你可以继续使用 Codex++ 的其他功能。")}</p>
-          ) : null}
-          {error ? <div className="inline-error">{error}</div> : null}
-          <div className="claude-l10n-actions">
-            <Button disabled={busy !== null} onClick={() => void refresh()} variant="secondary">
-              <RefreshCw className={`h-4 w-4 ${busy === "detect" ? "animate-spin" : ""}`} />
-              {busy === "detect" ? t("检测中…") : t("检测 Claude")}
-            </Button>
-            <Button disabled={busy !== null || !s?.supported} onClick={() => void act("prepare")}>
-              <PackageOpen className="h-4 w-4" />
-              {busy === "prepare"
-                ? t("准备中…")
-                : s?.needsRebuild
-                  ? t("更新副本")
-                  : s?.prepared
-                    ? t("重新准备副本")
-                    : t("准备副本")}
-            </Button>
-            <Button disabled={busy !== null || !canLaunch} onClick={() => void act("launch")}>
-              <Play className="h-4 w-4" />{busy === "launch" ? t("启动中…") : t("启动 Claude 副本")}
-            </Button>
-            <div className="claude-l10n-actions-secondary">
-              <Button disabled={busy !== null || !s?.prepared} onClick={() => void act("check")} variant="secondary">
-                <RefreshCw className="h-4 w-4" />{t("检查副本")}
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Panel>
-      </div>
-    </div>
-  );
-}
-
 function CardHead({ title, detail }: { title: string; detail: string }) {
   return (
     <CardHeader className="panel-head">
@@ -13342,378 +13090,6 @@ function CardHead({ title, detail }: { title: string; detail: string }) {
 
 function Toolbar({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <div className={`toolbar ${className}`.trim()}>{children}</div>;
-}
-
-type GrokProvidersResult = CommandResult<{
-  profiles: RelayProfile[];
-  activeRelayId: string;
-  live: {
-    grokHome: string;
-    configPath: string;
-    configExists: boolean;
-    cliPath: string | null;
-    cliInstalled: boolean;
-    revision: string;
-    defaultModel: string;
-    modelsBaseUrl: string;
-    models: Array<{ alias: string; model: string; baseUrl: string; contextWindow: number | null; apiKeyConfigured: boolean }>;
-  };
-  liveProfile: RelayProfile;
-}>;
-
-function newGrokProfileDraft(): RelayProfile {
-  return {
-    ...defaultSettings.relayProfiles[0],
-    id: `grok-${Date.now().toString(36)}`,
-    name: t("新建 Grok 供应商"),
-    modelList: "",
-    upstreamBaseUrl: "",
-    baseUrl: "",
-    apiKey: "",
-    protocol: "chatCompletions",
-    relayMode: "pureApi",
-    configContents: "",
-    authContents: "",
-  };
-}
-
-/**
- * Grok 分区的供应商管理。
- *
- * 映射约定是「一个供应商 = 一个 base_url」：应用到 Grok 时，这个供应商的模型
- * 列表会整体替换 `~/.grok/config.toml` 里所有受管的 `[model.*]` 表，未管理字段
- * （`[ui]`、`[models].web_search` 等）保留。所以「应用到 Grok」是需要确认的
- * 破坏性操作，这里显式二次确认。
- */
-function GrokScreen({
-  settings,
-  form,
-  actions,
-}: {
-  settings: SettingsResult | null;
-  form: BackendSettings;
-  actions: {
-    saveSettingsValue: (next: BackendSettings, silent?: boolean) => Promise<BackendSettings | null>;
-    showMessage: (title: string, message: string, status?: Status) => Promise<void>;
-    refreshCurrent: () => void;
-  };
-}) {
-  const [result, setResult] = useState<GrokProvidersResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [applying, setApplying] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  // 编辑区走本地草稿 + 显式保存，跟 Codex 供应商页一致。
-  // 直接在 onChange 里写盘的话，敲一个 Base URL 会触发几十次全量 save_settings。
-  const [draft, setDraft] = useState<RelayProfile | null>(null);
-
-  const shard = form.tools?.grok;
-  const profiles = shard?.relayProfiles?.length ? shard.relayProfiles : [];
-  const activeId = shard?.activeRelayId || "";
-  const activeProfile = profiles.find((profile) => profile.id === activeId);
-
-  // 切换选中的供应商（或外部刷新）时，把草稿重置成磁盘上的值。
-  useEffect(() => {
-    setDraft(activeProfile ? { ...activeProfile } : null);
-    // 只在选中的供应商变化时重置，不要在每次 profiles 数组变化时打断编辑。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeProfile?.id, activeProfile?.name, activeProfile?.upstreamBaseUrl, activeProfile?.apiKey, activeProfile?.modelList]);
-
-  const draftDirty = Boolean(
-    draft
-      && activeProfile
-      && (draft.name !== activeProfile.name
-        || draft.upstreamBaseUrl !== activeProfile.upstreamBaseUrl
-        || draft.apiKey !== activeProfile.apiKey
-        || draft.modelList !== activeProfile.modelList),
-  );
-
-  const refresh = async () => {
-    setLoading(true);
-    try {
-      const loaded = await invoke<GrokProvidersResult>("load_grok_providers");
-      setResult(loaded);
-    } catch (error) {
-      await actions.showMessage(t("调用失败"), String(error), "failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void refresh();
-    // 只在进入本页时拉一次；后续状态由本页自己的操作维护。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /// 唯一真正落盘的地方。结构性操作（新增/删除/切换选中）用它，
-  /// 编辑区则攒够了再调一次。
-  const writeShard = async (
-    nextProfiles: RelayProfile[],
-    nextActiveId: string,
-  ): Promise<boolean> => {
-    const next: BackendSettings = {
-      ...form,
-      activeTool: "grok",
-      tools: {
-        ...form.tools,
-        grok: {
-          ...shard,
-          relayProfiles: nextProfiles,
-          activeRelayId: nextActiveId,
-        },
-      },
-    };
-    // saveSettingsValue 会把结果写回 settings / settingsForm，所以这里不需要
-    // 自己先 setState（那反而会跟服务端归一化后的结果打架）。
-    const saved = await actions.saveSettingsValue(next, true);
-    if (!saved) return false;
-    await refresh();
-    return true;
-  };
-
-  const addProfile = async () => {
-    const fresh = newGrokProfileDraft();
-    const ok = await writeShard([...profiles, fresh], fresh.id);
-    if (!ok) return;
-    // 新增后直接把草稿铺好，用户马上就能填。
-    setDraft({ ...fresh });
-    await actions.showMessage(t("已新增"), tf("已新增供应商「{0}」，填好模型列表后点「应用到 Grok」。", [fresh.name]), "ok");
-  };
-
-  const saveDraft = async () => {
-    if (!draft || !activeProfile || saving) return;
-    setSaving(true);
-    try {
-      const ok = await writeShard(
-        profiles.map((profile) => (profile.id === draft.id ? { ...profile, ...draft } : profile)),
-        activeId,
-      );
-      if (ok) await actions.showMessage(t("已保存"), tf("供应商「{0}」已保存。", [draft.name]), "ok");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const removeProfile = async (id: string) => {
-    const rest = profiles.filter((profile) => profile.id !== id);
-    await writeShard(rest, activeId === id ? (rest[0]?.id ?? "") : activeId);
-  };
-
-  const selectProfile = async (id: string) => {
-    if (id === activeId) return;
-    await writeShard(profiles, id);
-  };
-
-  const applyToGrok = async () => {
-    if (draftDirty) {
-      await actions.showMessage(t("有未保存修改"), t("请先保存当前供应商，再应用到 Grok。"), "failed");
-      setConfirming(false);
-      return;
-    }
-    setApplying(true);
-    try {
-      // 只把 Grok 分片交给后端，避免整份 settings 被当成「本次改动」写回去。
-      const applied = await invoke<GrokProvidersResult>("apply_grok_relay_profile", {
-        settings: {
-          ...form,
-          tools: { ...form.tools, grok: { ...shard, activeRelayId: activeId } },
-        },
-      });
-      setConfirming(false);
-      if (applied.status === "ok") {
-        await actions.showMessage(t("已应用"), applied.message, "ok");
-      } else {
-        await actions.showMessage(t("应用失败"), applied.message, "failed");
-      }
-      await refresh();
-    } catch (error) {
-      await actions.showMessage(t("调用失败"), String(error), "failed");
-    } finally {
-      setApplying(false);
-    }
-  };
-
-  const live = result?.live;
-
-  return (
-    <>
-      <Panel className="grok-panel">
-        <CardHead
-          title={t("Grok 供应商")}
-          detail={t("每个供应商对应一套 Base URL + API Key + 模型列表。")}
-        />
-        <CardContent>
-          <div className="toolbar">
-            <Button disabled={loading} onClick={() => void refresh()} variant="outline">
-              <RefreshCw className="h-4 w-4" />
-              {loading ? t("刷新中") : t("刷新")}
-            </Button>
-            <Button onClick={() => void addProfile()} variant="outline">
-              <Plus className="h-4 w-4" />
-              {t("新增供应商")}
-            </Button>
-            <Button
-              disabled={saving || !draftDirty}
-              onClick={() => void saveDraft()}
-              title={draftDirty ? undefined : t("没有需要保存的修改")}
-              variant="outline"
-            >
-              <Save className="h-4 w-4" />
-              {saving ? t("保存中") : t("保存此供应商")}
-            </Button>
-            <Button
-              disabled={!activeProfile || applying || draftDirty}
-              onClick={() => setConfirming(true)}
-              title={
-                !activeProfile
-                  ? t("请先选择一个供应商")
-                  : draftDirty
-                    ? t("请先保存当前修改")
-                    : undefined
-              }
-            >
-              <Play className="h-4 w-4" />
-              {applying ? t("应用中") : t("应用到 Grok")}
-            </Button>
-          </div>
-
-          {profiles.length === 0 ? (
-            <div className="grok-empty">
-              <Blocks className="h-5 w-5" aria-hidden="true" />
-              <div>
-                <strong>{t("还没有 Grok 供应商")}</strong>
-                <span>{t("点「新增供应商」，填好 Base URL、API Key 和模型列表，再点「应用到 Grok」。")}</span>
-              </div>
-            </div>
-          ) : (
-            <div className="grok-provider-list">
-              {profiles.map((profile) => {
-                const selected = profile.id === activeId;
-                const modelCount = profile.modelList.split(/[\r\n,]+/).filter((line) => line.trim()).length;
-                const endpoint = profile.upstreamBaseUrl || profile.baseUrl;
-                return (
-                  <div className={`grok-provider-row ${selected ? "active" : ""}`} key={profile.id}>
-                    <button
-                      className="grok-provider-pick"
-                      onClick={() => void selectProfile(profile.id)}
-                      type="button"
-                    >
-                      <span className="grok-provider-name">
-                        {profile.name}
-                        {selected ? <span className="grok-provider-badge">{t("使用中")}</span> : null}
-                      </span>
-                      <span className="grok-provider-url">
-                        {endpoint || t("未填写 Base URL")}
-                      </span>
-                    </button>
-                    <span className="grok-provider-models">{tf("{0} 个模型", [String(modelCount)])}</span>
-                    <Button
-                      onClick={() => void removeProfile(profile.id)}
-                      size="icon"
-                      title={t("删除供应商")}
-                      variant="outline"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Panel>
-
-      {draft ? (
-        <Panel className="grok-panel">
-          <CardHead title={t("编辑供应商")} detail={draft.name} />
-          <CardContent>
-            <div className="grok-provider-editor">
-              <Field label={t("名称")}>
-                <Input
-                  onChange={(event) => setDraft({ ...draft, name: event.currentTarget.value })}
-                  value={draft.name}
-                />
-              </Field>
-              <Field label="Base URL">
-                <Input
-                  onChange={(event) => setDraft({ ...draft, upstreamBaseUrl: event.currentTarget.value })}
-                  placeholder="https://your-endpoint.example/v1"
-                  value={draft.upstreamBaseUrl}
-                />
-              </Field>
-              <Field label="API Key">
-                <Input
-                  onChange={(event) => setDraft({ ...draft, apiKey: event.currentTarget.value })}
-                  placeholder={t("留空则不改动 Grok 里已有的 Key")}
-                  type="password"
-                  value={draft.apiKey}
-                />
-              </Field>
-              <Field label={t("模型列表")}>
-                <Textarea
-                  onChange={(event) => setDraft({ ...draft, modelList: event.currentTarget.value })}
-                  placeholder={"grok-4.5[1M]\ngrok-4.1-fast"}
-                  rows={4}
-                  value={draft.modelList}
-                />
-              </Field>
-            </div>
-            <p className="muted-line">
-              {t("每行一个模型，可用 [1M] / [200K] 后缀声明上下文窗口。")}
-              {" "}
-              {t("改完点「保存此供应商」，再点「应用到 Grok」生效。")}
-            </p>
-          </CardContent>
-        </Panel>
-      ) : null}
-
-      <Panel className="grok-panel">
-        <CardHead title={t("Grok 当前配置")} detail={live?.configPath || t("读取 ~/.grok/config.toml")} />
-        <CardContent>
-          {live ? (
-            <div className="grok-live-grid">
-              <div className="grok-live-item">
-                <span className="grok-live-label">{t("CLI")}</span>
-                <span className="grok-live-value">{live.cliPath || t("未检测到")}</span>
-              </div>
-              <div className="grok-live-item">
-                <span className="grok-live-label">{t("默认模型")}</span>
-                <span className="grok-live-value">{live.defaultModel || t("未设置")}</span>
-              </div>
-              <div className="grok-live-item">
-                <span className="grok-live-label">{t("全局端点")}</span>
-                <span className="grok-live-value">{live.modelsBaseUrl || t("未设置")}</span>
-              </div>
-              <div className="grok-live-item">
-                <span className="grok-live-label">{t("受管模型")}</span>
-                <span className="grok-live-value">
-                  {live.models.length ? live.models.map((model) => model.alias).join("、") : t("无")}
-                </span>
-              </div>
-            </div>
-          ) : (
-            <p className="muted-line">{t("尚未读取。")}</p>
-          )}
-        </CardContent>
-      </Panel>
-
-      {confirming ? (
-        <ConfirmDialog
-          confirm={{            title: t("应用到 Grok？"),
-            message: tf(
-              "Grok 里所有由 Codex++ 管理的模型表会被供应商「{0}」的模型列表整体替换（[ui]、web_search 等未管理字段保留）。原配置会先备份。",
-              [activeProfile?.name || ""],
-            ),
-            confirmText: applying ? t("应用中") : t("确认应用"),
-            cancelText: t("取消"),
-          }}
-          onCancel={() => setConfirming(false)}
-          onConfirm={() => void applyToGrok()}
-        />
-      ) : null}
-    </>
-  );
 }
 
 /** 应用栏：上方切换 Agent，下方访问通用页面与界面设置。 */
@@ -13797,7 +13173,7 @@ function ApplicationRail({
 /**
  * 应用栏上方的 Agent 图标组：点击切换当前聚焦的工具。
  *
- * 这里的「工具」指 Codex / Grok / 后续接入的 CLI，每个工具在自己的供应商
+ * 这里的「工具」指 Codex / 后续接入的 CLI，每个工具在自己的供应商
  * 分区里，互相不串配置。未接入供应商写盘的工具仍可进入自己的管理页。
  */
 function ToolSwitcher({
@@ -14062,8 +13438,6 @@ function routeSubtitle(route: Route) {
     overview: t("检查问题、启动与快速修复"),
     relay: t("管理 API 供应商、协议、Key 与配置文件"),
     multiLaunch: t("为不同供应商启动相互隔离的 Codex 实例"),
-    grok: t("管理 Grok CLI 的模型与 API 端点"),
-    claude: t("保留官方 Claude.app 原样，通过受管副本为 Claude 应用增强功能"),
     relayEnvironment: t("统一管理本地协议代理、供应商代理与重试策略"),
     requestLog: t("查看代理请求的状态、模型、重试、token 用量与缓存命中"),
     sessions: t("查看、删除和修复 Codex 本地会话"),
