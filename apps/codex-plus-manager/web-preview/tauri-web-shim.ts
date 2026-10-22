@@ -15,7 +15,6 @@ const demoSettings = {
   codexAppPath: "/Applications/Codex.app",
   codexAppAutoTakeover: false,
   codexAppAutoTakeoverWhenActive: "defer",
-  codexExtraArgs: [],
   dictation: {
     enabled: false,
     provider: "api",
@@ -70,10 +69,6 @@ const demoSettings = {
   codexAppStepwiseMaxInputChars: 6000,
   codexAppStepwiseMaxOutputTokens: 500,
   codexAppStepwiseTimeoutMs: 8000,
-  codexAppImageOverlayEnabled: false,
-  codexAppImageOverlayPath: "",
-  codexAppImageOverlayOpacity: 35,
-  codexAppImageOverlayFitMode: "fit",
   codexAppDreamSkinEnabled: false,
   codexAppDreamSkinPaused: false,
   codexAppDreamSkinTheme: "pink",
@@ -139,7 +134,6 @@ const demoSettings = {
   activeRelayId: "default",
   aggregateRelayProfiles: [],
   activeAggregateRelayId: "",
-  relayTestModel: "gpt-5.4-mini",
   tools: {},
   activeTool: "codex",
   codexAppWhaleWidgetEnabled: false,
@@ -163,32 +157,18 @@ const overview = ok({
     protocol_conversion_enabled: true,
   },
   current_version: "1.10.1",
-  update_status: "up_to_date",
   settings_path: "演示模式",
   logs_path: "演示模式",
-});
-
-const tools = ok({
-  tools: [
-    { id: "codex", name: "Codex", homeDir: "~/.codex", switchable: true, active: true, activeRelayName: "默认中转", relayCount: 3 },
-  ],
-  activeTool: "codex",
 });
 
 const settingsResult = () => ok({ revision: "web-preview", settings: demoSettings, settings_path: "演示模式", user_scripts: { enabled: true, skip_next_start: false, scripts: [] } });
 
 export async function invoke<T = unknown>(command: string, args: Record<string, unknown> = {}): Promise<T> {
   switch (command) {
-    case "list_tools": return tools as T;
-    case "startup_options": return ok({ showUpdate: false }) as T;
     case "consume_pending_manager_navigation": return null as T;
     case "load_overview": return overview as T;
-    case "load_ads": return ok({ version: 1, ads: [], topAds: [] }) as T;
     case "load_settings":
     case "save_settings":
-    case "reset_settings":
-    case "set_settings_path":
-    case "reset_settings_path":
     case "refresh_user_script_inventory":
       if (command === "save_settings" && args.settings) return ok({ revision: "web-preview", settings: args.settings, settings_path: "演示模式", user_scripts: { enabled: true, skip_next_start: false, scripts: [] } }) as T;
       return settingsResult() as T;
@@ -200,7 +180,14 @@ export async function invoke<T = unknown>(command: string, args: Record<string, 
     case "load_pending_dream_skin_community": return ok({ versionId: "" }) as T;
     case "load_watcher_state": return ok({ enabled: false, running: false, status: "disabled", message: "演示模式" }) as T;
     case "load_auto_takeover_state": return ok({ running: false, enabled: false, message: "演示模式" }) as T;
-    case "update_check": return ok({ currentVersion: "1.10.1", latestVersion: "1.10.1", updateAvailable: false }) as T;
+    case "native_browser_status": return {
+      compatibility: { state: "not_started", detail: "" },
+      connection: { state: "unavailable", browsers: [], failedChecks: 0 },
+    } as T;
+    case "dream_skin_status": return ok({ state: "disabled", enabled: false, paused: false, liveApplied: false, checks: [] }) as T;
+    case "list_dream_skin_themes": return ok({ themes: [], activeDraft: { config: {}, imagePath: "", builtin: true } }) as T;
+    case "refresh_dream_skin_market": return ok({ themes: [], schemaVersion: 1, updatedAt: "", repositoryUrl: "", cached: false, warning: "" }) as T;
+    case "refresh_dream_skin_community": return ok({ items: [], total: 0, fetchedAt: "", cached: false, warning: "", installedThemeId: "" }) as T;
     case "refresh_script_market": return ok({ market: { status: "ok", message: "演示模式", scripts: [] }, user_scripts: { enabled: true, skip_next_start: false, scripts: [] } }) as T;
     case "load_ccs_providers": return ok({ providers: [] }) as T;
     case "weixin_connect_status": return ok({ state: "disconnected", message: "演示模式", accountId: "", hasToken: false, lastPeerId: "", lastMessageAtMs: 0, processedMessages: 0 }) as T;

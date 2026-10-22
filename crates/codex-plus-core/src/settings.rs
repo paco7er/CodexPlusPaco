@@ -689,8 +689,6 @@ pub struct BackendSettings {
         default = "default_auto_takeover_when_active"
     )]
     pub codex_app_auto_takeover_when_active: String,
-    #[serde(rename = "codexExtraArgs", default)]
-    pub codex_extra_args: Vec<String>,
     #[serde(rename = "providerSyncEnabled", default)]
     pub provider_sync_enabled: bool,
     #[serde(rename = "providerSyncSavedProviders", default)]
@@ -827,22 +825,6 @@ pub struct BackendSettings {
         deserialize_with = "deserialize_stepwise_timeout_ms"
     )]
     pub codex_app_stepwise_timeout_ms: u64,
-    #[serde(rename = "codexAppImageOverlayEnabled", default)]
-    pub codex_app_image_overlay_enabled: bool,
-    #[serde(rename = "codexAppImageOverlayPath", default)]
-    pub codex_app_image_overlay_path: String,
-    #[serde(
-        rename = "codexAppImageOverlayOpacity",
-        default = "default_image_overlay_opacity",
-        deserialize_with = "deserialize_image_overlay_opacity"
-    )]
-    pub codex_app_image_overlay_opacity: u8,
-    #[serde(
-        rename = "codexAppImageOverlayFitMode",
-        default = "default_image_overlay_fit_mode",
-        deserialize_with = "deserialize_image_overlay_fit_mode"
-    )]
-    pub codex_app_image_overlay_fit_mode: String,
     #[serde(rename = "codexAppDreamSkinEnabled", default)]
     pub codex_app_dream_skin_enabled: bool,
     #[serde(rename = "codexAppDreamSkinPaused", default)]
@@ -906,8 +888,6 @@ pub struct BackendSettings {
     pub aggregate_relay_profiles: Vec<AggregateRelayProfile>,
     #[serde(rename = "activeAggregateRelayId", default)]
     pub active_aggregate_relay_id: String,
-    #[serde(rename = "relayTestModel", default = "default_relay_test_model")]
-    pub relay_test_model: String,
     /// 协议代理自动重试：上游瞬时失败（连接失败、408/429/5xx）先在本地代理内部
     /// 退避重试，不立刻把错误交给 Codex。只影响经过本地协议代理的请求。
     /// 默认开启：用户看到的失败横幅会显著减少；关闭后恢复「失败立即返回」行为。
@@ -963,7 +943,6 @@ impl Default for BackendSettings {
             codex_app_path: String::new(),
             codex_app_auto_takeover: false,
             codex_app_auto_takeover_when_active: default_auto_takeover_when_active(),
-            codex_extra_args: Vec::new(),
             provider_sync_enabled: false,
             provider_sync_saved_providers: Vec::new(),
             provider_sync_manual_providers: Vec::new(),
@@ -1010,10 +989,6 @@ impl Default for BackendSettings {
             codex_app_stepwise_max_input_chars: default_stepwise_max_input_chars(),
             codex_app_stepwise_max_output_tokens: default_stepwise_max_output_tokens(),
             codex_app_stepwise_timeout_ms: default_stepwise_timeout_ms(),
-            codex_app_image_overlay_enabled: false,
-            codex_app_image_overlay_path: String::new(),
-            codex_app_image_overlay_opacity: default_image_overlay_opacity(),
-            codex_app_image_overlay_fit_mode: default_image_overlay_fit_mode(),
             codex_app_dream_skin_enabled: false,
             codex_app_dream_skin_paused: false,
             codex_app_dream_skin_theme: default_dream_skin_theme(),
@@ -1040,7 +1015,6 @@ impl Default for BackendSettings {
             active_relay_id: default_active_relay_id(),
             aggregate_relay_profiles: Vec::new(),
             active_aggregate_relay_id: String::new(),
-            relay_test_model: default_relay_test_model(),
             protocol_proxy_auto_retry: true,
             protocol_proxy_auto_retry_max_attempts:
                 default_protocol_proxy_auto_retry_max_attempts(),
@@ -1300,25 +1274,6 @@ pub fn default_stepwise_timeout_ms() -> u64 {
     8000
 }
 
-fn default_image_overlay_opacity() -> u8 {
-    35
-}
-
-fn clamp_image_overlay_opacity(value: u8) -> u8 {
-    value.clamp(1, 100)
-}
-
-pub fn default_image_overlay_fit_mode() -> String {
-    "fit".to_string()
-}
-
-fn normalize_image_overlay_fit_mode(value: &str) -> String {
-    match value {
-        "fill" | "fit" | "stretch" | "tile" | "center" => value.to_string(),
-        _ => default_image_overlay_fit_mode(),
-    }
-}
-
 pub fn default_dream_skin_theme() -> String {
     "pink".to_string()
 }
@@ -1573,24 +1528,6 @@ where
     Ok(Option::<String>::deserialize(deserializer)?
         .map(|value| normalize_stepwise_generation_mode(&value))
         .unwrap_or_else(default_stepwise_generation_mode))
-}
-
-fn deserialize_image_overlay_opacity<'de, D>(deserializer: D) -> Result<u8, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    Ok(Option::<u8>::deserialize(deserializer)?
-        .map(clamp_image_overlay_opacity)
-        .unwrap_or_else(default_image_overlay_opacity))
-}
-
-fn deserialize_image_overlay_fit_mode<'de, D>(deserializer: D) -> Result<String, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    Ok(Option::<String>::deserialize(deserializer)?
-        .map(|value| normalize_image_overlay_fit_mode(&value))
-        .unwrap_or_else(default_image_overlay_fit_mode))
 }
 
 fn deserialize_dream_skin_theme<'de, D>(deserializer: D) -> Result<String, D::Error>
@@ -1848,8 +1785,7 @@ impl SettingsStore {
         }
         // 先限制输入序列化大小，再复制/归一化；转义后的体积也计入预算。
         serialize_settings_bounded(settings)?;
-        let mut settings = normalize_settings_config_sections(settings.clone());
-        settings.codex_extra_args = normalize_codex_extra_args(&settings.codex_extra_args);
+        let settings = normalize_settings_config_sections(settings.clone());
         let mut next = settings_to_object(&settings);
         next.remove("revision");
         // 完整表单不能擦除新版本或拓展写入的未知字段；profile 以稳定 ID 对齐。
@@ -2073,22 +2009,6 @@ fn merge_known_setting_fields(target: &mut Map<String, Value>, source: &Map<Stri
             Value::String(value.to_string()),
         );
     }
-    if let Some(value) = source.get("codexExtraArgs").and_then(Value::as_array) {
-        let args = value
-            .iter()
-            .filter_map(Value::as_str)
-            .map(ToString::to_string)
-            .collect::<Vec<_>>();
-        target.insert(
-            "codexExtraArgs".to_string(),
-            Value::Array(
-                normalize_codex_extra_args(&args)
-                    .into_iter()
-                    .map(Value::String)
-                    .collect(),
-            ),
-        );
-    }
     if let Some(value) = source.get("providerSyncEnabled").and_then(Value::as_bool) {
         target.insert("providerSyncEnabled".to_string(), Value::Bool(value));
     }
@@ -2294,35 +2214,6 @@ fn merge_known_setting_fields(target: &mut Map<String, Value>, source: &Map<Stri
             Value::Number(serde_json::Number::from(clamp_stepwise_timeout_ms(value))),
         );
     }
-    merge_bool_setting(target, source, "codexAppImageOverlayEnabled");
-    if let Some(value) = source
-        .get("codexAppImageOverlayPath")
-        .and_then(Value::as_str)
-    {
-        target.insert(
-            "codexAppImageOverlayPath".to_string(),
-            Value::String(value.to_string()),
-        );
-    }
-    if let Some(value) = source
-        .get("codexAppImageOverlayOpacity")
-        .and_then(Value::as_u64)
-        .and_then(|value| u8::try_from(value).ok())
-    {
-        target.insert(
-            "codexAppImageOverlayOpacity".to_string(),
-            Value::Number(serde_json::Number::from(clamp_image_overlay_opacity(value))),
-        );
-    }
-    if let Some(value) = source
-        .get("codexAppImageOverlayFitMode")
-        .and_then(Value::as_str)
-    {
-        target.insert(
-            "codexAppImageOverlayFitMode".to_string(),
-            Value::String(normalize_image_overlay_fit_mode(value)),
-        );
-    }
     merge_bool_setting(target, source, "codexAppDreamSkinEnabled");
     merge_bool_setting(target, source, "codexAppDreamSkinPaused");
     if let Some(value) = source.get("codexAppDreamSkinTheme").and_then(Value::as_str) {
@@ -2448,16 +2339,6 @@ fn merge_known_setting_fields(target: &mut Map<String, Value>, source: &Map<Stri
         target.insert(
             "activeAggregateRelayId".to_string(),
             Value::String(value.to_string()),
-        );
-    }
-    if let Some(value) = source.get("relayTestModel").and_then(Value::as_str) {
-        target.insert(
-            "relayTestModel".to_string(),
-            Value::String(if value.trim().is_empty() {
-                default_relay_test_model()
-            } else {
-                value.trim().to_string()
-            }),
         );
     }
     if let Some(value) = source.get("activeTool").and_then(Value::as_str) {
@@ -2799,10 +2680,6 @@ fn normalize_settings_config_sections(mut settings: BackendSettings) -> BackendS
             *profile = normalized;
         }
     }
-    settings.codex_app_image_overlay_opacity =
-        clamp_image_overlay_opacity(settings.codex_app_image_overlay_opacity);
-    settings.codex_app_image_overlay_fit_mode =
-        normalize_image_overlay_fit_mode(&settings.codex_app_image_overlay_fit_mode);
     settings.codex_app_dream_skin_theme =
         normalize_dream_skin_theme(&settings.codex_app_dream_skin_theme);
     if settings.codex_app_dream_skin_theme_config == DreamSkinThemeConfig::default()
@@ -3140,12 +3017,10 @@ mod tests {
         assert!(!settings.codex_app_thread_id_badge);
         assert!(!settings.codex_goals_enabled);
         assert!(settings.codex_app_path.is_empty());
-        assert!(settings.codex_extra_args.is_empty());
         assert_eq!(settings.relay_base_url, default_relay_base_url());
         assert!(settings.relay_api_key.is_empty());
         assert_eq!(settings.relay_profiles[0].relay_mode, RelayMode::Official);
         assert!(settings.relay_common_config_contents.is_empty());
-        assert_eq!(settings.relay_test_model, default_relay_test_model());
         assert!(!settings.codex_app_stepwise_enabled);
         assert_eq!(settings.codex_app_stepwise_generation_mode, "auto");
         assert!(!settings.codex_app_answer_outline_enabled);
@@ -3234,7 +3109,6 @@ mod tests {
         assert!(settings.provider_sync_enabled);
         assert!(settings.codex_goals_enabled);
         assert_eq!(settings.relay_base_url, default_relay_base_url());
-        assert!(settings.codex_extra_args.is_empty());
         let saved = serde_json::to_value(&settings).unwrap();
         assert!(saved.get("cliWrapperEnabled").is_none());
         assert!(saved.get("cliWrapperBaseUrl").is_none());
@@ -3264,22 +3138,6 @@ mod tests {
         .unwrap();
 
         assert!(legacy_settings.codex_app_plugin_marketplace_unlock);
-    }
-
-    #[test]
-    fn settings_deserialize_reads_codex_extra_args() {
-        let settings: BackendSettings = serde_json::from_str(
-            r#"{"codexExtraArgs":["--force_high_performance_gpu"," --ignored-trimmed-by-ui "]}"#,
-        )
-        .unwrap();
-
-        assert_eq!(
-            settings.codex_extra_args,
-            vec![
-                "--force_high_performance_gpu".to_string(),
-                " --ignored-trimmed-by-ui ".to_string(),
-            ]
-        );
     }
 
     #[test]
@@ -3781,6 +3639,39 @@ experimental_bearer_token = "sk-existing""#
     }
 
     #[test]
+    fn retired_settings_are_ignored_without_erasing_existing_user_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        let retired = json!({
+            "codexExtraArgs": ["--legacy-option"],
+            "codexAppImageOverlayEnabled": true,
+            "codexAppImageOverlayPath": "old-background.png",
+            "codexAppImageOverlayOpacity": 42,
+            "codexAppImageOverlayFitMode": "fill",
+            "relayTestModel": "old-test-model"
+        });
+        fs::write(&path, serde_json::to_vec(&retired).unwrap()).unwrap();
+        let store = SettingsStore::new(path.clone());
+        let settings = store.load().unwrap();
+        let exposed = serde_json::to_value(&settings).unwrap();
+        for key in retired.as_object().unwrap().keys() {
+            assert!(exposed.get(key).is_none(), "{key}");
+        }
+        store.save(&settings).unwrap();
+        store.update(json!({
+            "codexAppImageOverlayEnabled": false,
+            "codexExtraArgs": ["--replacement"],
+            "relayTestModel": "replacement",
+            "ccsDbPath": "retained-provider-db"
+        })).unwrap();
+        let saved: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        for (key, value) in retired.as_object().unwrap() {
+            assert_eq!(&saved[key], value, "{key}");
+        }
+        assert_eq!(store.load().unwrap().ccs_db_path, "retained-provider-db");
+    }
+
+    #[test]
     fn settings_store_serialized_size_limit_counts_json_escaping() {
         let dir = temp_dir();
         let path = dir.join("settings.json");
@@ -3788,7 +3679,7 @@ experimental_bearer_token = "sk-existing""#
         fs::write(&path, original).unwrap();
         let store = SettingsStore::new(path.clone());
         let mut settings = store.load().unwrap();
-        settings.codex_app_image_overlay_path = "\\".repeat(MAX_SETTINGS_FILE_BYTES / 2);
+        settings.ccs_db_path = "\\".repeat(MAX_SETTINGS_FILE_BYTES / 2);
 
         assert!(
             store
@@ -3800,7 +3691,7 @@ experimental_bearer_token = "sk-existing""#
         assert_eq!(fs::read_to_string(&path).unwrap(), original);
         let error = store
             .update(json!({
-                "codexAppImageOverlayPath": settings.codex_app_image_overlay_path,
+                "ccsDbPath": settings.ccs_db_path,
             }))
             .unwrap_err();
         assert!(error.to_string().contains("16 MiB"));
@@ -3923,7 +3814,6 @@ experimental_bearer_token = "sk-existing""#
         let store = SettingsStore::new(dir.join("nested").join("settings.json"));
         let settings = BackendSettings {
             provider_sync_enabled: true,
-            codex_extra_args: vec!["--force_high_performance_gpu".to_string()],
             ccs_db_path: dir.join("cc-switch.db").to_string_lossy().to_string(),
             ..BackendSettings::default()
         };
@@ -4155,52 +4045,8 @@ experimental_bearer_token = "sk-existing""#
         assert!(updated.codex_goals_enabled);
         assert_eq!(updated.relay_base_url, "https://relay.example.test/v1");
         assert_eq!(updated.relay_api_key, "sk-relay");
-        assert_eq!(
-            updated.codex_extra_args,
-            vec![
-                "--force_high_performance_gpu".to_string(),
-                "--enable-gpu".to_string(),
-            ]
-        );
+        assert!(serde_json::to_value(&updated).unwrap().get("codexExtraArgs").is_none());
         assert_eq!(store.load().unwrap(), updated);
-    }
-
-    #[test]
-    fn settings_store_update_persists_image_overlay_settings() {
-        let dir = temp_dir();
-        let store = SettingsStore::new(dir.join("settings.json"));
-
-        let updated = store
-            .update(json!({
-                "codexAppImageOverlayEnabled": true,
-                "codexAppImageOverlayPath": "C:\\Users\\me\\Pictures\\overlay.png",
-                "codexAppImageOverlayOpacity": 42,
-                "codexAppImageOverlayFitMode": "fill"
-            }))
-            .unwrap();
-
-        assert!(updated.codex_app_image_overlay_enabled);
-        assert_eq!(
-            updated.codex_app_image_overlay_path,
-            r"C:\Users\me\Pictures\overlay.png"
-        );
-        assert_eq!(updated.codex_app_image_overlay_opacity, 42);
-        assert_eq!(updated.codex_app_image_overlay_fit_mode, "fill");
-        assert_eq!(store.load().unwrap(), updated);
-    }
-
-    #[test]
-    fn settings_store_defaults_invalid_image_overlay_fit_mode_to_fit() {
-        let dir = temp_dir();
-        let store = SettingsStore::new(dir.join("settings.json"));
-
-        let updated = store
-            .update(json!({
-                "codexAppImageOverlayFitMode": "unknown"
-            }))
-            .unwrap();
-
-        assert_eq!(updated.codex_app_image_overlay_fit_mode, "fit");
     }
 
     #[test]
@@ -4469,7 +4315,7 @@ experimental_bearer_token = "sk-existing""#
         assert_eq!(updated.relay_profiles.len(), 2);
         assert_eq!(active.id, "relay-b");
         assert_eq!(active.name, "中转 B");
-        assert_eq!(updated.relay_test_model, "claude-sonnet-4");
+        assert!(serde_json::to_value(&updated).unwrap().get("relayTestModel").is_none());
 
         let saved: Value =
             serde_json::from_str(&std::fs::read_to_string(dir.join("settings.json")).unwrap())
@@ -4670,41 +4516,6 @@ experimental_bearer_token = "sk-existing""#
         assert!(saved.get("codexAppPluginAutoExpand").is_none());
         assert!(saved.get("computerUseGuardEnabled").is_none());
         assert_eq!(saved["customField"], json!(1));
-    }
-
-    #[test]
-    fn settings_store_update_persists_codex_extra_args_and_preserves_unknown_fields() {
-        let dir = temp_dir();
-        let path = dir.join("settings.json");
-        let store = SettingsStore::new(path.clone());
-        std::fs::write(
-            &path,
-            r#"{"providerSyncEnabled":false,"customField":{"nested":true}}"#,
-        )
-        .unwrap();
-
-        let updated = store
-            .update(json!({
-                "codexExtraArgs": ["--force_high_performance_gpu", "--enable-features=UseOzonePlatform"]
-            }))
-            .unwrap();
-        let saved: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-
-        assert_eq!(
-            updated.codex_extra_args,
-            vec![
-                "--force_high_performance_gpu".to_string(),
-                "--enable-features=UseOzonePlatform".to_string(),
-            ]
-        );
-        assert_eq!(
-            saved["codexExtraArgs"],
-            json!([
-                "--force_high_performance_gpu",
-                "--enable-features=UseOzonePlatform"
-            ])
-        );
-        assert_eq!(saved["customField"], json!({"nested": true}));
     }
 
     #[test]

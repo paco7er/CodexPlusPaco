@@ -15,7 +15,7 @@ test("retired Claude and Grok workspaces have no routes, screens or bundled icon
   assert.ok(!appSource.includes("ClaudeLocalizationScreen"));
   assert.ok(!appSource.includes("GrokScreen"));
   assert.match(appSource, /id: "relay".*tool: "codex"/);
-  assert.ok(appSource.includes("./assets/agents/chatgpt.svg"));
+  assert.ok(!appSource.includes("./assets/agents/chatgpt.svg"));
 });
 
 test("retired Claude and Grok commands are neither implemented nor registered", () => {

@@ -950,7 +950,7 @@ async fn activate_existing_codex_app(options: &LaunchOptions) -> anyhow::Result<
             &app_dir,
             options.debug_port,
             &settings,
-            &settings.codex_extra_args,
+            &options.extra_args,
             &codex_plus_core::launcher::LaunchInstance::from_options(&options),
         )
         .await;
@@ -1750,9 +1750,6 @@ impl BridgeRuntimeService for LauncherRuntimeService {
         Ok(codex_plus_core::model_catalog::read_codex_model_catalog().await)
     }
 
-    async fn ads(&self) -> anyhow::Result<Value> {
-        codex_plus_core::ads::fetch_ad_list().await
-    }
 }
 
 async fn inject_with_context(

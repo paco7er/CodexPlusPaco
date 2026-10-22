@@ -381,10 +381,8 @@ export function builtinEntryToImportDocument(
   );
 }
 
-/// 标签以结构化字段下发（kind + 来源名），文案由调用方 localize 时用
-/// t()/tf() 拼 key：裸字符串会被 i18n-verify.mjs 漏掉（它只扫调用点），
-/// 英文模式直接露中文；调用方也不该再从渲染文本反解参数。
-/// key 全部登记在 i18n-en.ts 的 EN_TEMPLATE/EN_PLAIN 里。
+/// 标签以结构化字段下发（kind + 来源名），调用方生成中文文案，
+/// 不从渲染文本反解参数。
 export type MetadataSourceTag =
   | { kind: "match"; source: string; tone: "builtin" }
   | { kind: "fallback"; source: string; tone: "fallback" }

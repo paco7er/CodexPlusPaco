@@ -2,13 +2,10 @@
 
 fn main() {
     let args: Vec<_> = std::env::args_os().collect();
-    // MCP 是独立 stdio 进程，必须在 GUI、单实例锁和启动日志之前处理。
-    if args.get(1).is_some_and(|arg| arg == "--codex-plus-agent-mcp") {
-        if let Err(error) = codex_plus_manager_lib::run_agent_collaboration_mcp(&args[2..]) {
-            eprintln!("Agent 协作 MCP 启动失败：{error:#}");
-            std::process::exit(1);
-        }
-        return;
+    // 旧 MCP 配置和安装器参数不能误启动 GUI，也不能退回执行已移除的功能。
+    if retired_mode_requested(args.iter().map(|arg| arg.to_string_lossy())) {
+        eprintln!("此版本已移除 Agent 协作与自动更新，请移除旧的启动配置。");
+        std::process::exit(1);
     }
     if let Some(options_path) = args
         .windows(2)
@@ -35,31 +32,6 @@ fn main() {
         codex_plus_core::watcher::default_watcher_disabled_flag().exists(),
     ) {
         return;
-    }
-    #[cfg(target_os = "macos")]
-    {
-        let args: Vec<_> = std::env::args_os().collect();
-        if args
-            .get(1)
-            .is_some_and(|arg| arg == "--apply-codex-plus-update")
-        {
-            let result = if args.len() == 3 {
-                codex_plus_core::update::macos::run_update_helper(std::path::Path::new(&args[2]))
-            } else {
-                Err(anyhow::anyhow!(
-                    "更新 helper 需要且仅接受一个计划文件路径。"
-                ))
-            };
-            if let Err(error) = result {
-                eprintln!("更新 helper 失败：{error:#}");
-                let _ = codex_plus_core::diagnostic_log::append_diagnostic_log(
-                    "update.macos.helper_failed",
-                    serde_json::json!({ "message": error.to_string() }),
-                );
-                std::process::exit(1);
-            }
-            return;
-        }
     }
     for arg in std::env::args() {
         if arg.starts_with("dreamskin://") {
@@ -89,11 +61,6 @@ fn main() {
             }
         }
     }
-    if std::env::args().any(|arg| arg == "--show-update") {
-        unsafe {
-            std::env::set_var("CODEX_PLUS_SHOW_UPDATE", "1");
-        }
-    }
     codex_plus_manager_lib::run();
 }
 
@@ -109,9 +76,23 @@ fn should_skip_autostart(args: impl IntoIterator<Item = String>, disabled: bool)
     disabled && args.into_iter().any(|arg| arg == "--autostart")
 }
 
+fn retired_mode_requested(args: impl IntoIterator<Item = impl AsRef<str>>) -> bool {
+    args.into_iter().any(|arg| {
+        matches!(arg.as_ref(), "--codex-plus-agent-mcp" | "--apply-codex-plus-update")
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::should_skip_autostart;
+    use super::{retired_mode_requested, should_skip_autostart};
+
+    #[test]
+    fn retired_background_modes_never_fall_through_to_the_gui() {
+        assert!(retired_mode_requested(["app", "--codex-plus-agent-mcp"]));
+        assert!(retired_mode_requested(["app", "--apply-codex-plus-update", "plan.json"]));
+        assert!(!retired_mode_requested(["app", "--codex-plus-multi-worker", "options.json"]));
+        assert!(!retired_mode_requested(["app"]));
+    }
 
     #[test]
     fn disabling_login_startup_still_allows_opening_the_gui() {

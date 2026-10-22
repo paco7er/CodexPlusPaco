@@ -434,20 +434,21 @@ fn manager_ui_no_longer_exposes_command_wrapper_or_startup_marketplace_prompt() 
 }
 
 #[test]
-fn manager_update_install_keeps_visible_progress_bar() {
+fn manager_no_longer_downloads_or_starts_update_installers() {
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let app_tsx = manifest_dir.parent().unwrap().join("src/App.tsx");
     let app_tsx = std::fs::read_to_string(&app_tsx).expect("read manager App.tsx");
 
-    assert!(app_tsx.contains("下载并运行安装包"));
-    assert!(app_tsx.contains("updateInstallProgress"));
-    assert!(app_tsx.contains("安装包更新进度"));
-    assert!(app_tsx.contains("completedTitle={t(\"上次更新结果\")}"));
-    assert!(app_tsx.contains("progress={updateInstallProgress}"));
-    assert!(app_tsx.contains("listen<UpdateProgressEvent>(\"update-progress\""));
-    assert!(app_tsx.contains("data-indeterminate"));
-    assert!(app_tsx.contains("正在写入安装包并准备安装"));
-    assert!(app_tsx.contains("正在启动安装器"));
-    assert!(!app_tsx.contains("current.percent + 0.2"));
-    assert!(!app_tsx.contains("下载或启动耗时较长"));
+    for retired in [
+        "下载并运行安装包",
+        "updateInstallProgress",
+        "安装包更新进度",
+        "UpdateProgressEvent",
+        "正在写入安装包并准备安装",
+        "正在启动安装器",
+        "\"check_update\"",
+        "\"perform_update\"",
+    ] {
+        assert!(!app_tsx.contains(retired), "{retired}");
+    }
 }

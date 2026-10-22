@@ -9,7 +9,7 @@
 use std::path::PathBuf;
 
 use crate::settings::{
-    default_active_relay_id, default_relay_test_model, AggregateRelayProfile, BackendSettings,
+    default_active_relay_id, AggregateRelayProfile, BackendSettings,
     RelayProfile,
 };
 
@@ -78,8 +78,6 @@ pub struct ToolConfig {
     pub relay_common_config_contents: String,
     #[serde(default)]
     pub relay_context_config_contents: String,
-    #[serde(default)]
-    pub relay_test_model: String,
 }
 
 impl Default for ToolConfig {
@@ -91,7 +89,6 @@ impl Default for ToolConfig {
             active_aggregate_relay_id: String::new(),
             relay_common_config_contents: String::new(),
             relay_context_config_contents: String::new(),
-            relay_test_model: default_relay_test_model(),
         }
     }
 }
@@ -171,7 +168,6 @@ impl BackendSettings {
                 self.active_aggregate_relay_id = config.active_aggregate_relay_id;
                 self.relay_common_config_contents = config.relay_common_config_contents;
                 self.relay_context_config_contents = config.relay_context_config_contents;
-                self.relay_test_model = config.relay_test_model;
             }
             other => {
                 self.tools.insert(other.clone(), config);
@@ -188,7 +184,6 @@ impl BackendSettings {
             active_aggregate_relay_id: self.active_aggregate_relay_id.clone(),
             relay_common_config_contents: self.relay_common_config_contents.clone(),
             relay_context_config_contents: self.relay_context_config_contents.clone(),
-            relay_test_model: self.relay_test_model.clone(),
         }
     }
 

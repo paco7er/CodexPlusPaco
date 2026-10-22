@@ -123,13 +123,13 @@ fn normalize_navigation(
     if navigation.page == "settings"
         && matches!(
             navigation.section.as_deref(),
-            Some("stepwise" | "dictation")
+            None | Some("stepwise" | "dictation")
         )
     {
         navigation.page = "enhance".to_string();
     }
     match (navigation.page.as_str(), navigation.section.as_deref()) {
-        ("settings" | "pluginMarket", None) | ("enhance", None | Some("stepwise" | "dictation")) => Ok(navigation),
+        ("pluginMarket", None) | ("enhance", None | Some("stepwise" | "dictation")) => Ok(navigation),
         _ => anyhow::bail!(
             "不支持的管理工具导航：{}/{}",
             navigation.page,
@@ -169,7 +169,7 @@ mod tests {
             section: Some("stepwise".to_string()),
         };
         let replacement_navigation = ManagerNavigationIntent {
-            page: "settings".to_string(),
+            page: "enhance".to_string(),
             section: None,
         };
 
@@ -247,7 +247,25 @@ mod tests {
     }
 
     #[test]
-    fn supports_enhance_dictation_and_plain_settings_navigation() {
+    fn retired_plain_settings_navigation_opens_enhancements() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pending-manager-navigation.json");
+        let legacy = ManagerNavigationIntent {
+            page: "settings".to_string(),
+            section: None,
+        };
+        save_pending_manager_navigation_at(&path, &legacy).unwrap();
+        assert_eq!(
+            consume_pending_manager_navigation_at(&path).unwrap(),
+            Some(ManagerNavigationIntent {
+                page: "enhance".to_string(),
+                section: None,
+            })
+        );
+    }
+
+    #[test]
+    fn supports_enhance_dictation_and_plain_enhance_navigation() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("pending-manager-navigation.json");
         for navigation in [
@@ -256,7 +274,7 @@ mod tests {
                 section: Some("dictation".to_string()),
             },
             ManagerNavigationIntent {
-                page: "settings".to_string(),
+                page: "enhance".to_string(),
                 section: None,
             },
         ] {

@@ -18,6 +18,8 @@
 
 Codex++ is a unified management application for the OpenAI Codex / ChatGPT desktop app. Double-clicking opens its window; the official app is started from that window. It uses the Chromium DevTools Protocol and an embedded runtime for provider switching, protocol conversion, session management, and UI enhancements without modifying the official app's `app.asar` or installation files.
 
+This branch retains the Codex workspace only. The application rail, recommendations, cache cleanup, agent collaboration, About and updates, global settings, language switching, and manager theme switching have been removed. The manager uses Chinese and a fixed light theme; existing configuration and task data are not automatically deleted.
+
 ## Quick Start
 
 Download the latest installer from [GitHub Releases](https://github.com/BigPizzaV3/CodexPlusPlus/releases):
@@ -53,8 +55,7 @@ Friendly link: <a href="https://linux.do">LINUX DO</a>
 | Usage status line | Live generation speed, cache hit rate, and context usage below the composer, read from local Codex session records; the context share follows the per-model window Codex sees |
 | Request shock absorption | Absorb upstream overload errors (`server_overloaded`, `server_is_overloaded`, `at capacity`, ...) at the proxy with backoff retries. Streaming mode keeps live output and hands post-first-token overloads to Codex's native retry; buffered mode buffers the whole response and retries at any point (no streaming). Switch under Proxy settings → Request shock absorption; the request log shows in-flight requests, time to first token and total duration live |
 | Codex multi-launch | Start an isolated Codex instance per provider identity, each with its own config, sessions, and user data directory; running instances are listed together and can be restarted or stopped individually |
-| Sub-agent collaboration | Delegate in natural language from a Codex chat to Codex CLI, DeepSeek Harness (dsh), or Claude Code and receive results in the same chat; configure a default agent, model routes, and optional reuse of saved DSH authentication |
-| Scripts and maintenance | User script installation and toggles, app detection, shortcuts, Watcher, environment cleanup, logs, diagnostics, health checks, and Release updates |
+| Scripts and maintenance | User script installation and toggles, app detection, shortcuts, Watcher, environment cleanup, and health checks |
 
 Every UI enhancement is independently configurable. Disabling the global enhancement switch still leaves Codex++ available as a provider and launch manager.
 
@@ -70,19 +71,6 @@ Every UI enhancement is independently configurable. Disabling the global enhance
   <img src="docs/images/codex-multi-launch.png" alt="Codex multi-launch: running DeepSeek and Zhipu GLM instances with restart and stop actions" width="100%">
 </p>
 
-**Sub-agent collaboration** lets you say “Have DeepSeek implement this feature” or “Ask Claude Code to review the changes” directly in a Codex chat. Codex++ starts the corresponding native CLI through MCP and returns its results to the same chat. It supports Codex CLI, DeepSeek Harness (`dsh`), and Claude Code; naming an agent selects that agent, while an unspecified delegation uses your configured default.
-
-Configure the default agent, CLI paths, models, and DeepSeek's `provider/model` route in the manager. You can optionally enable reuse of DSH's saved login and keys, letting dsh use its native authentication without storing another copy in Codex++.
-
-1. Open **Agent collaboration**, enable collaboration and the agents you want to use, select a default agent, and save.
-2. Click **Connect and refresh** (「一键接入并刷新」) to add the collaboration tools to Codex.
-3. Return to the Codex chat, name an agent and its task, and wait for the result.
-
-<p align="center">
-  <img src="docs/images/agent-collaboration.png" alt="Verified DeepSeek example: ask what 1+1 equals and receive 2 through the Codex Plus Collaboration integration" width="100%">
-</p>
-
-Verified example: “Ask DeepSeek what 1+1 equals” → the collaboration integration returns DeepSeek's answer, “1+1 equals 2.” See the [sub-agent collaboration guide](docs/agent-collaboration.md) for model routes, authentication, and task settings.
 
 Enable the optional Codex usage widget under Codex Enhancements → General → Widgets and pets. It includes the original character, modular bubble editor, sound library and waveform trimming, character/image/audio management, edge snapping and alerts. View session and local usage, observed subscription windows and costs estimated from configured prices, or connect provider balance and quota templates. See the [widget guide](docs/whale-widget.md) and [feature verification](docs/whale-parity.md).
 
@@ -144,7 +132,7 @@ Availability, speed improvements, and pricing depend on the provider. Enabling t
 
 Codex++ publishes installers through GitHub Releases. Windows builds an NSIS installer, while macOS builds one universal DMG for Intel and Apple Silicon Macs. Each package contains one application executable.
 
-The About page can check and start updates. Older macOS two-app versions require the manual migration described above.
+This branch does not include in-app updates; install new builds manually. Older macOS two-app versions require the manual migration described above.
 
 ## Data Locations
 
@@ -160,7 +148,7 @@ The About page can check and start updates. Older macOS two-app versions require
 
 ### The Codex++ menu does not appear
 
-Open `Codex++` and click **Launch** to start the official app. Check the detected app path, launch status, and diagnostic logs in the Maintenance and About pages.
+Open `Codex++` and click **Launch** to start the official app. Check the detected app path, launch status, and runtime status in the Maintenance page.
 
 ### Requests fail after switching providers
 

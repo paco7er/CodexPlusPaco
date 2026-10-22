@@ -44,7 +44,7 @@ fn legacy_file_without_tools_shard_still_loads_and_gets_a_shard() {
     // 扁平字段原样读出来 —— 所有既有代码路径不受影响。
     assert_eq!(settings.active_relay_id, "legacy");
     assert_eq!(settings.relay_profiles[0].name, "老供应商");
-    assert_eq!(settings.relay_test_model, "legacy-model");
+    assert!(serde_json::to_value(&settings).unwrap().get("relayTestModel").is_none());
 
     // 分片被补出来，内容与扁平字段一致。
     let shard = settings.tool_config(&ToolId::Codex);

@@ -167,7 +167,6 @@ pub trait BridgeRuntimeService: Send + Sync {
     }
     async fn backend_status(&self) -> anyhow::Result<Value>;
     async fn codex_model_catalog(&self) -> anyhow::Result<Value>;
-    async fn ads(&self) -> anyhow::Result<Value>;
 }
 
 #[async_trait]
@@ -334,7 +333,6 @@ pub async fn handle_bridge_request(
         "/codex-model-catalog" | "/codex-config-model" => ctx.runtime.codex_model_catalog().await,
         "/diagnostics/log" => diagnostic_log_value(payload.clone()),
         "/llm-proxy" => llm_proxy_value(payload.clone()).await,
-        "/ads" => ctx.runtime.ads().await,
         "/script-market/list" => ctx.runtime.script_market_list().await,
         "/script-market/install" => ctx.runtime.script_market_install(payload.clone()).await,
         "/plugin-market/list" => ctx.runtime.plugin_market_list(payload.clone()).await,
@@ -763,9 +761,6 @@ impl BridgeRuntimeService for CoreRuntimeService {
         Ok(crate::model_catalog::read_codex_model_catalog().await)
     }
 
-    async fn ads(&self) -> anyhow::Result<Value> {
-        crate::ads::fetch_ad_list().await
-    }
 }
 
 struct UnavailableDataService;

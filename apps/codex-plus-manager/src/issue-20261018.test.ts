@@ -34,39 +34,18 @@ test("Lite controls edit one selected model and preserve the rest of an imported
   assert.equal(synchronizeModelMetadataLiteSupport('{"models":[{"slug":"one"},{"slug":"one"}]}', "one", "supported"), null);
 });
 
-test("language switches notify React without reload or storing drafts", () => {
+test("manager uses Chinese without language storage or reload", () => {
   const source = readFileSync(new URL("./i18n.ts", import.meta.url), "utf8");
-  const saved = new Map(); let reloads = 0; let calls = 0;
   const exports: Record<string, any> = {};
-  const context = vm.createContext({ exports, require: () => ({ EN_PLAIN: { "概览": "Overview" }, EN_BACKEND: {}, EN_BACKEND_PATTERNS: [], EN_TEMPLATE: {} }),
-    window: { localStorage: { getItem: (k: string) => saved.get(k), setItem: (k: string, v: string) => saved.set(k, v) }, location: { reload: () => { reloads++; } } } });
+  const context = vm.createContext({ exports });
   vm.runInContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, context);
-  const unsubscribe = exports.subscribeLanguage(() => { calls++; });
   assert.equal(exports.t("概览"), "概览");
-  exports.setLanguage("en"); assert.equal(exports.t("概览"), "Overview");
-  exports.setLanguage("en"); assert.equal(calls, 1);
-  exports.setLanguage("zh"); assert.equal(exports.t("概览"), "概览");
-  unsubscribe(); exports.setLanguage("en"); assert.equal(calls, 2);
-  assert.equal(reloads, 0);
-  assert.deepEqual([...saved.keys()], ["codex-plus-lang"]);
+  assert.equal(exports.tf("第 {0} 项：{1}", [2, "内容"]), "第 2 项：内容");
+  assert.equal(exports.tf("{0} {1}", [0]), "0 {1}");
+  assert.equal(exports.setLanguage, undefined);
+  assert.doesNotMatch(source, /localStorage|location\.reload|i18n-en/);
   const app = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
-  assert.match(app, /useSyncExternalStore\(subscribeLanguage, getLanguage, getLanguage\)/);
-  for (const name of ["App.tsx", "components/ProviderPresetSelector.tsx"]) {
-    const file = ts.createSourceFile(name, readFileSync(new URL(`./${name}`, import.meta.url), "utf8"), ts.ScriptTarget.Latest, true);
-    const visit = (node: ts.Node) => {
-      if (ts.isCallExpression(node) && node.expression.getText(file) === "t") {
-        let p: ts.Node | undefined = node.parent; let lazy = false;
-        while (p && !ts.isSourceFile(p)) { if (ts.isFunctionLike(p)) { lazy = true; break; } p = p.parent; }
-        // 默认供应商名称是配置数据，保持创建时快照；导航/提示标签才需动态翻译。
-        const defaultName = node.arguments[0] && ts.isStringLiteral(node.arguments[0]) && node.arguments[0].text === "默认中转";
-        if (name === "App.tsx" && defaultName) assert.ok(ts.isPropertyAssignment(node.parent), "配置名称不能变成动态 getter");
-        const dataSnapshot = name === "App.tsx" && ts.isPropertyAssignment(node.parent)
-          && node.parent.name.getText(file) === "name" && defaultName;
-        assert.equal(lazy || dataSnapshot, true, `${name} contains a frozen UI label`);
-      }
-      ts.forEachChild(node, visit);
-    }; visit(file);
-  }
+  assert.doesNotMatch(app, /subscribeLanguage|getLanguage|setLanguage|toggleTheme|codex-plus-theme/);
 });
 
 test("session selection cancellation, search and pagination never delete hidden rows", async () => {

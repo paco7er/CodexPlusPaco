@@ -1,4 +1,3 @@
-use base64::Engine;
 use codex_plus_core::assets;
 use codex_plus_core::bridge::{self, BRIDGE_BINDING_NAME};
 use codex_plus_core::cdp::{
@@ -454,31 +453,12 @@ fn pet_real_mouse_stop_script_retires_existing_runtime() {
 }
 
 #[test]
-fn injection_script_exposes_image_overlay_config() {
-    let temp = tempfile::tempdir().unwrap();
-    let image_path = temp.path().join("overlay.png");
-    std::fs::write(
-        &image_path,
-        base64::engine::general_purpose::STANDARD
-            .decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=")
-            .unwrap(),
-    )
-    .unwrap();
-    let settings = codex_plus_core::settings::BackendSettings {
-        codex_app_image_overlay_enabled: true,
-        codex_app_image_overlay_path: image_path.to_string_lossy().to_string(),
-        codex_app_image_overlay_opacity: 42,
-        codex_app_image_overlay_fit_mode: "fill".to_string(),
-        ..Default::default()
-    };
-    let script = assets::injection_script_with_settings(57321, &settings);
-
-    assert!(script.contains("window.__CODEX_PLUS_IMAGE_OVERLAY__"));
-    assert!(script.contains("\"enabled\":true"));
-    assert!(script.contains("\"opacity\":0.42"));
-    assert!(script.contains("\"fitMode\":\"fill\""));
-    assert!(script.contains("\"dataUrl\":\"data:image/png;base64,"));
-    assert!(script.contains("http://127.0.0.1:57321/overlay/image"));
+fn injection_script_omits_retired_overlay_and_ads() {
+    let script = assets::injection_script(57321);
+    assert!(!script.contains("__CODEX_PLUS_IMAGE_OVERLAY__"));
+    assert!(!script.contains("/overlay/image"));
+    assert!(!script.contains("ads.codexpp.cc"));
+    assert!(!script.contains("fetchCodexPlusAds"));
 }
 
 #[test]
@@ -780,35 +760,6 @@ process.exit(0);
 }
 
 #[test]
-fn injection_script_installs_image_overlay_from_data_uri() {
-    let script = assets::injection_script(57321);
-
-    assert!(script.contains("typeof config.dataUrl === \"string\""));
-    assert!(script.contains("overlay.id = codexPlusImageOverlayId"));
-    let overlay_script = script
-        .split("function installCodexPlusImageOverlay()")
-        .nth(1)
-        .and_then(|body| body.split("function scheduleCodexPlusImageOverlay()").next())
-        .expect("image overlay entry point should be embedded");
-    assert!(overlay_script.contains("data-codex-plus-image-native"));
-    assert!(overlay_script.contains("root.insertBefore(overlay, document.body"));
-    assert!(!overlay_script.contains("maskImage"));
-    assert!(!overlay_script.contains("ScrollTimeline"));
-    assert!(!overlay_script.contains("cloneNode"));
-    assert!(script.contains("URL.createObjectURL(new Blob([bytes], { type: data[1] }))"));
-    assert!(script.contains("image.src = resource.imageSource"));
-    assert!(!script.contains("JSON.stringify(source)"));
-    assert!(overlay_script.contains("zIndex: String(wallpaperLayer)"));
-    assert!(script.contains("pointerEvents: \"none\""));
-    assert!(!script.contains("codexPlusImageOverlayTransparentTargetSelector"));
-    assert!(!script.contains("function installCodexPlusImageOverlayForeground"));
-    assert!(script.contains(
-        "fit: { size: \"contain\", position: \"center center\", repeat: \"no-repeat\" }"
-    ));
-    assert!(script.contains("image_overlay_installed"));
-}
-
-#[test]
 fn rejects_non_loopback_cdp_websocket() {
     let error =
         validate_cdp_websocket_url("ws://example.com:9222/devtools/page/1", 9222).unwrap_err();
@@ -1005,13 +956,12 @@ fn injection_script_marks_diagnostic_build_and_reports_script_loaded() {
 }
 
 #[test]
-fn injection_script_fetches_ads_without_bridge() {
+fn injection_script_does_not_fetch_ads_with_or_without_bridge() {
     let script = assets::injection_script(57321);
 
-    assert!(script.contains("directFetchCodexPlusAds"));
-    assert!(script.contains("cacheBustCodexPlusAdUrl"));
-    assert!(script.contains("Date.now()"));
-    assert!(script.contains("ads.codexpp.cc/ads.json"));
+    assert!(!script.contains("directFetchCodexPlusAds"));
+    assert!(!script.contains("cacheBustCodexPlusAdUrl"));
+    assert!(!script.contains("ads.codexpp.cc/ads.json"));
     assert!(!script.contains("codexPlusAds = normalizeCodexPlusAds(await postJson(\"/ads\", {}));"));
 }
 

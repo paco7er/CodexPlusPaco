@@ -1,7 +1,4 @@
-pub mod ads;
 pub mod aggregate_catalog;
-pub mod agent_cache;
-pub mod agent_collaboration;
 pub mod anthropic_bridge;
 pub mod app_paths;
 pub mod assets;
@@ -66,7 +63,6 @@ pub mod status;
 pub mod stepwise;
 pub mod sub2api;
 pub mod tools;
-pub mod update;
 pub mod user_scripts;
 pub mod version;
 pub mod vision;

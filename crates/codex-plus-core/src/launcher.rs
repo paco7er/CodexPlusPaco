@@ -182,6 +182,8 @@ pub struct LaunchOptions {
     pub app_dir: Option<PathBuf>,
     pub debug_port: u16,
     pub helper_port: u16,
+    /// 仅供多开 worker 注入独立数据目录，不再从用户设置读取额外参数。
+    pub extra_args: Vec<String>,
     pub status_store: StatusStore,
     /// 本次启动使用的 Codex++ 状态目录（多开实例隔离用）。
     ///
@@ -202,6 +204,7 @@ impl Default for LaunchOptions {
             app_dir: None,
             debug_port: 9229,
             helper_port: 57321,
+            extra_args: Vec::new(),
             status_store: StatusStore::default(),
             state_dir: None,
             codex_home: None,
@@ -829,7 +832,7 @@ where
                 &app_dir,
                 debug_port,
                 &settings,
-                &settings.codex_extra_args,
+                &options.extra_args,
                 &LaunchInstance::from_options(&options),
             )
             .await?;
@@ -1884,17 +1887,6 @@ async fn handle_helper_connection(
             "application/json; charset=utf-8".to_string(),
             "helper.diagnostics_log_ok",
         )
-    } else if path == "/overlay/image" && matches!(method, "GET" | "OPTIONS") {
-        if method == "OPTIONS" {
-            (
-                "200 OK".to_string(),
-                Vec::new(),
-                "application/octet-stream".to_string(),
-                "helper.overlay_image_options",
-            )
-        } else {
-            overlay_image_response()
-        }
     } else if path == "/dream-skin/image" && matches!(method, "GET" | "OPTIONS") {
         if method == "OPTIONS" {
             (
@@ -1967,41 +1959,6 @@ fn decode_protocol_proxy_request_body(
 
     String::from_utf8(decoded)
         .map_err(|error| anyhow::anyhow!("Responses 请求体不是 UTF-8：{error}"))
-}
-
-fn overlay_image_response() -> (String, Vec<u8>, String, &'static str) {
-    let not_found = || {
-        (
-            "404 Not Found".to_string(),
-            serde_json::to_vec(&serde_json::json!({
-                "status": "failed",
-                "message": "图片覆盖层未启用或图片不可用"
-            }))
-            .unwrap_or_default(),
-            "application/json; charset=utf-8".to_string(),
-            "helper.overlay_image_not_found",
-        )
-    };
-    let settings = SettingsStore::default().load().unwrap_or_default();
-    if !settings.codex_app_image_overlay_enabled {
-        return not_found();
-    }
-    let image_path = PathBuf::from(settings.codex_app_image_overlay_path.trim());
-    if image_path.as_os_str().is_empty() || !image_path.is_file() {
-        return not_found();
-    }
-    let Some(content_type) = overlay_image_content_type(&image_path) else {
-        return not_found();
-    };
-    match std::fs::read(&image_path) {
-        Ok(bytes) => (
-            "200 OK".to_string(),
-            bytes,
-            content_type.to_string(),
-            "helper.overlay_image_ok",
-        ),
-        Err(_) => not_found(),
-    }
 }
 
 fn dream_skin_image_response() -> (String, Vec<u8>, String, &'static str) {
@@ -3881,9 +3838,9 @@ pub fn build_codex_arguments(debug_port: u16, extra_args: &[String]) -> Vec<Stri
 
 pub fn build_codex_arguments_for_settings(
     debug_port: u16,
-    settings: &BackendSettings,
+    _settings: &BackendSettings,
 ) -> Vec<String> {
-    build_codex_arguments(debug_port, &settings.codex_extra_args)
+    build_codex_arguments(debug_port, &[])
 }
 
 pub fn build_codex_command(app_dir: &Path, debug_port: u16, extra_args: &[String]) -> Vec<String> {

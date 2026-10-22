@@ -83,7 +83,7 @@ fn legacy_theme_name_migrates_without_losing_other_settings() {
         serde_json::to_vec_pretty(&serde_json::json!({
             "codexAppDreamSkinEnabled": true,
             "codexAppDreamSkinTheme": "miku",
-            "relayTestModel": "keep-me"
+            "ccsDbPath": "keep-me"
         }))
         .unwrap(),
     )
@@ -93,7 +93,7 @@ fn legacy_theme_name_migrates_without_losing_other_settings() {
 
     assert!(settings.codex_app_dream_skin_enabled);
     assert_eq!(settings.codex_app_dream_skin_theme_config.id, "miku");
-    assert_eq!(settings.relay_test_model, "keep-me");
+    assert_eq!(settings.ccs_db_path, "keep-me");
 }
 
 #[test]

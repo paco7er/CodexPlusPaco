@@ -24,7 +24,7 @@ fn stale_full_save_cannot_overwrite_patch_or_unknown_fields() {
     );
     assert_eq!(std::fs::read(&path).unwrap(), before);
     let mut latest = store.load().unwrap();
-    latest.relay_test_model = "new-model".into();
+    latest.ccs_db_path = "new-model".into();
     store.save(&latest).unwrap();
     let disk: Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
     assert_eq!(disk["futureSetting"]["keep"], true);
@@ -67,7 +67,7 @@ fn explicit_stale_patch_revision_is_rejected_and_initial_import_returns_current_
     let before = std::fs::read(&path).unwrap();
     assert!(
         store
-            .update(json!({"revision":first.settings_revision,"relayTestModel":"stale"}))
+            .update(json!({"revision":first.settings_revision,"ccsDbPath":"stale"}))
             .is_err()
     );
     assert_eq!(std::fs::read(&path).unwrap(), before);
@@ -303,7 +303,7 @@ fn cas_child_process_worker() {
         assert!(std::time::Instant::now() < deadline);
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
-    settings.relay_test_model = label.clone();
+    settings.ccs_db_path = label.clone();
     let outcome = match store.save(&settings) {
         Ok(()) => "ok",
         Err(error) => {
@@ -389,7 +389,7 @@ fn unsupported_auth_is_preserved_but_edit_and_apply_are_rejected() {
     let store = SettingsStore::new(path.clone());
     let mut settings = store.load().unwrap();
     assert_eq!(settings.relay_profiles[0].auth_contents, auth);
-    settings.relay_test_model = "unrelated-edit".into();
+    settings.ccs_db_path = "unrelated-edit".into();
     store.save(&settings).unwrap();
     settings = store.load().unwrap();
     let before = std::fs::read(&path).unwrap();

@@ -44,6 +44,7 @@ async fn launch_receipt_status_and_injection_follow_final_wrapper_port() {
     });
     let handle = launch_and_inject_with_hooks(
         LaunchOptions {
+            extra_args: Vec::new(),
             app_dir: Some(app),
             debug_port: 19450,
             helper_port: 19452,
@@ -780,7 +781,7 @@ fn launcher_appends_extra_codex_arguments_after_debug_arguments() {
 }
 
 #[test]
-fn launcher_ignores_retired_fast_startup_and_preserves_manual_extra_arguments() {
+fn launcher_ignores_retired_fast_startup_and_settings_extra_arguments() {
     for old_value in [
         serde_json::json!(true),
         serde_json::json!(false),
@@ -808,8 +809,9 @@ fn launcher_ignores_retired_fast_startup_and_preserves_manual_extra_arguments() 
     .unwrap();
     assert_eq!(
         build_codex_arguments_for_settings(9229, &settings),
-        build_codex_arguments(9229, &[manual_argument.to_string()])
+        build_codex_arguments(9229, &[])
     );
+    assert!(serde_json::to_value(settings).unwrap().get("codexExtraArgs").is_none());
 }
 
 #[test]
@@ -1267,22 +1269,20 @@ async fn native_fast_reload_runs_only_after_successful_opt_in_launch_injection()
 }
 
 #[tokio::test]
-async fn launch_lifecycle_passes_configured_extra_args_to_codex_launch() {
+async fn launch_lifecycle_passes_internal_instance_args_to_codex_launch() {
     let temp = tempfile::tempdir().unwrap();
     let app_dir = temp.path().join("Codex.app");
     std::fs::create_dir_all(&app_dir).unwrap();
     let status_store = StatusStore::new(temp.path().join("latest-status.json"));
     let events = Arc::new(Mutex::new(Vec::<String>::new()));
-    let hooks = FakeHooks::new(events.clone()).with_settings(BackendSettings {
-        codex_extra_args: vec!["--force_high_performance_gpu".to_string()],
-        ..BackendSettings::default()
-    });
+    let hooks = FakeHooks::new(events.clone());
 
     let handle = launch_and_inject_with_hooks(
         LaunchOptions {
             app_dir: Some(app_dir),
             debug_port: 9229,
             helper_port: 57321,
+            extra_args: vec!["--user-data-dir=isolated-instance".to_string()],
             status_store,
             ..Default::default()
         },
@@ -1296,7 +1296,7 @@ async fn launch_lifecycle_passes_configured_extra_args_to_codex_launch() {
         events
             .lock()
             .unwrap()
-            .contains(&"launch:9229:--force_high_performance_gpu".to_string())
+            .contains(&"launch:9229:--user-data-dir=isolated-instance".to_string())
     );
 }
 

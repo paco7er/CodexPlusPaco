@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -14,15 +13,11 @@ use codex_plus_core::settings::{
 };
 use codex_plus_core::status::{LaunchStatus, StatusStore};
 use codex_plus_core::user_scripts::UserScriptManager;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::{Value, json};
 use tauri::Emitter;
 
 use crate::install::{self, InstallActionResult};
-
-// 扫描快照仅驻留后端内存，不接受前端指定磁盘路径，不开放给扩展路由。
-static AGENT_CACHE_PLAN: OnceLock<Mutex<Option<codex_plus_core::agent_cache::CachePlan>>> =
-    OnceLock::new();
 
 #[tauri::command]
 pub fn dictation_local_model_status() -> Value {
@@ -64,56 +59,6 @@ pub fn set_global_dictation_hotkey(enabled: bool, hotkey: String) -> CommandResu
     }
 }
 
-#[tauri::command]
-pub async fn scan_agent_cache() -> CommandResult<Value> {
-    let result = tauri::async_runtime::spawn_blocking(|| -> anyhow::Result<Value> {
-        let mut slot = AGENT_CACHE_PLAN
-            .get_or_init(|| Mutex::new(None))
-            .lock()
-            .map_err(|_| anyhow::anyhow!("缓存扫描状态不可用"))?;
-        *slot = None;
-        let plan = codex_plus_core::agent_cache::scan_default()?;
-        let report = serde_json::to_value(&plan.report)?;
-        *slot = Some(plan);
-        Ok(json!({ "report": report }))
-    })
-    .await;
-    match result {
-        Ok(Ok(payload)) => ok("缓存扫描完成。", payload),
-        Ok(Err(error)) => failed(&error.to_string(), json!({})),
-        Err(error) => failed(&format!("缓存扫描失败：{error}"), json!({})),
-    }
-}
-
-#[tauri::command]
-pub async fn clean_agent_cache(
-    scan_id: String,
-    group_ids: Vec<String>,
-    confirmed: bool,
-) -> CommandResult<Value> {
-    let result = tauri::async_runtime::spawn_blocking(move || -> anyhow::Result<Value> {
-        anyhow::ensure!(confirmed, "尚未确认清理。");
-        let mut slot = AGENT_CACHE_PLAN
-            .get_or_init(|| Mutex::new(None))
-            .lock()
-            .map_err(|_| anyhow::anyhow!("缓存扫描状态不可用"))?;
-        let plan = slot
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("请先扫描缓存。"))?;
-        plan.validate_selection(&scan_id, &group_ids, SystemTime::now())?;
-        // 持锁消费快照，阻止并行扫描/清理和重复执行。
-        let plan = slot.take().unwrap();
-        let result = plan.clean(&scan_id, &group_ids, confirmed)?;
-        Ok(json!({ "result": result }))
-    })
-    .await;
-    match result {
-        Ok(Ok(payload)) => ok("缓存清理完成。", payload),
-        Ok(Err(error)) => failed(&error.to_string(), json!({})),
-        Err(error) => failed(&format!("缓存清理失败：{error}"), json!({})),
-    }
-}
-
 #[derive(Debug, Clone, Serialize)]
 pub struct CommandResult<T>
 where
@@ -145,7 +90,6 @@ pub struct OverviewPayload {
     pub latest_launch: Option<LaunchStatus>,
     pub runtime_health: crate::runtime_health::RuntimeHealth,
     pub current_version: String,
-    pub update_status: String,
     pub settings_path: String,
     pub logs_path: String,
 }
@@ -622,34 +566,6 @@ pub struct CodexMultiInstanceRequest {
     pub instance_id: String,
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LogRequest {
-    #[serde(default = "default_log_lines")]
-    pub lines: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct LogsPayload {
-    pub path: String,
-    pub text: String,
-    pub lines: usize,
-    pub truncated: bool,
-    pub file_size: u64,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct DiagnosticsPayload {
-    pub report: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct SettingsExportDocument {
-    schema: u8,
-    exported_at_ms: u64,
-    settings: BackendSettings,
-}
-
 #[derive(Debug, Clone, Serialize)]
 pub struct WatcherPayload {
     pub enabled: bool,
@@ -657,18 +573,6 @@ pub struct WatcherPayload {
     pub start_minimized: bool,
     pub start_codex: bool,
     pub start_codex_on_open: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct AdsPayload {
-    pub version: u64,
-    pub ads: Vec<Value>,
-    /// 单条兼容字段，保留给仍使用旧格式的管理端消费者。
-    #[serde(rename = "topAd", skip_serializing_if = "Option::is_none")]
-    pub top_ad: Option<Value>,
-    /// 独立于推荐池的置顶赞助位，支持概览横幅轮播。
-    #[serde(rename = "topAds", skip_serializing_if = "Vec::is_empty")]
-    pub top_ads: Vec<Value>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -691,71 +595,6 @@ pub struct SkillsPayload {
     pub codex_skills_dir: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StartupPayload {
-    pub show_update: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ToolEntry {
-    /// 工具的稳定标识，如 `codex`。
-    pub id: String,
-    pub name: String,
-    /// 该工具的配置根目录，UI 上作为副标题展示。
-    pub home_dir: String,
-    /// 供应商 profile 的写盘能力是否已接好；未接好的工具在 UI 上显示为不可切。
-    pub switchable: bool,
-    pub active: bool,
-    /// 该工具当前选中的供应商名，没配置时为 None。
-    pub active_relay_name: Option<String>,
-    /// 该工具名下已保存的供应商数量。
-    pub relay_count: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ToolsPayload {
-    pub tools: Vec<ToolEntry>,
-    pub active_tool: String,
-}
-
-/// 列出所有已注册的工具及其当前状态，供顶栏切换条渲染。
-///
-/// 注意：这里只读，不写盘。切换「当前聚焦的工具」由 save_settings 负责，
-/// 因为那只是 UI 状态，不该触发任何配置文件写入。
-#[tauri::command]
-pub fn list_tools() -> CommandResult<ToolsPayload> {
-    let settings = SettingsStore::default().load().unwrap_or_default();
-    let tools = codex_plus_core::tools::tool_specs()
-        .into_iter()
-        .map(|spec| {
-            let config = settings.tool_config(&spec.id);
-            let active_relay_name = config
-                .relay_profiles
-                .iter()
-                .find(|profile| profile.id == config.active_relay_id)
-                .map(|profile| profile.name.clone());
-            ToolEntry {
-                id: spec.id.as_str().to_string(),
-                name: spec.name,
-                home_dir: spec.home_dir,
-                switchable: spec.switchable,
-                active: settings.active_tool == spec.id,
-                active_relay_name,
-                relay_count: config.relay_profiles.len(),
-            }
-        })
-        .collect();
-
-    let payload = ToolsPayload {
-        tools,
-        active_tool: settings.active_tool.as_str().to_string(),
-    };
-    ok("工具列表已加载。", payload)
-}
-
 #[tauri::command]
 pub fn backend_version() -> CommandResult<VersionPayload> {
     ok(
@@ -767,35 +606,10 @@ pub fn backend_version() -> CommandResult<VersionPayload> {
 }
 
 #[tauri::command]
-pub fn startup_options() -> CommandResult<StartupPayload> {
-    ok(
-        "启动参数已读取。",
-        StartupPayload {
-            show_update: startup_should_show_update(),
-        },
-    )
-}
-
-#[tauri::command]
 pub fn consume_pending_manager_navigation()
 -> Result<Option<codex_plus_core::manager_navigation::ManagerNavigationIntent>, String> {
     codex_plus_core::manager_navigation::consume_pending_manager_navigation()
         .map_err(|error| error.to_string())
-}
-
-pub fn startup_should_show_update() -> bool {
-    should_show_update(
-        std::env::args(),
-        std::env::var("CODEX_PLUS_SHOW_UPDATE").ok().as_deref(),
-    )
-}
-
-fn should_show_update<I, S>(args: I, env_value: Option<&str>) -> bool
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<str>,
-{
-    args.into_iter().any(|arg| arg.as_ref() == "--show-update") || env_value == Some("1")
 }
 
 #[tauri::command]
@@ -812,7 +626,6 @@ pub async fn load_overview() -> CommandResult<OverviewPayload> {
                 latest_launch: None,
                 runtime_health: crate::runtime_health::RuntimeHealth::unavailable(),
                 current_version: codex_plus_core::version::VERSION.to_string(),
-                update_status: "not_checked".to_string(),
                 settings_path: codex_plus_core::paths::default_settings_path()
                     .to_string_lossy()
                     .to_string(),
@@ -834,7 +647,6 @@ pub async fn load_overview() -> CommandResult<OverviewPayload> {
             latest_launch,
             runtime_health,
             current_version: codex_plus_core::version::VERSION.to_string(),
-            update_status: "not_checked".to_string(),
             settings_path: codex_plus_core::paths::default_settings_path()
                 .to_string_lossy()
                 .to_string(),
@@ -1159,10 +971,6 @@ fn launch_codex_multi_instance_blocking(request: CodexMultiLaunchRequest) -> Com
     // 否则父进程写入的默认 57321 会让多个实例互相抢同一个代理端口。
     worker_settings.relay_profiles_enabled =
         profile.protocol == codex_plus_core::settings::RelayProtocol::ChatCompletions;
-    worker_settings.codex_extra_args = multi_instance_extra_args(&settings.codex_extra_args);
-    worker_settings
-        .codex_extra_args
-        .push(format!("--user-data-dir={}", user_data_dir.display()));
     if let Err(error) = worker_store.save(&worker_settings) {
         return failed(
             &format!("保存多开 launcher 设置失败：{error}"),
@@ -1734,6 +1542,7 @@ pub fn run_codex_multi_worker(options_path: &Path) -> anyhow::Result<()> {
         app_dir: Some(PathBuf::from(&options.app_path)),
         debug_port: options.debug_port,
         helper_port: options.helper_port,
+        extra_args: vec![format!("--user-data-dir={}", options.user_data_dir)],
         status_store: instance_status_store.clone(),
         state_dir: Some(instance_state_dir.clone()),
         codex_home: std::env::var_os("CODEX_HOME").map(PathBuf::from),
@@ -1906,17 +1715,6 @@ fn multi_instance_user_data_dir(slug: &str) -> PathBuf {
                 .join("user-data")
                 .join(slug)
         })
-}
-
-fn multi_instance_extra_args(args: &[String]) -> Vec<String> {
-    codex_plus_core::settings::normalize_codex_extra_args(args)
-        .into_iter()
-        .filter(|arg| {
-            !arg.starts_with("--remote-debugging-port")
-                && !arg.starts_with("--remote-allow-origins")
-                && !arg.starts_with("--user-data-dir")
-        })
-        .collect()
 }
 
 fn absolutize_multi_instance_model_catalog(home: &Path) -> anyhow::Result<()> {
@@ -5269,22 +5067,6 @@ fn persist_provider_sync_selection(provider: &str) {
 }
 
 #[tauri::command]
-pub async fn load_ads() -> CommandResult<AdsPayload> {
-    match codex_plus_core::ads::fetch_ad_list().await {
-        Ok(payload) => ok("推荐内容已加载。", ads_payload(payload)),
-        Err(error) => failed(
-            &format!("推荐内容加载失败：{error}"),
-            AdsPayload {
-                version: 1,
-                ads: Vec::new(),
-                top_ad: None,
-                top_ads: Vec::new(),
-            },
-        ),
-    }
-}
-
-#[tauri::command]
 pub async fn refresh_script_market() -> CommandResult<ScriptMarketPayload> {
     match script_market::fetch_market_manifest(script_market::DEFAULT_MARKET_INDEX_URL).await {
         Ok(manifest) => ok(
@@ -5982,123 +5764,6 @@ pub async fn repair_shortcuts() -> InstallActionResult {
 }
 
 #[tauri::command]
-pub async fn check_update() -> CommandResult<Value> {
-    match codex_plus_core::update::check_for_update(codex_plus_core::version::VERSION).await {
-        Ok(update) => {
-            let status = if update.update_available {
-                "ok"
-            } else {
-                "not_checked"
-            };
-            CommandResult {
-                status: status.to_string(),
-                message: if update.update_available {
-                    "发现可用更新。".to_string()
-                } else {
-                    "当前已是最新版本。".to_string()
-                },
-                payload: json!({
-                    "currentVersion": update.current_version,
-                    "latestVersion": update.latest_version,
-                    "releaseSummary": update.release_summary,
-                    "assetName": update.asset_name,
-                    "assetUrl": update.asset_url,
-                    "updateAvailable": update.update_available,
-                    "progress": 0
-                }),
-            }
-        }
-        Err(error) => failed(
-            &format!("检查更新失败：{error}"),
-            json!({
-                "currentVersion": codex_plus_core::version::VERSION,
-                "latestVersion": Value::Null,
-                "releaseSummary": "",
-                "assetName": Value::Null,
-                "assetUrl": Value::Null,
-                "updateAvailable": false,
-                "progress": 0
-            }),
-        ),
-    }
-}
-
-#[cfg(any(windows, target_os = "macos"))]
-#[tauri::command]
-pub async fn perform_update(
-    app: tauri::AppHandle,
-    release: Option<codex_plus_core::update::Release>,
-) -> CommandResult<Value> {
-    let emitter = app.clone();
-    let result = perform_update_inner(release, move |progress| {
-        let _ = emitter.emit("update-progress", progress);
-    })
-    .await;
-    if result.status == "ok" {
-        // 返回下载结果后正常退出，安装器等待后台服务清理完成再替换程序。
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(750));
-            app.exit(0);
-        });
-    }
-    result
-}
-
-#[cfg(not(any(windows, target_os = "macos")))]
-#[tauri::command]
-pub async fn perform_update(
-    release: Option<codex_plus_core::update::Release>,
-) -> CommandResult<Value> {
-    perform_update_inner(release, |_| {}).await
-}
-
-// 无需 app runtime 的业务核心；其它平台测试不应引入 Wry 析构依赖。
-async fn perform_update_inner<F>(
-    release: Option<codex_plus_core::update::Release>,
-    mut on_progress: F,
-) -> CommandResult<Value>
-where
-    F: FnMut(codex_plus_core::update::UpdateProgress) + Send,
-{
-    let Some(release) = release else {
-        return failed(
-            "请先检查更新并选择可下载的 Release asset。",
-            json!({
-                "currentVersion": codex_plus_core::version::VERSION,
-                "progress": 0
-            }),
-        );
-    };
-    let download_dir = codex_plus_core::paths::default_app_state_dir().join("updates");
-    match codex_plus_core::update::perform_update_with_progress(&release, &download_dir, &mut on_progress).await {
-        Ok(result) => ok(
-            if cfg!(target_os = "macos") {
-                "安装包已验证，Codex++ 将关闭以安装更新，完成后自动重启；失败时保留旧版。"
-            } else {
-                "安装包已下载并启动，请按安装向导完成更新。"
-            },
-            json!({
-            "currentVersion": codex_plus_core::version::VERSION,
-            "latestVersion": result.release.version,
-            "releaseSummary": result.release.body,
-            "installedPath": result.installer_path.to_string_lossy(),
-            "launched": result.launched,
-            "progress": 100
-            }),
-        ),
-        Err(error) => failed(
-            &format!("安装更新失败：{error}"),
-            json!({
-                "currentVersion": codex_plus_core::version::VERSION,
-                "latestVersion": release.version,
-                "releaseSummary": release.body,
-                "progress": 0
-            }),
-        ),
-    }
-}
-
-#[tauri::command]
 pub fn load_watcher_state() -> CommandResult<WatcherPayload> {
     ok("开机启动状态已加载。", watcher_payload())
 }
@@ -6267,265 +5932,6 @@ pub fn set_relay_feature(profile_id: String, stabilize_prompt_prefix: bool) -> C
             }),
         ),
         Err(error) => failed(&format!("保存供应商功能开关失败：{error}"), json!({})),
-    }
-}
-
-#[tauri::command]
-pub fn read_latest_logs(request: LogRequest) -> CommandResult<LogsPayload> {
-    let path = codex_plus_core::paths::default_diagnostic_log_path();
-    match read_tail(&path, request.lines) {
-        Ok(tail) => ok(
-            "日志已读取。",
-            LogsPayload {
-                path: path.to_string_lossy().to_string(),
-                text: tail.text,
-                lines: request.lines,
-                truncated: tail.truncated,
-                file_size: tail.file_size,
-            },
-        ),
-        Err(error) => failed(
-            &format!("读取日志失败：{error}"),
-            LogsPayload {
-                path: path.to_string_lossy().to_string(),
-                text: String::new(),
-                lines: request.lines,
-                truncated: false,
-                file_size: 0,
-            },
-        ),
-    }
-}
-
-#[tauri::command]
-pub fn clear_logs() -> CommandResult<LogsPayload> {
-    let path = codex_plus_core::paths::default_diagnostic_log_path();
-    match codex_plus_core::diagnostic_log::clear_diagnostic_log() {
-        Ok(()) => ok(
-            "日志已清理。",
-            LogsPayload {
-                path: path.to_string_lossy().to_string(),
-                text: String::new(),
-                lines: 0,
-                truncated: false,
-                file_size: 0,
-            },
-        ),
-        Err(error) => failed(
-            &format!("清理日志失败：{error}"),
-            LogsPayload {
-                path: path.to_string_lossy().to_string(),
-                text: String::new(),
-                lines: 0,
-                truncated: false,
-                file_size: 0,
-            },
-        ),
-    }
-}
-
-#[tauri::command]
-pub fn copy_diagnostics() -> CommandResult<DiagnosticsPayload> {
-    ok(
-        "诊断报告已生成。",
-        DiagnosticsPayload {
-            report: diagnostics_report(),
-        },
-    )
-}
-
-#[tauri::command]
-pub fn export_settings(path: String, settings: BackendSettings) -> CommandResult<Value> {
-    let path = PathBuf::from(path.trim());
-    if path.as_os_str().is_empty() {
-        return failed("导出路径为空。", json!({}));
-    }
-    let document = SettingsExportDocument {
-        schema: 1,
-        exported_at_ms: current_timestamp_ms(),
-        settings,
-    };
-    let contents = match serde_json::to_vec_pretty(&document) {
-        Ok(contents) => contents,
-        Err(error) => return failed(&format!("序列化配置失败：{error}"), json!({})),
-    };
-    if let Some(parent) = path.parent()
-        && let Err(error) = fs::create_dir_all(parent)
-    {
-        return failed(&format!("创建导出目录失败：{error}"), json!({}));
-    }
-    match fs::write(&path, contents) {
-        Ok(()) => ok(
-            "配置已导出。导出文件包含供应商密钥等敏感信息，请妥善保管。",
-            json!({ "path": path.to_string_lossy() }),
-        ),
-        Err(error) => failed(&format!("写入配置导出文件失败：{error}"), json!({})),
-    }
-}
-
-#[tauri::command]
-pub fn preview_import_settings(path: String) -> CommandResult<SettingsPayload> {
-    let path = PathBuf::from(path.trim());
-    let bytes = match fs::read(&path) {
-        Ok(bytes) if bytes.len() <= 8 * 1024 * 1024 => bytes,
-        Ok(_) => return failed("配置导入文件超过 8 MiB 上限。", fallback_settings_payload()),
-        Err(error) => return failed(&format!("读取配置导入文件失败：{error}"), fallback_settings_payload()),
-    };
-    let value: Value = match serde_json::from_slice(&bytes) {
-        Ok(value) => value,
-        Err(error) => return failed(&format!("配置导入文件不是有效 JSON：{error}"), fallback_settings_payload()),
-    };
-    let mut settings: BackendSettings = if value.get("settings").is_some() {
-        match serde_json::from_value(value.get("settings").cloned().unwrap_or_default()) {
-            Ok(settings) => settings,
-            Err(error) => return failed(&format!("配置导入文件中的 settings 无效：{error}"), fallback_settings_payload()),
-        }
-    } else {
-        match serde_json::from_value(value) {
-            Ok(settings) => settings,
-            Err(error) => return failed(&format!("配置导入文件格式无效：{error}"), fallback_settings_payload()),
-        }
-    };
-    let current = match SettingsStore::default().load() {
-        Ok(current) => current,
-        Err(error) => return failed(&format!("读取当前设置失败：{error}"), fallback_settings_payload()),
-    };
-    settings.settings_revision = current.settings_revision;
-    settings.sync_tool_shards();
-    ok(
-        "配置已读入草稿，请检查后点击“保存设置”写入本机。",
-        SettingsPayload {
-            revision: settings.settings_revision.clone(),
-            settings,
-            settings_path: codex_plus_core::paths::default_settings_path()
-                .to_string_lossy()
-                .to_string(),
-            user_scripts: user_script_inventory(),
-        },
-    )
-}
-
-#[tauri::command]
-pub fn set_settings_path(path: String) -> CommandResult<SettingsPayload> {
-    if codex_plus_core::paths::state_dir_override().is_some() {
-        return failed("多开实例使用独立的状态目录，不支持修改配置文件路径；请在主实例中修改。", fallback_settings_payload());
-    }
-    let target = PathBuf::from(path.trim());
-    if !target.is_absolute() {
-        return failed("配置文件路径必须是绝对路径。", fallback_settings_payload());
-    }
-    let current = codex_plus_core::paths::default_settings_path();
-    if current != target && target.exists() {
-        return failed("目标配置文件已存在，为避免覆盖文件请先选择新路径。", fallback_settings_payload());
-    }
-    if current != target {
-        let contents = match fs::read(&current) {
-            Ok(contents) => contents,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                let settings = match SettingsStore::default().load() {
-                    Ok(settings) => settings,
-                    Err(error) => return failed(&format!("读取当前设置失败：{error}"), fallback_settings_payload()),
-                };
-                match serde_json::to_vec_pretty(&settings) {
-                    Ok(contents) => contents,
-                    Err(error) => return failed(&format!("序列化当前设置失败：{error}"), fallback_settings_payload()),
-                }
-            }
-            Err(error) => return failed(&format!("读取当前设置失败：{error}"), fallback_settings_payload()),
-        };
-        if let Some(parent) = target.parent()
-            && let Err(error) = fs::create_dir_all(parent)
-        {
-            return failed(&format!("创建配置目录失败：{error}"), fallback_settings_payload());
-        }
-        if let Err(error) = fs::write(&target, contents) {
-            return failed(&format!("复制配置文件失败：{error}"), fallback_settings_payload());
-        }
-    }
-    if let Err(error) = codex_plus_core::paths::set_settings_path_pointer(Some(&target)) {
-        if current != target {
-            let _ = fs::remove_file(&target);
-        }
-        return failed(&format!("保存配置路径失败：{error}"), fallback_settings_payload());
-    }
-    settings_payload("配置文件路径已更新；重新打开管理器后所有组件都会使用新路径。", "路径更新后重新读取失败")
-}
-
-#[tauri::command]
-pub fn reset_settings_path() -> CommandResult<SettingsPayload> {
-    if codex_plus_core::paths::state_dir_override().is_some() {
-        return failed("多开实例使用独立的状态目录，不支持修改配置文件路径；请在主实例中修改。", fallback_settings_payload());
-    }
-    let current = codex_plus_core::paths::default_settings_path();
-    let target = codex_plus_core::paths::default_app_state_dir().join("settings.json");
-    if current != target {
-        let contents = match fs::read(&current) {
-            Ok(contents) => contents,
-            Err(error) => return failed(&format!("读取当前设置失败：{error}"), fallback_settings_payload()),
-        };
-        // 迁移路径时默认位置会留下一份旧副本；过去这里直接拒绝，迁移过一次就再也
-        // 恢复不了默认路径。现在把旧副本改名备份后再写入当前配置，不丢任何内容。
-        if target.exists() {
-            let backup = target.with_file_name(format!("settings.json.before-reset-{}.bak", current_timestamp_ms()));
-            if let Err(error) = fs::rename(&target, &backup) {
-                return failed(&format!("备份默认位置的旧配置失败：{error}"), fallback_settings_payload());
-            }
-        }
-        if let Err(error) = fs::create_dir_all(target.parent().unwrap_or(Path::new(".")))
-            .map_err(anyhow::Error::from)
-            .and_then(|_| codex_plus_core::settings::atomic_write(&target, &contents))
-        {
-            return failed(&format!("恢复默认配置路径失败：{error}"), fallback_settings_payload());
-        }
-    }
-    if let Err(error) = codex_plus_core::paths::set_settings_path_pointer(None) {
-        return failed(&format!("清除配置路径失败：{error}"), fallback_settings_payload());
-    }
-    settings_payload("已恢复默认配置文件路径。", "恢复默认路径后重新读取失败")
-}
-
-#[tauri::command]
-pub fn reset_settings() -> CommandResult<SettingsPayload> {
-    let settings = BackendSettings::default();
-    match SettingsStore::default().save(&settings) {
-        Ok(()) => settings_payload("设置已重置为默认值。", "设置重置后重新读取失败"),
-        Err(error) => failed(
-            &format!("重置设置失败：{error}"),
-            SettingsPayload {
-                revision: settings.settings_revision.clone(),
-                settings,
-                settings_path: codex_plus_core::paths::default_settings_path()
-                    .to_string_lossy()
-                    .to_string(),
-                user_scripts: user_script_inventory(),
-            },
-        ),
-    }
-}
-
-#[tauri::command]
-pub fn reset_image_overlay_settings() -> CommandResult<SettingsPayload> {
-    let store = SettingsStore::default();
-    let mut settings = store.load().unwrap_or_default();
-    let defaults = BackendSettings::default();
-    settings.codex_app_image_overlay_enabled = defaults.codex_app_image_overlay_enabled;
-    settings.codex_app_image_overlay_path = defaults.codex_app_image_overlay_path;
-    settings.codex_app_image_overlay_opacity = defaults.codex_app_image_overlay_opacity;
-    settings.codex_app_image_overlay_fit_mode = defaults.codex_app_image_overlay_fit_mode;
-    let settings = normalize_settings_before_save(settings);
-    match store.save(&settings) {
-        Ok(()) => settings_payload("图片覆盖层设置已重置。", "图片覆盖层重置后重新读取失败"),
-        Err(error) => failed(
-            &format!("重置图片覆盖层失败：{error}"),
-            SettingsPayload {
-                revision: settings.settings_revision.clone(),
-                settings,
-                settings_path: codex_plus_core::paths::default_settings_path()
-                    .to_string_lossy()
-                    .to_string(),
-                user_scripts: user_script_inventory(),
-            },
-        ),
     }
 }
 
@@ -7242,7 +6648,6 @@ pub async fn test_relay_profile(profile: RelayProfile) -> CommandResult<RelayPro
     } else {
         profile.name.trim()
     };
-    let settings = SettingsStore::default().load().unwrap_or_default();
     let test_model: String = if !profile.test_model.trim().is_empty() {
         // 1. 使用者在該供應商明確填的測試模型
         profile.test_model.trim().to_string()
@@ -7250,8 +6655,8 @@ pub async fn test_relay_profile(profile: RelayProfile) -> CommandResult<RelayPro
         // 2. 該供應商自己 config.toml 裡的 model（避免串味）
         let from_profile = codex_plus_core::relay_config::relay_profile_model(&profile);
         if from_profile.trim().is_empty() {
-            // 3. 最後才用全域預設
-            settings.relay_test_model.trim().to_string()
+            // 3. 未配置时使用内置测试模型。
+            codex_plus_core::settings::default_relay_test_model()
         } else {
             from_profile
         }
@@ -7443,13 +6848,12 @@ pub async fn diagnose_relay_profile(profile: RelayProfile) -> CommandResult<Prov
     } else {
         profile.name.trim().to_string()
     };
-    let settings = SettingsStore::default().load().unwrap_or_default();
     let test_model = if !profile.test_model.trim().is_empty() {
         profile.test_model.trim().to_string()
     } else {
         let from_profile = codex_plus_core::relay_config::relay_profile_model(&profile);
         if from_profile.trim().is_empty() {
-            settings.relay_test_model.trim().to_string()
+            codex_plus_core::settings::default_relay_test_model()
         } else {
             from_profile
         }
@@ -8206,23 +7610,6 @@ fn read_optional_text_file(path: &std::path::Path) -> anyhow::Result<String> {
     }
 }
 
-fn ads_payload(payload: Value) -> AdsPayload {
-    AdsPayload {
-        version: payload.get("version").and_then(Value::as_u64).unwrap_or(1),
-        ads: payload
-            .get("ads")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default(),
-        top_ad: payload.get("topAd").cloned(),
-        top_ads: payload
-            .get("topAds")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default(),
-    }
-}
-
 fn open_url(url: &str) -> anyhow::Result<()> {
     #[cfg(windows)]
     {
@@ -8401,51 +7788,6 @@ fn builtin_user_scripts_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("user_scripts"))
 }
 
-fn diagnostics_report() -> String {
-    let (codex_app_path, entrypoints, latest_launch, runtime_health) = load_overview_payload();
-    let overview = ok(
-        "概览已加载。",
-        OverviewPayload {
-            codex_version: codex_app_path
-                .as_deref()
-                .and_then(codex_plus_core::app_paths::codex_app_version),
-            codex_app: path_state(codex_app_path),
-            silent_shortcut: shortcut_state(entrypoints.silent_shortcut),
-            management_shortcut: shortcut_state(entrypoints.management_shortcut),
-            latest_launch,
-            runtime_health,
-            current_version: codex_plus_core::version::VERSION.to_string(),
-            update_status: "not_checked".to_string(),
-            settings_path: codex_plus_core::paths::default_settings_path()
-                .to_string_lossy()
-                .to_string(),
-            logs_path: codex_plus_core::paths::default_diagnostic_log_path()
-                .to_string_lossy()
-                .to_string(),
-        },
-    );
-    let settings = SettingsStore::default().load().unwrap_or_default();
-    let generated_at_ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis();
-    serde_json::to_string_pretty(&json!({
-        "generatedAtMs": generated_at_ms,
-        "version": codex_plus_core::version::VERSION,
-        "overview": overview.payload,
-        "settings": settings,
-        "logs": {
-            "diagnosticLogPath": codex_plus_core::paths::default_diagnostic_log_path(),
-            "latestStatusPath": codex_plus_core::paths::default_latest_status_path()
-        },
-        "platform": {
-            "os": std::env::consts::OS,
-            "arch": std::env::consts::ARCH
-        }
-    }))
-    .unwrap_or_else(|error| format!("诊断报告序列化失败：{error}"))
-}
-
 fn load_overview_payload() -> (
     Option<PathBuf>,
     install::EntryPointState,
@@ -8485,48 +7827,6 @@ fn watcher_payload() -> WatcherPayload {
         start_codex: codex_plus_core::watcher::watcher_start_codex(),
         start_codex_on_open: codex_plus_core::watcher::watcher_start_codex_on_open(),
     }
-}
-
-const MAX_LOG_TAIL_READ_BYTES: u64 = 2 * 1024 * 1024;
-
-#[derive(Debug, Clone)]
-struct TailRead {
-    text: String,
-    truncated: bool,
-    file_size: u64,
-}
-
-fn read_tail(path: &Path, max_lines: usize) -> std::io::Result<TailRead> {
-    let mut file = fs::File::open(path)?;
-    let file_size = file.metadata()?.len();
-    if max_lines == 0 || file_size == 0 {
-        return Ok(TailRead {
-            text: String::new(),
-            truncated: false,
-            file_size,
-        });
-    }
-
-    let read_len = MAX_LOG_TAIL_READ_BYTES.min(file_size);
-    let start = file_size - read_len;
-    file.seek(SeekFrom::Start(start))?;
-    let mut bytes = Vec::with_capacity(read_len as usize);
-    file.read_to_end(&mut bytes)?;
-    let truncated = start > 0;
-    if truncated {
-        if let Some(pos) = bytes.iter().position(|byte| *byte == b'\n') {
-            bytes.drain(..=pos);
-        }
-    }
-
-    let contents = String::from_utf8_lossy(&bytes);
-    let mut lines = contents.lines().rev().take(max_lines).collect::<Vec<_>>();
-    lines.reverse();
-    Ok(TailRead {
-        text: lines.join("\n"),
-        truncated,
-        file_size,
-    })
 }
 
 fn path_state(path: Option<PathBuf>) -> PathState {
@@ -8683,10 +7983,6 @@ fn default_helper_port() -> u16 {
     57321
 }
 
-fn default_log_lines() -> usize {
-    200
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -8720,32 +8016,6 @@ mod tests {
         GLOBAL_STATE_TEST_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-    }
-
-    #[test]
-    fn native_browser_diagnostics_keeps_connection_independent_from_patch_status() {
-        let result = NativeBrowserDiagnostics {
-            compatibility: codex_plus_core::native_browser::BrowserStatus {
-                state: "runtime_unverified".into(),
-                detail: "Legacy runtime mismatch".into(),
-            },
-            connection: codex_plus_core::native_browser_connection::ConnectionStatus {
-                state: "available".into(),
-                failed_checks: 0,
-                browsers: vec![
-                    codex_plus_core::native_browser_connection::ConnectedBrowser {
-                        family: "edge".into(),
-                        header_enabled: Some(true),
-                        recognized: true,
-                    },
-                ],
-            },
-        };
-        let json = serde_json::to_value(result).unwrap();
-        assert_eq!(json["compatibility"]["state"], "runtime_unverified");
-        assert_eq!(json["connection"]["state"], "available");
-        assert_eq!(json["connection"]["browsers"][0]["headerEnabled"], true);
-        assert_eq!(json["connection"]["failedChecks"], 0);
     }
 
     #[test]
@@ -9222,37 +8492,6 @@ base_url = "https://example.invalid/v1"
     }
 
     #[test]
-    fn startup_options_returns_structured_payload() {
-        let result = startup_options();
-
-        assert_eq!(result.status, "ok");
-    }
-
-    #[test]
-    fn startup_options_honors_show_update_environment() {
-        unsafe {
-            std::env::set_var("CODEX_PLUS_SHOW_UPDATE", "1");
-        }
-
-        let result = startup_options();
-
-        unsafe {
-            std::env::remove_var("CODEX_PLUS_SHOW_UPDATE");
-        }
-
-        assert_eq!(result.status, "ok");
-        assert!(result.payload.show_update);
-    }
-
-    #[test]
-    fn startup_options_honors_show_update_argument() {
-        assert!(should_show_update(
-            ["codex-plus-plus-manager.exe", "--show-update"],
-            None
-        ));
-    }
-
-    #[test]
     fn overview_contains_expected_operational_fields() {
         let result = tauri::async_runtime::block_on(load_overview());
 
@@ -9277,28 +8516,11 @@ base_url = "https://example.invalid/v1"
     }
 
     #[test]
-    fn update_install_requires_release_payload() {
-        let result = tauri::async_runtime::block_on(perform_update_inner(None, |_| {}));
-
-        assert_eq!(result.status, "failed");
-        assert!(result.message.contains("请先检查更新"));
-    }
-
-    #[test]
     fn watcher_state_returns_disabled_flag_path() {
         let result = load_watcher_state();
 
         assert_eq!(result.status, "ok");
         assert!(result.payload.disabled_flag.contains("watcher.disabled"));
-    }
-
-    #[test]
-    fn missing_logs_return_failed_status() {
-        let result = read_latest_logs(LogRequest { lines: 25 });
-
-        if result.payload.text.is_empty() {
-            assert_eq!(result.status, "failed");
-        }
     }
 
     #[test]
@@ -9370,12 +8592,14 @@ base_url = "https://example.invalid/v1"
     }
 
     #[test]
-    fn tray_menu_only_has_show_and_quit_in_both_languages() {
+    fn tray_menu_only_has_show_and_quit_in_chinese() {
         let source =
             std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/lib.rs")).unwrap();
 
         assert!(source.contains("Menu::with_items(app, &[&show_item, &quit_item])"));
-        assert!(source.contains("Menu::with_items(&app, &[&show, &quit])"));
+        assert!(source.contains("\"显示主窗口\""));
+        assert!(source.contains("\"退出程序\""));
+        assert!(!source.contains("update_tray_labels"));
         assert!(!source.contains("tray_apply_dream_skin"));
         assert!(!source.contains("apply_dream_skin_from_tray"));
     }
@@ -9418,35 +8642,6 @@ base_url = "https://example.invalid/v1"
         assert!(activation.contains("previous_runtime_signature"));
         assert!(activation.contains("theme_changed"));
         assert!(activation.contains("pending_restart"));
-    }
-
-    #[test]
-    fn read_tail_returns_requested_lines_from_file_end() {
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("codex-plus.log");
-        std::fs::write(&path, "one\ntwo\nthree\nfour\n").unwrap();
-
-        let result = read_tail(&path, 2).unwrap();
-
-        assert_eq!(result.text, "three\nfour");
-        assert_eq!(result.file_size, 19);
-        assert!(!result.truncated);
-    }
-
-    #[test]
-    fn read_tail_does_not_load_prefix_when_log_is_large() {
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("codex-plus.log");
-        let mut contents = String::from("prefix-should-not-appear\n");
-        contents.push_str(&"x".repeat((MAX_LOG_TAIL_READ_BYTES as usize) + 128));
-        contents.push_str("\nlast-1\nlast-2\n");
-        std::fs::write(&path, contents).unwrap();
-
-        let result = read_tail(&path, 2).unwrap();
-
-        assert_eq!(result.text, "last-1\nlast-2");
-        assert!(result.truncated);
-        assert!(!result.text.contains("prefix-should-not-appear"));
     }
 
     #[test]
@@ -10535,101 +9730,6 @@ enabled = true
     }
 
     #[test]
-    fn list_tools_only_exposes_codex_for_legacy_grok_settings() {
-        let _guard = lock_codex_home_for_test();
-        let temp = tempfile::tempdir().unwrap();
-        let settings_path = temp.path().join("settings.json");
-        let previous = codex_plus_core::paths::set_settings_path_for_tests(Some(settings_path));
-
-        let settings = BackendSettings {
-            active_relay_id: "supplier-a".to_string(),
-            relay_profiles: vec![RelayProfile {
-                id: "supplier-a".to_string(),
-                name: "供应商 A".to_string(),
-                relay_mode: codex_plus_core::settings::RelayMode::PureApi,
-                ..RelayProfile::default()
-            }],
-            active_tool: codex_plus_core::tools::ToolId::parse("grok"),
-            tools: [(
-                codex_plus_core::tools::ToolId::parse("grok"),
-                codex_plus_core::tools::ToolConfig {
-                    relay_profiles: vec![RelayProfile {
-                        id: "grok-a".to_string(),
-                        name: "Grok 供应商".to_string(),
-                        ..RelayProfile::default()
-                    }],
-                    active_relay_id: "grok-a".to_string(),
-                    ..codex_plus_core::tools::ToolConfig::default()
-                },
-            )]
-            .into_iter()
-            .collect(),
-            ..BackendSettings::default()
-        };
-        SettingsStore::default().save(&settings).unwrap();
-
-        let result = list_tools();
-        codex_plus_core::paths::set_settings_path_for_tests(previous);
-
-        assert_eq!(result.status, "ok");
-        assert_eq!(result.payload.active_tool, "codex");
-        assert_eq!(result.payload.tools.len(), 1);
-
-        let codex = result
-            .payload
-            .tools
-            .iter()
-            .find(|tool| tool.id == "codex")
-            .expect("codex 必须在工具列表里");
-        assert!(codex.switchable);
-        assert!(codex.active);
-        assert_eq!(codex.active_relay_name.as_deref(), Some("供应商 A"));
-        assert_eq!(codex.relay_count, 1);
-
-    }
-
-    #[test]
-    fn reset_image_overlay_settings_preserves_supplier_settings() {
-        let _guard = lock_codex_home_for_test();
-        let temp = tempfile::tempdir().unwrap();
-        let settings_path = temp.path().join("settings.json");
-        let previous = codex_plus_core::paths::set_settings_path_for_tests(Some(settings_path));
-
-        let settings = BackendSettings {
-            codex_app_image_overlay_enabled: true,
-            codex_app_image_overlay_path: "C:\\Users\\me\\Pictures\\overlay.png".to_string(),
-            codex_app_image_overlay_opacity: 42,
-            codex_app_image_overlay_fit_mode: "fill".to_string(),
-            active_relay_id: "supplier-a".to_string(),
-            relay_profiles: vec![RelayProfile {
-                id: "supplier-a".to_string(),
-                name: "供应商 A".to_string(),
-                relay_mode: codex_plus_core::settings::RelayMode::PureApi,
-                api_key: "sk-test".to_string(),
-                ..RelayProfile::default()
-            }],
-            ..BackendSettings::default()
-        };
-        SettingsStore::default().save(&settings).unwrap();
-
-        let result = reset_image_overlay_settings();
-        codex_plus_core::paths::set_settings_path_for_tests(previous);
-
-        assert_eq!(result.status, "ok");
-        assert!(!result.payload.settings.codex_app_image_overlay_enabled);
-        assert_eq!(result.payload.settings.codex_app_image_overlay_path, "");
-        assert_eq!(result.payload.settings.codex_app_image_overlay_opacity, 35);
-        assert_eq!(
-            result.payload.settings.codex_app_image_overlay_fit_mode,
-            "fit"
-        );
-        assert_eq!(result.payload.settings.active_relay_id, "supplier-a");
-        assert_eq!(result.payload.settings.relay_profiles.len(), 1);
-        assert_eq!(result.payload.settings.relay_profiles[0].id, "supplier-a");
-        assert_eq!(result.payload.settings.relay_profiles[0].api_key, "sk-test");
-    }
-
-    #[test]
     fn normalize_settings_before_save_preserves_official_profile_auth() {
         let settings = BackendSettings {
             relay_profiles: vec![RelayProfile {
@@ -10816,26 +9916,6 @@ model_reasoning_effort = "high"
                 .relay_context_config_contents
                 .contains("[mcp_servers.context7]")
         );
-    }
-
-    #[test]
-    fn ads_payload_keeps_version_and_ad_items() {
-        let payload = ads_payload(json!({
-            "version": 1,
-            "ads": [{"id": "ad-1", "type": "normal", "title": "Ad"}],
-            "topAd": {"id": "banner-1", "type": "sponsor", "title": "Banner 1"},
-            "topAds": [
-                {"id": "banner-1", "type": "sponsor", "title": "Banner 1"},
-                {"id": "banner-2", "type": "sponsor", "title": "Banner 2"}
-            ]
-        }));
-
-        assert_eq!(payload.version, 1);
-        assert_eq!(payload.ads.len(), 1);
-        assert_eq!(payload.ads[0]["id"], json!("ad-1"));
-        assert_eq!(payload.top_ad.as_ref().unwrap()["id"], json!("banner-1"));
-        assert_eq!(payload.top_ads.len(), 2);
-        assert_eq!(payload.top_ads[1]["id"], json!("banner-2"));
     }
 
     #[test]

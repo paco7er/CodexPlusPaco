@@ -1,5 +1,4 @@
 mod auto_takeover;
-mod agent_collaboration_commands;
 mod global_dictation;
 pub mod commands;
 pub mod install;
@@ -22,10 +21,6 @@ const MANAGER_NAVIGATION_EVENT: &str = "manager-navigation-requested";
 
 pub(crate) fn app_is_exiting() -> bool {
     APP_EXITING.load(Ordering::SeqCst)
-}
-
-pub fn run_agent_collaboration_mcp(args: &[std::ffi::OsString]) -> anyhow::Result<()> {
-    agent_collaboration_commands::run_mcp(args)
 }
 
 pub fn run() {
@@ -70,7 +65,6 @@ pub fn run() {
             serde_json::json!({ "message": error.to_string() }),
         );
     }
-    let show_update = commands::startup_should_show_update();
     let autostart = std::env::args().any(|arg| arg == "--autostart");
     let start_minimized = autostart
         && codex_plus_core::watcher::watcher_start_minimized();
@@ -79,13 +73,8 @@ pub fn run() {
     let app_result = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(move |app| {
-            let url = if show_update {
-                "/index.html?showUpdate=1"
-            } else {
-                "/index.html"
-            };
             let mut main_window_builder =
-                tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App(url.into()))
+                tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("/index.html".into()))
                     .title("Codex++")
                     .visible(!start_minimized)
                     .focused(!start_minimized)
@@ -126,9 +115,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            agent_collaboration_commands::agent_collaboration_request,
             commands::backend_version,
-            commands::startup_options,
             commands::consume_pending_manager_navigation,
             commands::load_overview,
             commands::launch_codex_plus,
@@ -146,7 +133,6 @@ pub fn run() {
             commands::set_global_dictation_hotkey,
             commands::native_browser_status,
             commands::save_settings,
-            commands::list_tools,
             commands::test_vlm,
             commands::weixin_connect_qr_start,
             commands::weixin_connect_qr_status,
@@ -196,7 +182,6 @@ pub fn run() {
             commands::sync_providers_now,
             commands::load_provider_sync_recovery,
             commands::recover_provider_sync,
-            commands::load_ads,
             commands::refresh_script_market,
             commands::refresh_plugin_market,
             commands::install_plugin_market_item,
@@ -222,8 +207,6 @@ pub fn run() {
             commands::delete_skill_repo,
             commands::open_external_url,
             commands::repair_shortcuts,
-            commands::check_update,
-            commands::perform_update,
             commands::load_watcher_state,
             commands::set_watcher_enabled,
             commands::set_watcher_start_minimized,
@@ -238,17 +221,6 @@ pub fn run() {
             commands::load_auto_takeover_state,
             commands::take_over_codex_now,
             commands::pause_auto_takeover_for_instance,
-            commands::read_latest_logs,
-            commands::clear_logs,
-            commands::scan_agent_cache,
-            commands::clean_agent_cache,
-            commands::copy_diagnostics,
-            commands::export_settings,
-            commands::preview_import_settings,
-            commands::set_settings_path,
-            commands::reset_settings_path,
-            commands::reset_settings,
-            commands::reset_image_overlay_settings,
             commands::relay_status,
             commands::read_relay_files,
             commands::check_env_conflicts,
@@ -278,8 +250,7 @@ pub fn run() {
             commands::apply_pure_api_injection,
             commands::clear_relay_injection,
             manager_exit_app,
-            manager_hide_to_tray,
-            update_tray_labels
+            manager_hide_to_tray
         ])
         .build(tauri::generate_context!());
     match app_result {
@@ -292,10 +263,6 @@ pub fn run() {
                         auto_takeover::stop_supervisor();
                         let app = app_handle.clone();
                         tauri::async_runtime::spawn_blocking(move || {
-                            // 退出前先等待自有 CLI 任务清理，避免进程退出后遗留执行器。
-                            tauri::async_runtime::block_on(
-                                codex_plus_core::agent_collaboration::executor::shutdown_owned_tasks(),
-                            );
                             if let Err(error) = codex_plus_launcher::shutdown() {
                                 let _ = codex_plus_core::diagnostic_log::append_diagnostic_log(
                                     "app.shutdown_failed",
@@ -468,27 +435,6 @@ fn manager_hide_to_tray<R: tauri::Runtime>(window: tauri::WebviewWindow<R>) {
     let app_handle = window.app_handle();
     let _ = window.hide();
     set_manager_activation_policy(&app_handle, false);
-}
-
-#[tauri::command]
-fn update_tray_labels<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
-    show_label: String,
-    quit_label: String,
-    window_title: String,
-) {
-    if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        let show_item = MenuItem::with_id(&app, TRAY_MENU_SHOW, &show_label, true, None::<&str>);
-        let quit_item = MenuItem::with_id(&app, TRAY_MENU_QUIT, &quit_label, true, None::<&str>);
-        if let (Ok(show), Ok(quit)) = (show_item, quit_item) {
-            if let Ok(menu) = Menu::with_items(&app, &[&show, &quit]) {
-                let _ = tray.set_menu(Some(menu));
-            }
-        }
-    }
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.set_title(&window_title);
-    }
 }
 
 fn show_main_window<R: tauri::Runtime>(app_handle: &tauri::AppHandle<R>) {

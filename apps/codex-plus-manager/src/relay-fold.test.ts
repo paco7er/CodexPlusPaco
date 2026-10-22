@@ -80,12 +80,10 @@ test("corrupt fold preferences use section defaults and do not affect other sect
   assert.equal(fixture(stored).render({ title: "Advanced", sectionId: "advanced" }).props.open, false);
 });
 
-test("new sharing and protocol hint strings have English translations", () => {
-  const dictionary = readFileSync(new URL("./i18n-en.ts", import.meta.url), "utf8");
+test("protocol hints remain available in Chinese", () => {
   for (const key of [
     "若网关提示 thinking type: adaptive 无效，可启用此项后重试；这会停用厂商私有推理参数。",
   ]) {
     assert.ok(source.includes(`t(${JSON.stringify(key)})`), key);
-    assert.ok(dictionary.includes(`${JSON.stringify(key)}:`), key);
   }
 });

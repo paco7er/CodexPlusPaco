@@ -22,7 +22,7 @@ import {
   ArrowRight,
   ArrowRightLeft,
   Bell,
-  Blocks,
+
   Cable,
   BookOpen,
   CheckCircle2,
@@ -34,15 +34,17 @@ import {
   Edit3,
   Eye,
   GripVertical,
+  GitBranch,
+  Github,
   Info,
   ImagePlus,
-  Github,
-  GitBranch,
+
+
   ExternalLink,
   Hammer,
   KeyRound,
   Layers3,
-  Languages,
+
   LayoutGrid,
   LayoutDashboard,
   List,
@@ -53,7 +55,7 @@ import {
   MoreHorizontal,
   PackageOpen,
   FileCode2,
-  Moon,
+
   Network,
   Power,
   PowerOff,
@@ -70,7 +72,7 @@ import {
   Star,
   Store,
   Stethoscope,
-  Sun,
+
   TestTube,
   Trash2,
   Wrench,
@@ -79,7 +81,7 @@ import {
 import { createPresetPatch } from "@/components/ProviderPresetSelector";
 import { PRESETS, type ProviderPreset } from "./presets";
 import { createPortal } from "react-dom";
-import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { Badge as UiBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -89,11 +91,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { isGitHubRepositoryHomepage } from "./github-repository";
 import { NativeBrowserStatusView, nativeBrowserConsent } from "./native-browser-settings";
-import { AgentCachePanel } from "./agent-cache";
-import { AgentCollaborationPage } from "./AgentCollaborationPage";
+
+
 import { PluginMarketScreen } from "./PluginMarketScreen";
-import { ReleaseNotes } from "./ReleaseNotes";
-import { UPDATE_CHECK_INTERVAL_MS, UpdateNotifications } from "./update-notification";
+
+
 import { McpPage, PageHeader } from "./ManagementPages";
 import { SkillsPage } from "./ManagementExtra";
 import { ProjectSessionPage } from "./ProjectSessionPage";
@@ -219,7 +221,7 @@ import {
   type DreamSkinThemeSummary,
   type DreamSkinVerificationResult,
 } from "./dream-skin";
-import { subscribeLanguage, getLanguage, t, tf, toggleLanguage } from "@/i18n";
+import { t, tf } from "@/i18n";
 import { vlmTestTranslation } from "./vlm-test-translation";
 import {
   multiLaunchInstanceFailure,
@@ -291,7 +293,6 @@ type OverviewResult = CommandResult<{
   latest_launch: LaunchStatus | null;
   runtime_health: { codex_app: RuntimeServiceState; local_server: RuntimeServiceState; debugger: RuntimeServiceState; protocol_conversion_enabled: boolean | null };
   current_version: string;
-  update_status: string;
   settings_path: string;
   logs_path: string;
 }>;
@@ -323,7 +324,7 @@ type BackendSettings = WhaleBalanceSettings & {
   /** 自动接管官方 App（与 Rust `codex_app_auto_takeover` 对应）。 */
   codexAppAutoTakeover: boolean;
   codexAppAutoTakeoverWhenActive: string;
-  codexExtraArgs: string[];
+
   dictation: DictationSettings;
   providerSyncEnabled: boolean;
   ccsDbPath: string;
@@ -371,10 +372,10 @@ type BackendSettings = WhaleBalanceSettings & {
   codexAppStepwiseMaxInputChars: number;
   codexAppStepwiseMaxOutputTokens: number;
   codexAppStepwiseTimeoutMs: number;
-  codexAppImageOverlayEnabled: boolean;
-  codexAppImageOverlayPath: string;
-  codexAppImageOverlayOpacity: number;
-  codexAppImageOverlayFitMode: ImageOverlayFitMode;
+
+
+
+
   codexAppDreamSkinEnabled: boolean;
   codexAppDreamSkinPaused: boolean;
   codexAppDreamSkinTheme: string;
@@ -400,7 +401,7 @@ type BackendSettings = WhaleBalanceSettings & {
   relayPreserveNonproviderSettings: boolean;
   relayContextConfigContents: string;
   activeRelayId: string;
-  relayTestModel: string;
+
   /** 按工具分区的配置镜像，保留历史工具的配置。 */
   tools?: Record<string, ToolShard>;
   /** 侧栏当前聚焦的工具。只影响管理器的展示，不影响 Codex 的启动配置。 */
@@ -415,27 +416,14 @@ type ToolShard = {
   activeAggregateRelayId?: string;
   relayCommonConfigContents?: string;
   relayContextConfigContents?: string;
-  relayTestModel?: string;
+
 };
 
-type ToolEntry = {
-  id: string;
-  name: string;
-  homeDir: string;
-  switchable: boolean;
-  active: boolean;
-  activeRelayName: string | null;
-  relayCount: number;
-};
 
-type ToolsResult = {
-  status: string;
-  message: string;
-  tools: ToolEntry[];
-  activeTool: string;
-};
 
-type ImageOverlayFitMode = "fill" | "fit" | "stretch" | "tile" | "center";
+
+
+
 type TypingEffect = "off" | "rainbow" | "fireworks" | "stars";
 
 export type RelayProfile = {
@@ -934,15 +922,9 @@ type TaskProgress = {
   failed?: boolean;
 };
 
-type UpdateStage = "downloading" | "writing" | "launching";
 
-type UpdateProgressEvent = {
-  stage: UpdateStage;
-  downloadedBytes: number;
-  totalBytes: number | null;
-  percent: number | null;
-  elapsedMs: number;
-};
+
+
 
 type SessionIndexRepairReport = {
   scannedFiles: number;
@@ -969,17 +951,9 @@ type SessionIndexRepairReport = {
   }[];
 };
 
-type LogsResult = CommandResult<{
-  path: string;
-  text: string;
-  lines: number;
-  truncated: boolean;
-  fileSize: number;
-}>;
 
-type DiagnosticsResult = CommandResult<{
-  report: string;
-}>;
+
+
 
 type WatcherResult = CommandResult<{
   enabled: boolean;
@@ -1014,36 +988,11 @@ type InstallResult = CommandResult<{
   management_shortcut: { installed: boolean; path: string | null };
 }>;
 
-type UpdateResult = CommandResult<{
-  currentVersion: string;
-  latestVersion?: string | null;
-  releaseSummary?: string;
-  assetName?: string | null;
-  assetUrl?: string | null;
-  updateAvailable?: boolean;
-  installedPath?: string;
-  progress?: number;
-}>;
 
-type AdItem = {
-  id?: string;
-  type: "sponsor" | "normal" | string;
-  title: string;
-  description: string;
-  url: string;
-  image?: string;
-  highlights?: string[];
-  expires_at?: string;
-};
 
-type AdsResult = CommandResult<{
-  version: number;
-  ads: AdItem[];
-  /// 兼容旧数据和旧管理端消费者的首条置顶赞助位。
-  topAd?: AdItem;
-  /// 独立置顶赞助位列表，供概览横幅轮播。
-  topAds?: AdItem[];
-}>;
+
+
+
 
 type ScriptMarketItem = {
   id: string;
@@ -1134,34 +1083,20 @@ function syncMarketInstalledState(current: ScriptMarketResult | null, userScript
   };
 }
 
-type StartupResult = CommandResult<{
-  showUpdate: boolean;
-}>;
 
-/** 左侧 Agent 切换栏的工具标识。后端 `list_tools` 返回同名字符串。 */
-type ToolId = string;
 
-/** 品牌图标随应用打包，来源和许可见 assets/agents/LICENSE.txt。 */
-const TOOL_ICONS: Record<string, string> = {
-  codex: new URL("./assets/agents/chatgpt.svg", import.meta.url).href,
-};
 
-type Route = "overview" | "relay" | "multiLaunch" | "relayEnvironment" | "requestLog" | "sessions" | "context" | "skills" | "weixin" | "enhance" | "dreamSkin" | "userScripts" | "pluginMarket" | "recommendations" | "agentCache" | "agentCollaboration" | "maintenance" | "about" | "settings";
-type Theme = "dark" | "light";
+
+
+
+type Route = "overview" | "relay" | "multiLaunch" | "relayEnvironment" | "requestLog" | "sessions" | "context" | "skills" | "weixin" | "enhance" | "dreamSkin" | "userScripts" | "pluginMarket" | "maintenance";
+
 
 const MANAGER_NAVIGATION_EVENT = "manager-navigation-requested";
 
-/**
- * 导航项归属。
- *
- * - `"codex"`：这一页属于 Codex 工作区。
- *   绝大部分功能（会话、MCP、皮肤、脚本市场、安装维护…）都是 Codex 专属的。
- * - 不写 `tool`：与工具无关的应用级页面（设置、关于），任何工具下都显示。
- *
- * 新增页面时明确区分工作区页面与应用级页面。
- */
+// 保留 Codex 工作区导航；tool 标签兼容已有工作区归属约定。
 const routes: Array<{ id: Route; label: string; icon: LucideIcon; badge?: string; tool?: string }> = [
-  // 概览承载置顶推荐位和 Codex 状态。
+  // 概览只展示 Codex 健康状态。
   { id: "overview", get label() { return t("概览"); }, icon: LayoutDashboard },
   { id: "relay", get label() { return t("供应商配置"); }, icon: KeyRound, tool: "codex" },
   { id: "multiLaunch", get label() { return t("Codex多开"); }, icon: Layers3, tool: "codex" },
@@ -1173,14 +1108,12 @@ const routes: Array<{ id: Route; label: string; icon: LucideIcon; badge?: string
   { id: "dreamSkin", get label() { return t("皮肤管理"); }, icon: Palette, tool: "codex" },
   { id: "userScripts", get label() { return t("拓展"); }, icon: FileCode2, tool: "codex" },
   { id: "pluginMarket", get label() { return t("Codex 插件市场"); }, icon: Store, tool: "codex" },
-  { id: "recommendations", get label() { return t("推荐内容"); }, icon: ExternalLink },
-  // 缓存清理覆盖多个 AI 应用，属于应用级页面，在各工具下均可访问。
-  { id: "agentCache", get label() { return t("AI Agent 缓存清理"); }, icon: Trash2 },
-  // 跨客户端协作属于应用级能力，各工具下共用同一组任务。
-  { id: "agentCollaboration", get label() { return t("Agent 协作"); }, icon: GitBranch, badge: "实验" },
+
+
+
   { id: "maintenance", get label() { return t("安装维护"); }, icon: Wrench, tool: "codex" },
-  { id: "about", get label() { return t("关于"); }, icon: Info },
-  { id: "settings", get label() { return t("设置"); }, icon: Settings },
+
+
   { id: "relayEnvironment", get label() { return t("代理设置"); }, icon: ShieldCheck, tool: "codex" },
   { id: "requestLog", get label() { return t("请求日志"); }, icon: List, tool: "codex" },
 ];
@@ -1205,15 +1138,14 @@ const navigationSections: Array<{ label: string; routes: Route[]; placement?: "b
   },
 ];
 
-/** 应用级入口放在最左栏；概览仍随当前 Agent 显示各自的状态。 */
-const globalNavigationRoutes: Route[] = ["recommendations", "agentCache", "agentCollaboration", "about", "settings"];
+
 
 const defaultSettings: BackendSettings = {
   ...defaultWhaleBalanceSettings(),
   codexAppPath: "",
   codexAppAutoTakeover: false,
   codexAppAutoTakeoverWhenActive: "defer",
-  codexExtraArgs: [],
+
   dictation: defaultDictationSettings(),
   providerSyncEnabled: false,
   ccsDbPath: "",
@@ -1259,10 +1191,10 @@ const defaultSettings: BackendSettings = {
   codexAppStepwiseMaxInputChars: 6000,
   codexAppStepwiseMaxOutputTokens: 500,
   codexAppStepwiseTimeoutMs: 8000,
-  codexAppImageOverlayEnabled: false,
-  codexAppImageOverlayPath: "",
-  codexAppImageOverlayOpacity: 35,
-  codexAppImageOverlayFitMode: "fit",
+
+
+
+
   codexAppDreamSkinEnabled: false,
   codexAppDreamSkinPaused: false,
   codexAppDreamSkinTheme: "pink",
@@ -1324,14 +1256,14 @@ const defaultSettings: BackendSettings = {
   activeRelayId: "default",
   aggregateRelayProfiles: [],
   activeAggregateRelayId: "",
-  relayTestModel: "gpt-5.4-mini",
+
   tools: {},
   activeTool: "codex",
 };
 
 export function App() {
-  useSyncExternalStore(subscribeLanguage, getLanguage, getLanguage);
-  const [theme, setTheme] = useState<Theme>(() => loadInitialTheme());
+
+
   const [route, setRoute] = useState<Route>(() => loadInitialRoute());
   const [enhancementTab, setEnhancementTab] = useState<EnhancementTab>("general");
   const [pendingEnhancementSection, setPendingEnhancementSection] = useState<ManagerNavigationIntent["section"] | null>(null);
@@ -1359,8 +1291,8 @@ export function App() {
   const [pendingProviderImport, setPendingProviderImport] = useState<ProviderImportRequest | null>(null);
   const [localSessions, setLocalSessions] = useState<LocalSessionsResult | null>(null);
   const [liveContextEntries, setLiveContextEntries] = useState<CodexContextEntries | null>(null);
-  const [logs, setLogs] = useState<LogsResult | null>(null);
-  const [diagnostics, setDiagnostics] = useState<DiagnosticsResult | null>(null);
+
+
   const [watcher, setWatcher] = useState<WatcherResult | null>(null);
   const [dreamSkinStatus, setDreamSkinStatus] = useState<DreamSkinRuntimeResult | null>(null);
   const [dreamSkinVerification, setDreamSkinVerification] = useState<DreamSkinVerificationResult | null>(null);
@@ -1377,17 +1309,13 @@ export function App() {
   const [pendingDreamSkinRestart, setPendingDreamSkinRestart] = useState<PendingDreamSkinRestart | null>(null);
   const [dreamSkinUnsavedDialog, setDreamSkinUnsavedDialog] = useState(false);
   const dreamSkinPendingActionRef = useRef<(() => void) | null>(null);
-  const [update, setUpdate] = useState<UpdateResult | null>(null);
-  const [updatePrompt, setUpdatePrompt] = useState<UpdateResult | null>(null);
-  const updateNotifications = useRef(new UpdateNotifications());
-  const updateCheckPending = useRef<{ manual: boolean } | null>(null);
-  const updateInstallPending = useRef(false);
-  const [updateInstallProgress, setUpdateInstallProgress] = useState<TaskProgress>({
-    active: false,
-    percent: 0,
-    message: t("尚未运行安装包更新。"),
-  });
-  const [ads, setAds] = useState<AdsResult | null>(null);
+
+
+
+
+
+
+
   const [scriptMarket, setScriptMarket] = useState<ScriptMarketResult | null>(null);
   const [launchForm, setLaunchForm] = useState({
     appPath: "",
@@ -1404,10 +1332,8 @@ export function App() {
   const [multiLaunchActionPending, setMultiLaunchActionPending] = useState<string | null>(null);
   const multiLaunchInstancesRequestRef = useRef(false);
   const [settingsForm, setSettingsForm] = useState<BackendSettings>({ ...defaultSettings });
-  // 左侧 Agent 切换栏的数据源。后端是唯一事实来源，不落 localStorage —— 多窗口
-  // 同时开着时才不会各说各话。
-  const [toolEntries, setToolEntries] = useState<ToolEntry[]>([]);
-  const [activeTool, setActiveTool] = useState<ToolId>("codex");
+
+
   const [providerSyncProgress, setProviderSyncProgress] = useState<ProviderSyncProgress>({
     active: false,
     percent: 0,
@@ -1460,49 +1386,9 @@ export function App() {
     }
   };
 
-  const refreshTools = async (silent = true) => {
-    const result = await run(() => call<ToolsResult>("list_tools"));
-    if (result) {
-      setToolEntries(result.tools ?? []);
-      setActiveTool(result.activeTool || "codex");
-      if (!silent) showResultNotice(t("工具列表"), result, { silentSuccess: true });
-    }
-    return result;
-  };
 
-  /// 切换侧栏聚焦的工具。纯 UI 状态：写回 settings.json 的 `activeTool`，
-  /// 不触发任何供应商配置写入 —— 切工具 ≠ 切供应商。
-  const switchTool = async (toolId: ToolId) => {
-    if (toolId === activeTool) {
-      // 通用页面占据整个右侧，点击当前 Agent 也要能回到它的工作区。
-      if (globalNavigationRoutes.includes(route)) await navigate("overview");
-      return;
-    }
-    const target = toolEntries.find((tool) => tool.id === toolId);
-    if (target && !target.switchable) {
-      showNotice(t("该工具暂不可切换"), tf("{0} 的供应商配置还没接入，切过去只会显示空列表。", [target.name]), "failed");
-      return;
-    }
-    setActiveTool(toolId);
-    const next = { ...settingsForm, activeTool: toolId };
-    setSettingsForm(next);
-    // 供应商页是跟着工具走的，切工具后如果当前页不属于新工具就跳到它自己的页。
-    const currentRoute = routes.find((candidate) => candidate.id === route);
-    if (currentRoute?.tool && currentRoute.tool !== toolId) {
-      setRoute("relay");
-    }
-    const result = await run(() => call<SettingsResult>("save_settings", { settings: next }));
-    if (result) {
-      setSettings(result);
-      setSettingsForm(normalizeSettings(result.settings));
-      // 先保存 Agent 选择，再离开通用页；失败时保留原页面与布局。
-      if (globalNavigationRoutes.includes(route)) await navigate("overview");
-    } else {
-      // 写盘失败就回滚 UI，别让侧栏显示一个没保存的状态。
-      setActiveTool(activeTool);
-      void refreshSettings(true);
-    }
-  };
+
+
 
   const refreshOverview = async (silent = false) => {
     const requestSequence = ++overviewRequestSequence.current;
@@ -1526,8 +1412,6 @@ export function App() {
       setSettings(result);
       const normalized = normalizeSettings(result.settings);
       setSettingsForm(normalized);
-      // 侧栏聚焦的工具以后端存的为准，避免刷新后跳回 codex。
-      setActiveTool(normalized.activeTool || "codex");
       setLaunchForm((current) => ({
         ...current,
         appPath: current.appPath || result.settings.codexAppPath || "",
@@ -2261,29 +2145,11 @@ export function App() {
     return result;
   };
 
-  const refreshLogs = async (silent = false) => {
-    const result = await run(() => call<LogsResult>("read_latest_logs", { request: { lines: 240 } }));
-    if (result) {
-      setLogs(result);
-      if (!silent) showResultNotice(t("日志已刷新"), result, { silentSuccess: true });
-    }
-  };
 
-  const clearLogs = async () => {
-    const result = await run(() => call<LogsResult>("clear_logs"));
-    if (result) {
-      setLogs(result);
-      showResultNotice(t("日志清理"), result, { silentSuccess: false });
-    }
-  };
 
-  const refreshDiagnostics = async (silent = false) => {
-    const result = await run(() => call<DiagnosticsResult>("copy_diagnostics"));
-    if (result) {
-      setDiagnostics(result);
-      if (!silent) showResultNotice(t("诊断已生成"), result, { silentSuccess: true });
-    }
-  };
+
+
+
 
   const refreshWatcher = async (silent = false) => {
     const result = await run(() => call<WatcherResult>("load_watcher_state"));
@@ -2371,18 +2237,14 @@ export function App() {
       await refreshDreamSkinMarket(true);
       await refreshDreamSkinCommunity(true);
     }
-    if (next === "settings" || next === "enhance") await refreshSettings(true);
+    if (next === "enhance") await refreshSettings(true);
     if (next === "userScripts") {
       await refreshSettings(true);
       await refreshScriptMarket(true);
       await refreshUserScriptInventory();
     }
-    if (next === "recommendations") await refreshAds(true);
-    if (next === "about") {
-      await refreshOverview(true);
-      await refreshLogs(true);
-      await refreshDiagnostics(true);
-    }
+
+
     if (next === "maintenance") {
       await refreshOverview(true);
       await refreshWatcher(true);
@@ -2396,9 +2258,6 @@ export function App() {
       if (!navigation) return false;
       const destination = managerNavigationDestination(navigation);
       await refreshSettings(true);
-      if (destination.route === "enhance" || destination.route === "pluginMarket") {
-        setActiveTool("codex");
-      }
       if (destination.route === "enhance") {
         setEnhancementTab(destination.section ?? "general");
       }
@@ -2638,113 +2497,11 @@ export function App() {
     }
   };
 
-  const checkUpdate = async (silent = false) => {
-    if (updateInstallPending.current) return;
-    if (updateCheckPending.current) {
-      // 手动检查复用正在进行的后台请求，但仍按用户主动检查显示结果。
-      if (!silent) updateCheckPending.current.manual = true;
-      return;
-    }
-    const request = { manual: !silent };
-    updateCheckPending.current = request;
-    try {
-      const result = await call<UpdateResult>("check_update");
-      // 后台检查失败时保留上次可用的安装包，手动检查仍显示错误。
-      if (request.manual || result.status !== "failed") setUpdate(result);
-      if (updateNotifications.current.shouldPrompt(result, request.manual)) {
-        setUpdatePrompt(result);
-      } else if (request.manual) {
-        showNotice(t("GitHub Release 检查"), result.message, result.status);
-      }
-    } catch (error) {
-      if (request.manual) showNotice(t("GitHub Release 检查"), stringifyError(error), "failed");
-    } finally {
-      updateCheckPending.current = null;
-    }
-  };
 
-  const closeUpdatePrompt = () => {
-    if (updatePrompt?.latestVersion) updateNotifications.current.dismiss(updatePrompt.latestVersion);
-    setUpdatePrompt(null);
-  };
 
-  const performUpdate = async (selectedUpdate = update) => {
-    if (updateInstallPending.current) return;
-    const release =
-      selectedUpdate?.latestVersion && selectedUpdate.assetName && selectedUpdate.assetUrl
-        ? {
-            version: selectedUpdate.latestVersion,
-            url: "",
-            body: selectedUpdate.releaseSummary ?? "",
-            asset_name: selectedUpdate.assetName,
-            asset_url: selectedUpdate.assetUrl,
-          }
-        : null;
-    if (!release) {
-      showNotice(t("更新安装"), t("请先检查更新并选择可下载的 Release asset。"), "failed");
-      return;
-    }
-    updateInstallPending.current = true;
-    setUpdateInstallProgress({
-      active: true,
-      percent: 0,
-      indeterminate: true,
-      message: t("正在准备下载安装包…"),
-    });
-    const fallbackTimer = window.setTimeout(() => {
-      setUpdateInstallProgress((current) =>
-        current.active && current.indeterminate
-          ? { ...current, message: t("更新包仍在处理中，请保持窗口打开；完成后会自动更新状态。") }
-          : current,
-      );
-    }, 15_000);
-    let unlisten: (() => void) | null = null;
-    try {
-      unlisten = await listen<UpdateProgressEvent>("update-progress", (event) => {
-        const progress = event.payload;
-        const message =
-          progress.stage === "downloading"
-            ? t("正在下载安装包…")
-            : progress.stage === "writing"
-              ? t("正在写入安装包并准备安装…")
-              : t("正在启动安装器…");
-        setUpdateInstallProgress({
-          active: true,
-          percent: progress.stage === "downloading" ? (progress.percent ?? 0) : 0,
-          indeterminate: progress.stage !== "downloading" || progress.percent == null,
-          message,
-        });
-      });
-      const result = await run(() => call<UpdateResult>("perform_update", { release }));
-      if (result) {
-        setUpdate({ ...selectedUpdate!, ...result });
-        setUpdateInstallProgress({
-          active: false,
-          percent: result.progress ?? 100,
-          indeterminate: false,
-          message: result.message,
-          failed: result.status === "failed",
-        });
-        showNotice(t("更新安装"), result.message, result.status);
-      } else {
-        setUpdateInstallProgress({
-          active: false,
-          percent: 100,
-          indeterminate: false,
-          message: t("安装包更新失败，请查看错误提示后重试。"),
-          failed: true,
-        });
-      }
-    } catch (error) {
-      const message = stringifyError(error);
-      setUpdateInstallProgress({ active: false, percent: 0, indeterminate: false, message, failed: true });
-      showNotice(t("更新安装"), message, "failed");
-    } finally {
-      updateInstallPending.current = false;
-      window.clearTimeout(fallbackTimer);
-      unlisten?.();
-    }
-  };
+
+
+
 
   const saveSettings = async () => {
     const next = normalizeSettings(settingsForm);
@@ -2850,103 +2607,19 @@ export function App() {
     showResultNotice(t("Codex CLI 路径"), result);
   };
 
-  const resetSettings = async () => {
-    const result = await run(() => call<SettingsResult>("reset_settings"));
-    if (result) {
-      setSettings(result);
-      setSettingsForm(normalizeSettings(result.settings));
-      showNotice(t("设置重置"), result.message, result.status);
-    }
-  };
 
-  const exportSettings = async () => {
-    try {
-      const selected = await saveDialog({
-        title: t("导出 Codex++ 配置"),
-        defaultPath: "codex-plus-plus-settings.json",
-        filters: [{ name: "JSON", extensions: ["json"] }],
-      });
-      if (!selected) return;
-      const result = await run(() => call<CommandResult<{ path: string }>>("export_settings", {
-        path: selected,
-        settings: normalizeSettings(settingsForm),
-      }));
-      if (result) showNotice(t("导出 Codex++ 配置"), result.message, result.status);
-    } catch (error) {
-      showNotice(t("导出 Codex++ 配置"), stringifyError(error), "failed");
-    }
-  };
 
-  const importSettings = async () => {
-    try {
-      const selected = await open({
-        title: t("导入 Codex++ 配置"),
-        multiple: false,
-        directory: false,
-        filters: [{ name: "JSON", extensions: ["json"] }],
-      });
-      if (typeof selected !== "string" || !selected.trim()) return;
-      const result = await run(() => call<SettingsResult>("preview_import_settings", { path: selected }));
-      if (!result || !isSuccessStatus(result.status)) {
-        if (result) showNotice(t("导入 Codex++ 配置"), result.message, result.status);
-        return;
-      }
-      setSettings(settings ?? result);
-      setSettingsForm(normalizeSettings(result.settings));
-      showNotice(t("导入 Codex++ 配置"), result.message, "ok");
-    } catch (error) {
-      showNotice(t("导入 Codex++ 配置"), stringifyError(error), "failed");
-    }
-  };
 
-  const chooseSettingsPath = async () => {
-    try {
-      const selected = await saveDialog({
-        title: t("选择配置文件路径"),
-        defaultPath: "settings.json",
-        filters: [{ name: "JSON", extensions: ["json"] }],
-      });
-      if (!selected) return;
-      const result = await run(() => call<SettingsResult>("set_settings_path", { path: selected }));
-      if (result) {
-        if (isSuccessStatus(result.status)) {
-          setSettings(result);
-          setSettingsForm(normalizeSettings(result.settings));
-        }
-        showNotice(t("配置文件路径"), result.message, result.status);
-      }
-    } catch (error) {
-      showNotice(t("配置文件路径"), stringifyError(error), "failed");
-    }
-  };
 
-  const resetSettingsPath = async () => {
-    const result = await run(() => call<SettingsResult>("reset_settings_path"));
-    if (result) {
-      if (isSuccessStatus(result.status)) {
-        setSettings(result);
-        setSettingsForm(normalizeSettings(result.settings));
-      }
-      showNotice(t("配置文件路径"), result.message, result.status);
-    }
-  };
 
-  const resetImageOverlaySettings = async () => {
-    const result = await run(() => call<SettingsResult>("reset_image_overlay_settings"));
-    if (result) {
-      setSettings(result);
-      setSettingsForm(normalizeSettings(result.settings));
-      showNotice(t("图片覆盖层"), result.message, result.status);
-    }
-  };
 
-  const refreshAds = async (silent = false) => {
-    const result = await run(() => call<AdsResult>("load_ads"));
-    if (result) {
-      setAds(result);
-      if (!silent) showResultNotice(t("推荐内容"), result, { silentSuccess: true });
-    }
-  };
+
+
+
+
+
+
+
 
   const refreshProviderSyncTargets = async (silent = false) => {
     const result = await run(() => call<ProviderSyncTargetsResult>("load_provider_sync_targets"));
@@ -3481,22 +3154,9 @@ export function App() {
   };
 
   useEffect(() => {
-    // 工具栏只依赖本地配置，不能排在广告等网络请求之后。
-    // 切换语言会重载窗口，串行等待会让三个 Agent 图标长时间消失。
-    void refreshTools(true);
     void (async () => {
-      const startup = await run(() => call<StartupResult>("startup_options"));
       const handledNavigation = await consumePendingManagerNavigation();
-      if (!handledNavigation && startup?.showUpdate) {
-        setRoute("about");
-        void checkUpdate(false);
-      } else {
-        void checkUpdate(true);
-      }
       await refreshOverview(true);
-      // 概览页的赞助商区块要显示真实广告源内容，所以启动就拉一次，
-      // 不要等到用户点进「推荐内容」才加载。
-      await refreshAds(true);
       if (!handledNavigation) await refreshSettings(true);
       await refreshRelay(true);
       await refreshEnvConflicts(true);
@@ -3506,11 +3166,7 @@ export function App() {
     })();
   }, []);
 
-  useEffect(() => {
-    // 长期开着管理器也能发现更新；后台检查失败不打扰当前操作。
-    const timer = window.setInterval(() => void checkUpdate(true), UPDATE_CHECK_INTERVAL_MS);
-    return () => window.clearInterval(timer);
-  }, []);
+
 
   // 主题卡片的「更多操作」是原生 details 弹层：原生不会因为点了别处就收起，
   // 会出现多个菜单同时展开。这里统一做外点收起（details 的开关是 DOM 瞬态，不经 React 状态）。
@@ -3602,16 +3258,6 @@ export function App() {
   }, [pendingEnhancementSection, route]);
 
   useEffect(() => {
-    if (getLanguage() === "en") {
-      void invoke("update_tray_labels", {
-        showLabel: "Show window",
-        quitLabel: "Quit",
-        windowTitle: "Codex++",
-      });
-    }
-  }, []);
-
-  useEffect(() => {
     const timer = window.setInterval(() => {
       void refreshPendingProviderImport(true);
       void refreshPendingDreamSkinCommunity();
@@ -3656,11 +3302,7 @@ export function App() {
     return () => window.clearInterval(timer);
   }, [route]);
 
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme === "dark");
-    document.documentElement.classList.toggle("light", theme === "light");
-    window.localStorage.setItem("codex-plus-theme", theme);
-  }, [theme]);
+
 
   useEffect(() => {
     const refresh = () => { void refreshOverview(true); };
@@ -3774,17 +3416,17 @@ export function App() {
       stopMultiLaunchInstance,
       restart,
       repairShortcuts,
-      checkUpdate,
-      performUpdate,
+
+
       saveSettings,
       saveSettingsValue,
       refreshSettings,
-      resetSettings,
-      exportSettings,
-      importSettings,
-      chooseSettingsPath,
-      resetSettingsPath,
-      resetImageOverlaySettings,
+
+
+
+
+
+
       chooseCodexAppPath: async (mode: "folder" | "file") => {
         let selected: unknown;
         try {
@@ -3823,28 +3465,7 @@ export function App() {
           await refreshOverview(true);
         }
       },
-      chooseImageOverlayPath: async () => {
-        let selected: unknown;
-        try {
-          selected = await open({
-            directory: false,
-            multiple: false,
-            title: t("选择覆盖图片"),
-            filters: [{ name: t("图片"), extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp"] }],
-          });
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          showNotice(t("图片覆盖层"), tf("打开选择器失败：{0}", [message]), "failed");
-          return;
-        }
-        if (typeof selected === "string" && selected.trim()) {
-          setSettingsForm((current) => ({
-            ...current,
-            codexAppImageOverlayEnabled: true,
-            codexAppImageOverlayPath: selected.trim(),
-          }));
-        }
-      },
+
       chooseDreamSkinImagePath: chooseDreamSkinDraftImage,
       resetDreamSkinImage: async () => runAfterDreamSkinDraftGuard(() => {
         setDreamSkinThemeDraft((current) => current ? { ...current, imagePath: "" } : current);
@@ -3917,7 +3538,7 @@ export function App() {
       importCcsProviders,
       refreshLiveContextEntries,
       syncLiveContextEntries,
-      refreshAds,
+
       refreshScriptMarket,
       refreshUserScriptInventory,
       reloadUserScripts,
@@ -3949,13 +3570,13 @@ export function App() {
       relaySwitching,
       switchOfficialMode,
       switchPureApiMode,
-      refreshLogs,
-      clearLogs,
-      refreshDiagnostics,
+
+
+
       showMessage: async (title: string, message: string, status?: Status) => showNotice(title, message, status),
-      copyLogs: () => copyText(logs?.text ?? "", t("日志已复制。")),
-      copyDiagnostics: () => copyText(diagnostics?.report ?? "", t("诊断报告已复制。")),
-      goLogs: () => navigate("about"),
+
+
+
       checkHealth: async () => {
         await refreshOverview(true);
         await refreshRelay(true);
@@ -3970,42 +3591,23 @@ export function App() {
       refreshAutoTakeover: () => refreshAutoTakeover(false),
       takeOverNow: () => runAutoTakeoverCommand("take_over_codex_now"),
       pauseAutoTakeover: () => runAutoTakeoverCommand("pause_auto_takeover_for_instance"),
-      toggleTheme: () => setTheme((current) => (current === "dark" ? "light" : "dark")),
+
     }),
-    [route, launchForm, settingsForm, settings, overview, update, updateInstallProgress.active, logs, diagnostics, theme, relayFiles, localSessions, selectedProviderSyncTarget, envConflicts, relayEnvironment, ccsProviders, multiLaunchPending, multiLaunchInstances, multiLaunchInstancesLoading, multiLaunchActionPending, dreamSkinLibrary, dreamSkinMarket, dreamSkinCommunity, selectedDreamSkinTheme, savedDreamSkinThemeDraft, dreamSkinThemeDraft, dreamSkinDraftDirty, pendingDreamSkinRestart, getLanguage()],
+    [route, launchForm, settingsForm, settings, overview, relayFiles, localSessions, selectedProviderSyncTarget, envConflicts, relayEnvironment, ccsProviders, multiLaunchPending, multiLaunchInstances, multiLaunchInstancesLoading, multiLaunchActionPending, dreamSkinLibrary, dreamSkinMarket, dreamSkinCommunity, selectedDreamSkinTheme, savedDreamSkinThemeDraft, dreamSkinThemeDraft, dreamSkinDraftDirty, pendingDreamSkinRestart],
   );
-  const isGlobalPage = globalNavigationRoutes.includes(route);
+
   const isManagementScreen = route === "relay" || route === "multiLaunch" || route === "sessions" || route === "context" || route === "skills";
   const codexAppRunning = overview?.runtime_health?.codex_app?.status === "running";
 
   return (
-    <div className={`shell ${theme} ${isGlobalPage ? "global-workspace" : ""}`}>
-      <ApplicationRail
-        tools={toolEntries}
-        activeTool={activeTool}
-        codexAppRunning={codexAppRunning}
-        route={route}
-        theme={theme}
-        onSelect={(toolId) => void switchTool(toolId)}
-        onNavigate={(next) => void navigate(next)}
-        onToggleTheme={actions.toggleTheme}
-      />
-      {!isGlobalPage ? (
+    <div className="shell">
         <aside className="sidebar">
           <nav className="nav" aria-label={t("主导航")}>
             {navigationSections.map((section) => {
-              // 按当前工具过滤：只留下属于这个工具、或与工具无关的页面。
-              const visibleRoutes = section.routes.filter((routeId) => {
-                const item = routes.find((candidate) => candidate.id === routeId);
-                if (!item) return false;
-                return !item.tool || item.tool === activeTool;
-              });
-              // 整节都被过滤掉时不渲染空分组标题。
-              if (visibleRoutes.length === 0) return null;
               return (
               <div className={`nav-section ${section.placement === "bottom" ? "nav-section-bottom" : ""}`} key={section.label}>
                 <div className="nav-section-label">{section.label}</div>
-                {visibleRoutes.map((routeId) => {
+                {section.routes.map((routeId) => {
                   const item = routes.find((candidate) => candidate.id === routeId);
                   if (!item) return null;
                   const Icon = item.icon;
@@ -4030,7 +3632,6 @@ export function App() {
             })}
           </nav>
         </aside>
-      ) : null}
       <main className="workspace">
         <header className="topbar" key={`topbar-${route}`}>
           <div>
@@ -4038,8 +3639,6 @@ export function App() {
             <p>{routeSubtitle(route)}</p>
           </div>
           <div className="topbar-actions">
-            {activeTool === "codex" && !isGlobalPage ? (
-              <>
                 <span className="codex-app-state" aria-live="polite">
                   <UiBadge
                     className={statusClass(overview?.runtime_health?.codex_app?.status ?? "not_checked")}
@@ -4056,8 +3655,6 @@ export function App() {
                   <Rocket className="h-4 w-4" />
                   {codexAppRunning ? t("重启 Codex") : t("启动 Codex")}
                 </Button>
-              </>
-            ) : null}
           </div>
         </header>
         <section
@@ -4067,9 +3664,6 @@ export function App() {
           {route === "overview" ? (
             <OverviewScreen
               overview={overview}
-              ads={ads}
-              activeTool={activeTool}
-              toolEntries={toolEntries}
               actions={actions}
             />
           ) : null}
@@ -4190,9 +3784,9 @@ export function App() {
           ) : null}
           {route === "userScripts" ? <UserScriptsScreen settings={settings} market={scriptMarket} actions={actions} /> : null}
           {route === "pluginMarket" ? <PluginMarketScreen /> : null}
-          {route === "recommendations" ? <RecommendationsScreen ads={ads} actions={actions} /> : null}
-          {route === "agentCache" ? <AgentCachePanel /> : null}
-          {route === "agentCollaboration" ? <AgentCollaborationPage /> : null}
+
+
+
           {route === "maintenance" ? (
             <MaintenanceScreen
               overview={overview}
@@ -4205,43 +3799,11 @@ export function App() {
               actions={actions}
             />
           ) : null}
-          {route === "about" ? (
-            <AboutScreen
-              overview={overview}
-              update={update}
-              updateInstallProgress={updateInstallProgress}
-              logs={logs}
-              diagnostics={diagnostics}
-              actions={actions}
-            />
-          ) : null}
-          {route === "settings" ? (
-            <SettingsScreen
-              dirty={settingsDirty}
-              settings={settings}
-              theme={theme}
-              form={settingsForm}
-              activeTool={activeTool}
-              toolEntries={toolEntries}
-              onFormChange={setSettingsForm}
-              actions={actions}
-            />
-          ) : null}
+
+
         </section>
       </main>
-      {updatePrompt ? (
-        <UpdateDialog
-          update={updatePrompt}
-          progress={updateInstallProgress}
-          onClose={closeUpdatePrompt}
-          onMuteToday={() => {
-            updateNotifications.current.muteToday();
-            setUpdatePrompt(null);
-          }}
-          onUpdate={() => void performUpdate(updatePrompt)}
-          onOpenUrl={(url) => void openExternalUrl(url)}
-        />
-      ) : null}
+
       {notice ? (
         <NoticeDialog
           key={`${notice.title}-${notice.message}-${notice.status ?? ""}`}
@@ -4455,20 +4017,20 @@ type Actions = {
   stopMultiLaunchInstance: (instance: MultiLaunchInstance) => Promise<void>;
   restart: (syncActiveRelay?: boolean) => Promise<boolean>;
   repairShortcuts: () => Promise<void>;
-  checkUpdate: () => Promise<void>;
-  performUpdate: () => Promise<void>;
+
+
   saveSettings: () => Promise<void>;
   saveSettingsValue: (settings: BackendSettings, silent?: boolean) => Promise<BackendSettings | null>;
   refreshSettings: (silent?: boolean) => Promise<BackendSettings | null>;
-  resetSettings: () => Promise<void>;
-  exportSettings: () => Promise<void>;
-  importSettings: () => Promise<void>;
-  chooseSettingsPath: () => Promise<void>;
-  resetSettingsPath: () => Promise<void>;
-  resetImageOverlaySettings: () => Promise<void>;
+
+
+
+
+
+
   chooseCodexAppPath: (mode: "folder" | "file") => Promise<void>;
   clearCodexAppPath: () => Promise<void>;
-  chooseImageOverlayPath: () => Promise<void>;
+
   chooseDreamSkinImagePath: () => Promise<void>;
   resetDreamSkinImage: () => Promise<void>;
   resetDreamSkinTheme: () => Promise<void>;
@@ -4503,7 +4065,7 @@ type Actions = {
   importCcsProviders: (bindings?: Record<string, string>) => Promise<void>;
   refreshLiveContextEntries: () => Promise<LiveContextEntriesResult | null>;
   syncLiveContextEntries: (settings: BackendSettings, silent?: boolean) => Promise<LiveContextEntriesResult | null>;
-  refreshAds: () => Promise<void>;
+
   refreshScriptMarket: () => Promise<void>;
   refreshUserScriptInventory: () => Promise<SettingsResult | null>;
   reloadUserScripts: () => Promise<void>;
@@ -4541,13 +4103,13 @@ type Actions = {
   relaySwitching: boolean;
   switchOfficialMode: () => Promise<void>;
   switchPureApiMode: () => Promise<void>;
-  refreshLogs: () => Promise<void>;
-  clearLogs: () => Promise<void>;
-  refreshDiagnostics: () => Promise<void>;
+
+
+
   showMessage: (title: string, message: string, status?: Status) => Promise<void>;
-  copyLogs: () => Promise<void>;
-  copyDiagnostics: () => Promise<void>;
-  goLogs: () => Promise<void>;
+
+
+
   setWatcherEnabled: (enabled: boolean) => Promise<void>;
   setWatcherStartMinimized: (minimized: boolean) => Promise<void>;
   setWatcherStartCodex: (startCodex: boolean) => Promise<void>;
@@ -4556,7 +4118,7 @@ type Actions = {
   refreshAutoTakeover: () => Promise<void>;
   takeOverNow: () => Promise<void>;
   pauseAutoTakeover: () => Promise<void>;
-  toggleTheme: () => void;
+
   checkHealth: () => Promise<void>;
 };
 
@@ -4995,79 +4557,15 @@ function WeixinConnectScreen({
   );
 }
 
-/// 概览页的两个独立广告位。
-///
-/// 这里只读取广告源的 `top_ad/topAds`，不会读取普通 `ads` 推荐池。
-/// `top_ad` 可以是单个对象，也可以是数组；最多显示前两个有效广告。
-function SponsorBoard({ ads, actions }: { ads: AdsResult | null; actions: Actions }) {
-  const sourceAds = ads?.topAds?.length ? ads.topAds : ads?.topAd ? [ads.topAd] : [];
-  const featured = sourceAds.filter((ad) => !isExpiredAd(ad)).slice(0, 2);
 
-  if (featured.length === 0) return null;
 
-  return (
-    <div className={`sponsor-board ${featured.length === 1 ? "sponsor-board-single" : ""}`}>
-      {featured.map((ad) => (
-        <Panel className="jojocode-overview sponsor-slot" key={ad.id || ad.title}>
-          <CardContent>
-            <div className="sponsor-slot-content">
-              <div className="sponsor-slot-main">
-                {ad.image ? (
-                  <img alt="" className="sponsor-logo" src={ad.image} />
-                ) : (
-                  <div className="jojocode-overview-mark">
-                    <Network className="h-5 w-5" />
-                  </div>
-                )}
-                <div className="sponsor-slot-copy">
-                  <span className="eyebrow">{t("推荐内容")}</span>
-                  <h2>{formatAdTitle(ad.title)}</h2>
-                  <p className="recommendation-description" title={ad.description}>{ad.description}</p>
-                </div>
-              </div>
-              {ad.highlights?.length ? (
-                <div className="jojocode-model-tags sponsor-slot-tags">
-                  {ad.highlights.map((item) => (
-                    <span key={item}>{item}</span>
-                  ))}
-                </div>
-              ) : null}
-              <div className="sponsor-slot-actions">
-                <Button onClick={() => void actions.openExternalUrl(ad.url)}>
-                  <ExternalLink className="h-4 w-4" />
-                  {t("打开推荐内容")}
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Panel>
-      ))}
-    </div>
-  );
-}
-
-function OverviewScreen({
-  overview,
-  ads,
-  activeTool,
-  toolEntries,
-  actions,
-}: {
+function OverviewScreen({ overview, actions }: {
   overview: OverviewResult | null;
-  ads: AdsResult | null;
-  activeTool: ToolId;
-  toolEntries: ToolEntry[];
   actions: Actions;
 }) {
   const health = healthItems(overview);
-  const tool = toolEntries.find((entry) => entry.id === activeTool);
   return (
-    <>
-      {/* 置顶推荐位两个工具下都显示，内容与「推荐内容」页同源。 */}
-      <SponsorBoard ads={ads} actions={actions} />
-      {activeTool === "codex" ? (
-        <>
-          <Panel>
+    <Panel>
             <CardHeader className="panel-head overview-health-header">
               <CardTitle>{t("健康检查")}</CardTitle>
               <div className="overview-health-header-actions">
@@ -5107,41 +4605,6 @@ function OverviewScreen({
               </div>
             </CardContent>
           </Panel>
-        </>
-      ) : (
-        <Panel>
-          <CardHead title={tf("{0} 状态", [tool?.name ?? t("工具")])} detail={t("该工具由它自己的页签管理")} />
-          <CardContent>
-            <div className="health-grid">
-              <div className={`health-item ${tool?.switchable ? "ok" : "needs-fix"}`}>
-                {tool?.switchable ? <CheckCircle2 className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
-                <div>
-                  <strong>{t("配置切换")}</strong>
-                  <span>{tool?.switchable ? t("已接入，可在该工具页切换供应商。") : t("尚未接入配置切换。")}</span>
-                </div>
-                <Badge status={tool?.switchable ? "ok" : "not_checked"} />
-              </div>
-              <div className={`health-item ${tool?.relayCount ? "ok" : "needs-fix"}`}>
-                {tool?.relayCount ? <CheckCircle2 className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
-                <div>
-                  <strong>{t("供应商")}</strong>
-                  <span>{tf("{0} 个已保存", [String(tool?.relayCount ?? 0)])}</span>
-                </div>
-                <Badge status={tool?.relayCount ? "ok" : "not_checked"} />
-              </div>
-              <div className="health-item ok">
-                <CheckCircle2 className="h-4 w-4" />
-                <div>
-                  <strong>{t("配置目录")}</strong>
-                  <span>{tool?.homeDir || t("未配置目录")}</span>
-                </div>
-                <Badge status="ok" />
-              </div>
-            </div>
-          </CardContent>
-        </Panel>
-      )}
-    </>
   );
 }
 
@@ -8724,53 +8187,7 @@ function SessionsScreen({
   );
 }
 
-/// 推荐内容页：列出广告源里的全部推荐（含 sponsor 与 normal）。
-///
-/// 概览页置顶位独立配置；展示多条时也从推荐池去重，避免重复出现。
-function RecommendationsScreen({ ads, actions }: { ads: AdsResult | null; actions: Actions }) {
-  const items = (ads?.ads ?? []).filter((ad) => !isExpiredAd(ad));
-  // 置顶位排在最前，并把推荐池里指向同一家的那条去掉 —— 广告源里同一条赞助商
-  // 常常同时出现在 top_ad 和 ads 里（两个 id、同一个落地页），只比 id 去不掉。
-  const topAds = (ads?.topAds?.length ? ads.topAds : ads?.topAd ? [ads.topAd] : []).filter((ad) => !isExpiredAd(ad));
-  const topIdentities = new Set(topAds.map(adIdentity));
-  const pool = items.filter((ad) => !topIdentities.has(adIdentity(ad)));
-  const ordered = [...topAds, ...pool];
-  const sponsors = ordered.filter((ad) => ad.type === "sponsor");
-  const normal = ordered.filter((ad) => ad.type === "normal");
-  return (
-    <>
-      <Panel>
-        <CardHead title={t("推荐内容")} detail={t("与 Codex 内插件菜单使用同一个远端广告源")} />
-        <CardContent>
-          <div className="recommend-hero">
-            <div>
-              <strong>{ads ? tf("已加载 {0} 条推荐", [ordered.length]) : t("尚未加载推荐内容")}</strong>
-              <span>{t("内容来自 Codex++ 广告源，含置顶推荐与普通推荐。")}</span>
-            </div>
-            <Button onClick={() => void actions.refreshAds()}>
-              <RefreshCw className="h-4 w-4" />
-              {t("刷新推荐")}
-            </Button>
-          </div>
-        </CardContent>
-      </Panel>
-      {sponsors.length ? (
-        <Panel>
-          <CardHead title={t("赞助商推荐")} detail={tf("{0} 条", [sponsors.length])} />
-          <CardContent>
-            <AdGrid actions={actions} ads={sponsors} empty={t("暂无赞助商推荐。")} />
-          </CardContent>
-        </Panel>
-      ) : null}
-      <Panel>
-        <CardHead title={t("普通推荐")} detail={tf("{0} 条", [normal.length])} />
-        <CardContent>
-          <AdGrid actions={actions} ads={normal} empty={t("暂无普通推荐。")} />
-        </CardContent>
-      </Panel>
-    </>
-  );
-}
+
 
 function MaintenanceScreen({
   overview,
@@ -8975,322 +8392,13 @@ function MaintenanceScreen({
   );
 }
 
-function AboutScreen({
-  overview,
-  update,
-  updateInstallProgress,
-  logs,
-  diagnostics,
-  actions,
-}: {
-  overview: OverviewResult | null;
-  update: UpdateResult | null;
-  updateInstallProgress: TaskProgress;
-  logs: LogsResult | null;
-  diagnostics: DiagnosticsResult | null;
-  actions: Actions;
-}) {
-  return (
-    <>
-      <Panel>
-        <CardHead title={t("关于 Codex++")} detail={t("本地 Codex 增强、管理工具和安装包维护")} />
-        <CardContent>
-          <div className="metric-list">
-            <Metric label={t("Codex++ 版本")} value={overview?.current_version ?? update?.currentVersion ?? "-"} />
-            <Metric label={t("Codex 版本")} value={overview?.codex_version ?? t("未检测到")} />
-            <Metric label={t("项目地址")} value="github.com/BigPizzaV3/CodexPlusPlus" />
-          </div>
-          <Toolbar>
-            <Button onClick={() => void actions.openExternalUrl("https://github.com/BigPizzaV3/CodexPlusPlus")} variant="secondary">
-              <ExternalLink className="h-4 w-4" />
-              {t("打开项目主页")}
-            </Button>
-            <Button onClick={() => void actions.openExternalUrl("https://github.com/BigPizzaV3/CodexPlusPlus/issues")} variant="secondary">
-              <ExternalLink className="h-4 w-4" />
-              {t("反馈问题")}
-            </Button>
-            <Button onClick={() => void actions.openExternalUrl("https://discord.gg/y96kX7A76v")} variant="secondary">
-              <MessageCircle className="h-4 w-4" />
-              Discord
-            </Button>
-            <Button onClick={() => void actions.openExternalUrl("https://t.me/CodexPlusPlus")} variant="secondary">
-              <MessageCircle className="h-4 w-4" />
-              Telegram
-            </Button>
-          </Toolbar>
-        </CardContent>
-      </Panel>
-      <Panel>
-        <CardHead title={t("GitHub Release 更新")} detail={tf("当前版本 {0}", [overview?.current_version ?? update?.currentVersion ?? "-"])} />
-        <CardContent>
-          <div className="metric-list">
-            <Metric label={t("状态")} value={update?.status ?? "not_checked"} />
-            <Metric label={t("最新版本")} value={update?.latestVersion ?? t("未检查")} />
-            <Metric label={t("资源")} value={update?.assetName ?? "-"} />
-            <Metric label={t("进度")} value={`${formatProgressPercent(update?.progress ?? 0)}%`} />
-          </div>
-          <ReleaseNotes markdown={update?.releaseSummary || update?.message || t("尚未检查 GitHub Release；更新会下载并启动安装包。")} onOpenUrl={(url) => void actions.openExternalUrl(url)} />
-          <TaskProgressBox completedTitle={t("上次更新结果")} progress={updateInstallProgress} title={t("安装包更新进度")} />
-          <Toolbar>
-            <Button onClick={() => void actions.checkUpdate()}>{t("检查更新")}</Button>
-            <Button disabled={updateInstallProgress.active} variant="secondary" onClick={() => void actions.performUpdate()}>
-              {updateInstallProgress.active ? t("正在下载安装包…") : t("下载并运行安装包")}
-            </Button>
-          </Toolbar>
-        </CardContent>
-      </Panel>
-      <LogsPanel logs={logs} actions={actions} />
-      <DiagnosticsPanel diagnostics={diagnostics} actions={actions} />
-    </>
-  );
-}
 
-/// 设置页。
-///
-/// 内容按归属分成两类：
-/// - **应用级**（界面主题、语言等）：跟具体工具无关，任何工具下都显示
-/// - **工具级**：图片覆盖层、供应商测试模型、额外启动参数，只在聚焦 Codex 时显示
-///
-/// 语音输入和 Stepwise 的完整配置在 Codex增强 页面管理。
-function SettingsScreen({
-  dirty,
-  settings,
-  theme,
-  form,
-  activeTool,
-  toolEntries,
-  onFormChange,
-  actions,
-}: {
-  dirty: boolean;
-  settings: SettingsResult | null;
-  theme: Theme;
-  form: BackendSettings;
-  activeTool: ToolId;
-  toolEntries: ToolEntry[];
-  onFormChange: (value: BackendSettings) => void;
-  actions: Actions;
-}) {
-  const tool = toolEntries.find((entry) => entry.id === activeTool);
-  const isCodex = activeTool === "codex";
-  return (
-    <div className="settings-page">
-      <Panel>
-        <CardHead title={t("基础设置")} detail={settings?.settings_path ?? ""} />
-        <CardContent className="settings-content">
-          <div className="theme-row">
-            <div>
-              <strong>{t("界面主题")}</strong>
-              <span>{t("当前为")}{theme === "dark" ? t("深色") : t("浅色")}{t("模式。")}</span>
-            </div>
-            <Button variant="secondary" onClick={actions.toggleTheme}>{t("切换主题")}</Button>
-          </div>
-          <div className="settings-block">
-            <strong>{t("配置备份与迁移")}</strong>
-            <p className="field-hint">{t("导出文件包含供应商 API Key 等敏感信息；导入只会读入草稿，检查后仍需点击保存设置。")}</p>
-            <Toolbar>
-              <Button variant="secondary" onClick={() => void actions.exportSettings()}>{t("导出完整配置")}</Button>
-              <Button variant="secondary" onClick={() => void actions.importSettings()}>{t("导入配置草稿")}</Button>
-            </Toolbar>
-          </div>
-          <div className="settings-block">
-            <strong>{t("配置文件路径")}</strong>
-            <Input readOnly value={settings?.settings_path ?? ""} />
-            <p className="field-hint">{t("只迁移 settings.json；日志、备份、Skills 和运行状态仍留在原状态目录。更换后建议重新打开管理器。")}</p>
-            <Toolbar>
-              <Button variant="secondary" onClick={() => void actions.chooseSettingsPath()}>{t("选择路径")}</Button>
-              <Button variant="secondary" onClick={() => void actions.resetSettingsPath()}>{t("恢复默认路径")}</Button>
-            </Toolbar>
-          </div>
-        </CardContent>
-      </Panel>
 
-      {isCodex ? (
-        <>
-          <Panel>
-            <CardHead title={t("Codex 供应商设置")} detail={t("只作用于 Codex 供应商的配置")} />
-            <CardContent className="settings-content">
-              <Field className="settings-test-model-field" label={t("供应商测试模型")}>
-                <Input
-                  value={form.relayTestModel}
-                  onChange={(event) => onFormChange({ ...form, relayTestModel: event.currentTarget.value })}
-                  placeholder={t("例如 gpt-5.4-mini")}
-                />
-              </Field>
-              <p className="field-hint">
-                {t("「测试供应商」按钮用这个模型发起一次真实请求，用于判断 Key 与端点是否可用。")}
-              </p>
-            </CardContent>
-          </Panel>
 
-          <Panel>
-            <CardHead title={t("Codex 图片覆盖层")} detail={t("在当前 Codex 会话上叠加一张背景图")} />
-            <CardContent className="settings-content">
-              <div className="settings-block">
-                <label className="check-row">
-                  <input
-                    checked={form.codexAppImageOverlayEnabled}
-                    onChange={(event) =>
-                      onFormChange({ ...form, codexAppImageOverlayEnabled: event.currentTarget.checked })
-                    }
-                    type="checkbox"
-                  />
-                  <span>{t("启用 Codex 图片覆盖层")}</span>
-                </label>
-                <div className="form-row">
-                  <Field label={t("覆盖图片")}>
-                    <Input
-                      value={form.codexAppImageOverlayPath}
-                      onChange={(event) => onFormChange({ ...form, codexAppImageOverlayPath: event.currentTarget.value })}
-                      placeholder={t("选择 png / jpg / webp / gif / bmp")}
-                    />
-                  </Field>
-                  <Toolbar>
-                    <Button variant="secondary" onClick={() => void actions.chooseImageOverlayPath()}>
-                      {t("选择图片")}
-                    </Button>
-                  </Toolbar>
-                </div>
-                <Field label={tf("透明度 {0}%", [form.codexAppImageOverlayOpacity])}>
-                  <Input
-                    min={1}
-                    max={100}
-                    type="range"
-                    value={form.codexAppImageOverlayOpacity}
-                    onChange={(event) =>
-                      onFormChange({
-                        ...form,
-                        codexAppImageOverlayOpacity: clampNumber(Number(event.currentTarget.value), 1, 100),
-                      })
-                    }
-                  />
-                </Field>
-                <Field label={t("背景适配方式")}>
-                  <AppSelect
-                    value={form.codexAppImageOverlayFitMode}
-                    onChange={(value) =>
-                      onFormChange({
-                        ...form,
-                        codexAppImageOverlayFitMode: value,
-                      })
-                    }
-                    options={[
-                      { value: "fill", label: t("填充") },
-                      { value: "fit", label: t("适应") },
-                      { value: "stretch", label: t("拉伸") },
-                      { value: "tile", label: t("平铺") },
-                      { value: "center", label: t("居中") },
-                    ]}
-                  />
-                </Field>
-              </div>
-              <Toolbar>
-                <Button variant="secondary" onClick={() => void actions.resetImageOverlaySettings()}>
-                  {t("重置背景")}
-                </Button>
-              </Toolbar>
-            </CardContent>
-          </Panel>
 
-          <Panel>
-            <CardHead title={t("Codex 启动参数")} detail={t("启动 Codex App 时追加到默认 CDP 参数后。留空则保持默认启动行为。")} />
-            <CardContent className="settings-content">
-              <Field label={t("额外参数")}>
-                <Textarea
-                  className="launch-args-input"
-                  placeholder="--force_high_performance_gpu"
-                  spellCheck={false}
-                  value={codexExtraArgsToInput(form.codexExtraArgs)}
-                  onChange={(event) =>
-                    onFormChange({
-                      ...form,
-                      codexExtraArgs: inputToCodexExtraArgs(event.currentTarget.value),
-                    })
-                  }
-                />
-              </Field>
-              <p className="field-hint">{t("每行一个参数，例如 --force_high_performance_gpu。不需要填写 open 或 --args。")}</p>
-            </CardContent>
-          </Panel>
-        </>
-      ) : (
-        <Panel>
-          <CardHead title={tf("{0} 设置", [tool?.name ?? t("工具")])} detail={t("这个工具目前没有独立设置项")} />
-          <CardContent className="settings-content">
-            <p className="field-hint">
-              {t("该工具的配置在它自己的页签里管理；上面的基础设置对所有工具通用。")}
-            </p>
-          </CardContent>
-        </Panel>
-      )}
 
-      {dirty ? (
-        <div className="settings-save-bar">
-          <span>{t("设置有修改时，保存后才会写入本地配置。")}</span>
-          <Button onClick={() => void actions.saveSettings()}>
-            <Save className="h-4 w-4" />
-            {t("保存设置")}
-          </Button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
-function LogsPanel({ logs, actions }: { logs: LogsResult | null; actions: Actions }) {
-  const lines = splitLogLines(logs?.text ?? "");
-  const logDetail = logs
-    ? logs.truncated
-      ? tf("日志大小 {0}，仅显示末尾 {1} 行", [formatBytes(logs.fileSize), logs.lines])
-      : tf("日志大小 {0}", [formatBytes(logs.fileSize)])
-    : "";
-  return (
-    <Panel>
-      <CardHead title={t("最近日志")} detail={logs?.path ?? ""} />
-      <CardContent>
-        {logDetail ? <p className="field-hint">{logDetail}</p> : null}
-        <div className="log-lines">
-          {lines.length ? (
-            lines.map((line, index) => (
-              <div className="log-line" key={`${index}-${line.slice(0, 12)}`}>
-                <span>{index + 1}</span>
-                <code>{line || " "}</code>
-              </div>
-            ))
-          ) : (
-            <div className="empty">{t("暂无日志。")}</div>
-          )}
-        </div>
-        <Toolbar>
-          <Button onClick={() => void actions.refreshLogs()}>{t("刷新")}</Button>
-          <Button variant="secondary" onClick={() => void actions.clearLogs()}>
-            {t("清理日志")}
-          </Button>
-          <Button variant="secondary" onClick={() => void actions.copyLogs()}>
-            {t("复制")}
-          </Button>
-        </Toolbar>
-      </CardContent>
-    </Panel>
-  );
-}
 
-function DiagnosticsPanel({ diagnostics, actions }: { diagnostics: DiagnosticsResult | null; actions: Actions }) {
-  return (
-    <Panel>
-      <CardHead title={t("诊断报告")} detail={t("包含版本、路径、设置和平台信息")} />
-      <CardContent>
-        <Textarea className="log-view tall" readOnly value={diagnostics?.report ?? t("尚未生成诊断报告。")} />
-        <Toolbar>
-          <Button onClick={() => void actions.refreshDiagnostics()}>{t("重新生成")}</Button>
-          <Button variant="secondary" onClick={() => void actions.copyDiagnostics()}>
-            {t("复制报告")}
-          </Button>
-        </Toolbar>
-      </CardContent>
-    </Panel>
-  );
-}
 
 function RelayProfileList({
   form,
@@ -11549,7 +10657,7 @@ function RelayProfileEditor({
               <Input
                 value={profile.testModel}
                 onChange={(event) => updateDraft({ testModel: event.currentTarget.value })}
-                placeholder={tf("留空使用默认：{0}", [form.relayTestModel || defaultSettings.relayTestModel])}
+                placeholder={tf("留空使用默认：{0}", ["gpt-5.4-mini"])}
               />
             </Field>
             <Field className="relay-field-context-window" label={t("上下文大小")}>
@@ -11871,7 +10979,7 @@ function AggregateRelayProfileEditor({
           <Input
             value={profile.testModel}
             onChange={(event) => onProfileChange({ ...profile, testModel: event.currentTarget.value })}
-            placeholder={tf("留空使用默认：{0}", [form.relayTestModel || defaultSettings.relayTestModel])}
+            placeholder={tf("留空使用默认：{0}", ["gpt-5.4-mini"])}
           />
         </Field> : null}
         {!modelMode ? (
@@ -12792,47 +11900,7 @@ function DreamSkinUnsavedDialog({
   );
 }
 
-function UpdateDialog({ update, progress, onClose, onMuteToday, onUpdate, onOpenUrl }: {
-  update: UpdateResult;
-  progress: TaskProgress;
-  onClose: () => void;
-  onMuteToday: () => void;
-  onUpdate: () => void;
-  onOpenUrl: (url: string) => void;
-}) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (dialog && !dialog.open) dialog.showModal();
-    return () => { if (dialog?.open) dialog.close(); };
-  }, []);
 
-  return (
-    <dialog className="modal-card update-dialog" ref={dialogRef} aria-labelledby="update-dialog-title" aria-describedby="update-dialog-description" onCancel={(event) => { event.preventDefault(); onClose(); }}>
-      <div className="modal-head">
-        <div>
-          <h2 id="update-dialog-title">{tf("发现新版本 {0}", [update.latestVersion ?? ""])}</h2>
-          <p id="update-dialog-description">{tf("当前版本 {0}", [update.currentVersion])}</p>
-        </div>
-        <button className="toast-close" onClick={onClose} type="button" aria-label={t("关闭更新提示")}>×</button>
-      </div>
-      <div className="update-dialog-body">
-        <ReleaseNotes markdown={update.releaseSummary || t("发现可用更新。")} onOpenUrl={onOpenUrl} />
-      </div>
-      <TaskProgressBox completedTitle={t("上次更新结果")} progress={progress} title={t("安装包更新进度")} />
-      <p className="update-dialog-hint">{t("也可随时在“关于”页面检查和安装更新。")}</p>
-      {!update.assetName || !update.assetUrl ? <p className="update-dialog-hint">{t("此版本暂未提供适用于当前系统的安装包。")}</p> : null}
-      <Toolbar className="update-dialog-actions">
-        <Button autoFocus disabled={progress.active || !update.assetName || !update.assetUrl} onClick={onUpdate}>
-          <Download className="h-4 w-4" />
-          {progress.active ? t("正在下载安装包…") : t("立即更新")}
-        </Button>
-        <Button variant="secondary" onClick={onClose}>{t("关闭提示")}</Button>
-        <Button variant="ghost" onClick={onMuteToday}>{t("今日不再提示")}</Button>
-      </Toolbar>
-    </dialog>
-  );
-}
 
 function NoticeDialog({
   notice,
@@ -13092,138 +12160,9 @@ function Toolbar({ children, className = "" }: { children: React.ReactNode; clas
   return <div className={`toolbar ${className}`.trim()}>{children}</div>;
 }
 
-/** 应用栏：上方切换 Agent，下方访问通用页面与界面设置。 */
-function ApplicationRail({
-  tools,
-  activeTool,
-  codexAppRunning,
-  route,
-  theme,
-  onSelect,
-  onNavigate,
-  onToggleTheme,
-}: {
-  tools: ToolEntry[];
-  activeTool: ToolId;
-  codexAppRunning: boolean;
-  route: Route;
-  theme: Theme;
-  onSelect: (toolId: ToolId) => void;
-  onNavigate: (route: Route) => void;
-  onToggleTheme: () => void;
-}) {
-  const languageLabel = getLanguage() === "en" ? t("切换到中文") : t("切换到英文");
-  const themeLabel = theme === "dark" ? t("切换到浅色") : t("切换到深色");
-  return (
-    <aside className="app-rail">
-      <ToolSwitcher
-        tools={tools}
-        activeTool={activeTool}
-        codexAppRunning={codexAppRunning}
-        showSelection={!globalNavigationRoutes.includes(route)}
-        onSelect={onSelect}
-      />
-      <div className="rail-bottom">
-        <nav className="rail-navigation" aria-label={t("系统")}>
-          {globalNavigationRoutes.map((routeId) => {
-            const item = routes.find((candidate) => candidate.id === routeId);
-            if (!item) return null;
-            const Icon = item.icon;
-            const selected = route === item.id;
-            return (
-              <button
-                aria-current={selected ? "page" : undefined}
-                aria-label={item.label}
-                className={`tool-chip rail-nav-item ${selected ? "active" : ""}`}
-                key={item.id}
-                onClick={() => onNavigate(item.id)}
-                title={item.label}
-                type="button"
-              >
-                <Icon aria-hidden="true" className="rail-nav-icon" />
-              </button>
-            );
-          })}
-        </nav>
-        <div className="rail-preferences">
-          <button
-            aria-label={languageLabel}
-            className="tool-chip rail-nav-item"
-            onClick={() => toggleLanguage()}
-            title={languageLabel}
-            type="button"
-          >
-            <Languages aria-hidden="true" className="rail-nav-icon" />
-          </button>
-          <button
-            aria-label={themeLabel}
-            className="tool-chip rail-nav-item"
-            onClick={onToggleTheme}
-            title={themeLabel}
-            type="button"
-          >
-            {theme === "dark" ? <Sun aria-hidden="true" className="rail-nav-icon" /> : <Moon aria-hidden="true" className="rail-nav-icon" />}
-          </button>
-        </div>
-      </div>
-    </aside>
-  );
-}
 
-/**
- * 应用栏上方的 Agent 图标组：点击切换当前聚焦的工具。
- *
- * 这里的「工具」指 Codex / 后续接入的 CLI，每个工具在自己的供应商
- * 分区里，互相不串配置。未接入供应商写盘的工具仍可进入自己的管理页。
- */
-function ToolSwitcher({
-  tools,
-  activeTool,
-  codexAppRunning,
-  showSelection = true,
-  onSelect,
-}: {
-  tools: ToolEntry[];
-  activeTool: ToolId;
-  codexAppRunning: boolean;
-  showSelection?: boolean;
-  onSelect: (toolId: ToolId) => void;
-}) {
-  return (
-    <nav className="tool-switcher" aria-label={t("工具切换")}>
-      {tools.map((tool) => {
-        const icon = TOOL_ICONS[tool.id];
-        const selected = showSelection && tool.id === activeTool;
-        const running = tool.id === "codex" && codexAppRunning;
-        const title = tool.switchable
-          ? tf("{0}｜{1}｜{2} 个供应商", [tool.name, tool.homeDir || t("未配置目录"), tool.relayCount])
-          : tf("{0}｜{1}｜供应商配置尚未接入", [tool.name, tool.homeDir || t("未配置目录")]);
-        return (
-          <button
-            aria-label={tool.switchable ? `${tool.name}${running ? ` · ${t("运行中")}` : ""}` : `${tool.name} · ${t("待接入")}`}
-            aria-pressed={selected}
-            className={`tool-chip ${selected ? "active" : ""}`}
-            disabled={!tool.switchable}
-            key={tool.id}
-            onClick={() => onSelect(tool.id)}
-            title={`${title}${running ? `｜${t("运行中")}` : ""}`}
-            type="button"
-          >
-            {icon ? (
-              <span
-                aria-hidden="true"
-                className={`tool-chip-icon tool-chip-brand-icon tool-chip-icon-${tool.id}`}
-                style={{ maskImage: `url("${icon}")`, WebkitMaskImage: `url("${icon}")` }}
-              />
-            ) : (
-              <Blocks aria-hidden="true" className="tool-chip-icon" />
-            )}
-          </button>
-        );
-      })}
-    </nav>
-  );
-}
+
+
 
 function Field({ label, children, className = "" }: { label: string; children: React.ReactNode; className?: string }) {
   return (
@@ -13368,66 +12307,13 @@ function ScriptRow({ script, actions }: { script: NonNullable<UserScriptInventor
   );
 }
 
-function AdGrid({ ads, empty, actions }: { ads: AdItem[]; empty: string; actions: Actions }) {
-  if (!ads.length) return <div className="empty">{empty}</div>;
-  return (
-    <div className="ad-grid">
-      {ads.map((ad) => (
-        <button className="ad-card" key={ad.id || `${ad.type}-${ad.title}`} onClick={() => void actions.openExternalUrl(ad.url)} type="button">
-          {ad.image ? <img alt="" className="ad-image" src={ad.image} /> : null}
-          <div className="ad-content">
-            <strong>{formatAdTitle(ad.title)}</strong>
-            <p className="recommendation-description" title={ad.description}>{ad.description}</p>
-          </div>
-          {ad.highlights?.length ? (
-            <div className="ad-tags">
-              {ad.highlights.map((item) => (
-                <span key={item}>{item}</span>
-              ))}
-            </div>
-          ) : null}
-          <span className="ad-link">
-            {t("打开")}
-            <ExternalLink className="h-4 w-4" />
-          </span>
-        </button>
-      ))}
-    </div>
-  );
-}
 
-/// 广告标题原样展示。
-///
-/// 以前这里会在 `｜` / `|` 处截断，把「火山引擎｜方舟 Agent Plan」显示成
-/// 「火山引擎」—— 后半段是作者写的产品名，不该被我们悄悄丢掉。既然卡片
-/// 已经改成按内容自适应高度，就不再需要在标题上省这一点空间。
-function formatAdTitle(title: string) {
-  return title.trim() || title;
-}
 
-/// 广告的「同一家」判据。
-///
-/// 只比 id 是不够的：置顶位和推荐池里的同一条赞助商往往有两个 id
-/// （`jojocode-top` vs `jojocode-codex-relay`），但指向同一个去处。
-/// 所以按落地 URL（去 query / 尾斜杠）比，退回标题。
-function adIdentity(ad: AdItem): string {
-  const url = (ad.url || "").trim();
-  if (url) {
-    try {
-      const parsed = new URL(url);
-      return `${parsed.host}${parsed.pathname}`.replace(/\/+$/, "").toLowerCase();
-    } catch {
-      return url.replace(/[?#].*$/, "").replace(/\/+$/, "").toLowerCase();
-    }
-  }
-  return (ad.title || "").trim().toLowerCase();
-}
 
-function isExpiredAd(ad: AdItem) {
-  if (!ad.expires_at) return false;
-  const expiresAt = Date.parse(ad.expires_at);
-  return Number.isFinite(expiresAt) && expiresAt < Date.now();
-}
+
+
+
+
 
 function routeTitle(route: Route) {
   return routes.find((item) => item.id === route)?.label ?? t("概览");
@@ -13448,12 +12334,12 @@ function routeSubtitle(route: Route) {
     dreamSkin: t("Codex-Dream-Skin 风格主题和换图"),
     userScripts: t("内置和用户自定义拓展清单"),
     pluginMarket: t("检索插件，按需下载并安装到 Codex"),
-    recommendations: t("普通推荐内容"),
-    agentCache: t("扫描 Codex、Claude 与 Codex++ 的已知缓存目录，由你选择清理项目。"),
-    agentCollaboration: t("连接 Codex、DeepSeek Harness 与 Claude Code，派发任务并查看结果。"),
+
+
+
     maintenance: t("入口检查与修复、开机启动与应用路径"),
-    about: t("版本信息、项目链接、GitHub Release 更新、日志与诊断"),
-    settings: t("主题和启动参数"),
+
+
   };
   return subtitles[route];
 }
@@ -14202,8 +13088,8 @@ function normalizeSettings(settings: BackendSettings): BackendSettings {
           : "streaming",
     protocolProxyAutoRetryCommitDelayMs: clampNumber(settings.protocolProxyAutoRetryCommitDelayMs ?? 1000, 0, 10000),
     protocolProxyAutoRetryIntervalSeconds: clampNumber(settings.protocolProxyAutoRetryIntervalSeconds ?? 2, 0, 30),
-    codexAppImageOverlayOpacity: clampNumber(settings.codexAppImageOverlayOpacity || 35, 1, 100),
-    codexAppImageOverlayFitMode: normalizeImageOverlayFitMode(settings.codexAppImageOverlayFitMode),
+
+
     codexAppDreamSkinPaused: settings.codexAppDreamSkinPaused === true,
     codexAppDreamSkinThemeConfig: normalizeDreamSkinTheme(settings.codexAppDreamSkinThemeConfig),
     codexAppDreamSkinImagePath: (settings.codexAppDreamSkinImagePath || "").trim(),
@@ -14255,19 +13141,11 @@ function parsePort(value: string, fallback: number): number {
   return Number.isInteger(parsed) && parsed >= 1 && parsed <= 65535 ? parsed : fallback;
 }
 
-function normalizeImageOverlayFitMode(value: string | undefined): ImageOverlayFitMode {
-  return value === "fill" || value === "fit" || value === "stretch" || value === "tile" || value === "center"
-    ? value
-    : "fit";
-}
 
-function codexExtraArgsToInput(args: string[] | undefined) {
-  return (args ?? []).join("\n");
-}
 
-function inputToCodexExtraArgs(value: string) {
-  return value === "" ? [] : value.split(/\r?\n/);
-}
+
+
+
 
 function normalizeRelayProfile(profile: RelayProfile, defaultContextSelection = emptyContextSelection()): RelayProfile {
   const legacyMixedApi = profile.relayMode === "mixedApi";
@@ -15804,10 +14682,7 @@ function stringifyError(error: unknown) {
   return String(error);
 }
 
-function loadInitialTheme(): Theme {
-  if (typeof window === "undefined") return "dark";
-  return window.localStorage.getItem("codex-plus-theme") === "light" ? "light" : "dark";
-}
+
 
 function loadInitialRoute(): Route {
   if (typeof window === "undefined") return "overview";
@@ -15815,9 +14690,6 @@ function loadInitialRoute(): Route {
   const previewRoute = params.get("previewRoute");
   if (previewRoute && routes.some((item) => item.id === previewRoute)) {
     return previewRoute as Route;
-  }
-  if (params.get("showUpdate") === "1" || window.location.hash === "#about") {
-    return "about";
   }
   return "overview";
 }

@@ -134,10 +134,7 @@ test("complete voice and Stepwise panels share the enhancement form and save act
   const calls = descendants(enhance).filter(ts.isCallExpression);
   assert.ok(calls.some((node) => node.expression.getText(app) === "actions.saveSettings"), "enhancements must retain their save action");
 
-  const settings = component("SettingsScreen");
-  assert.ok(!elements(settings).some((element) => ["DictationSettingsPanel", "StepwiseSettingsPanel"].includes(element.tagName.getText(app))));
-  assert.ok(!descendants(settings).some((node) => ts.isPropertyAccessExpression(node)
-    && (/^form\.dictation(?:\.|$)/.test(node.getText(app)) || /^form\.codexApp(?:Stepwise|AnswerOutline)/.test(node.getText(app)))));
+  assert.ok(!app.statements.some((node) => ts.isFunctionDeclaration(node) && node.name?.text === "SettingsScreen"));
 });
 
 test("local speech download requires a configuration button click and mount only reads status", () => {

@@ -50,15 +50,11 @@ test("maintenance retains application entrypoint checks and repairs", () => {
   assert.match(screen, /actions\.repairShortcuts\(\)/);
 });
 
-test("settings exposes reviewed configuration export and draft import", () => {
-  const screen = functionSource("SettingsScreen");
-  assert.match(screen, /actions\.exportSettings\(\)/);
-  assert.match(screen, /actions\.importSettings\(\)/);
+test("retired settings commands are not exposed while shared configuration remains", () => {
   const entry = functionSource("App");
-  assert.match(entry, /call<CommandResult<\{ path: string \}>>\("export_settings"/);
-  assert.match(entry, /call<SettingsResult>\("preview_import_settings"/);
-  assert.match(entry, /call<SettingsResult>\("set_settings_path"/);
-  assert.match(entry, /call<SettingsResult>\("reset_settings_path"/);
+  assert.doesNotMatch(entry, /export_settings|preview_import_settings|set_settings_path|reset_settings_path/);
+  assert.match(entry, /"load_settings"/);
+  assert.match(entry, /"save_settings"/);
 });
 
 test("maintenance no longer offers the removed entrypoint management panel", () => {
