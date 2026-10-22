@@ -98,6 +98,8 @@ test("retired enhancements have no settings, navigation or command references in
     "API 余额（可选）", "如果使用官方模式或官方混入 API 模式，通常不需要开启插件市场解锁。",
     "对话与输入", "Markdown 导出", "粘贴修复", "强制中文界面", "容量错误自动重试",
     "打字特效（彩虹 P）", "会话 ID 标识", "对话居中宽度", "切换对话保留位置", "用量状态栏",
+    "FeatureGroup", "插件与模型", "NativeBrowserStatusView", "nativeBrowserConsent", "isWindowsPlatform",
+    "原生 Edge / Chrome 请求标识兼容（实验）", "模型白名单解锁", "原生 Fast 强制解锁",
   ]);
   const references = descendants(app)
     .filter((node) => ts.isIdentifier(node) || ts.isStringLiteral(node))
@@ -106,15 +108,14 @@ test("retired enhancements have no settings, navigation or command references in
   assert.deepEqual([...new Set(references)], []);
 });
 
-test("remaining enhancements use the master switch and keep their complete feature groups", () => {
+test("marketplace unlock is the only remaining enhancement and obeys the master switch", () => {
   const enhance = component("EnhanceScreen");
   const toggles = elements(enhance).filter((element) => element.tagName.getText(app) === "FeatureToggle");
-  assert.ok(toggles.length > 0);
+  assert.equal(toggles.length, 1);
   for (const toggle of toggles) assert.equal(attribute(toggle, "disabled"), "!masterEnabled");
   assert.equal(attribute(fieldControl(enhance, "form.codexAppPluginMarketplaceUnlock"), "disabled"), "!masterEnabled");
-  const groups = elements(enhance).filter((element) => element.tagName.getText(app) === "FeatureGroup");
-  assert.deepEqual(groups.map((element) => attribute(element, "title")), ['t("插件与模型")']);
-  for (const group of groups) assert.equal(isConditional(group, enhance), false, "remaining groups stay visible when enhancements are off");
+  assert.equal(attribute(toggles[0], "title"), 't("插件市场解锁")');
+  assert.equal(isConditional(toggles[0], enhance), false, "marketplace unlock stays visible when enhancements are off");
 
   const visibleEnglish = descendants(app).filter((node) => ts.isStringLiteral(node)
     || ts.isNoSubstitutionTemplateLiteral(node) || ts.isJsxText(node)).filter((node) => /Stepwise/.test(node.getText(app)));
@@ -167,7 +168,8 @@ test("retired enhancement controls cannot reappear or autosave from enhancements
   for (const field of ["codexAppWhaleWidgetEnabled", "codexAppWhaleBalanceProtocol", "codexAppWhaleBalancePath", "codexAppWhaleBalanceField",
     "codexAppWhaleBalanceCurrency", "codexAppWhaleBalanceScale", "codexAppPetRealMouseLook", "codexAppActivityOverlayRight", "codexAppStandaloneQuotaUnlock",
     "codexAppSessionDelete", "codexAppMarkdownExport", "codexAppPasteFix", "codexAppForceChineseLocale", "codexAppCapacityAutoRetry",
-    "codexAppTypingEffect", "codexAppThreadIdBadge", "codexAppConversationView", "codexAppThreadScrollRestore", "codexAppUsageStatusLine"]) {
+    "codexAppTypingEffect", "codexAppThreadIdBadge", "codexAppConversationView", "codexAppThreadScrollRestore", "codexAppUsageStatusLine",
+    "codexAppNativeBrowserRequireIdentification", "codexAppModelWhitelistUnlock", "codexAppNativeFastUnlock"]) {
     assert.ok(!controls.some((element) => attribute(element, "checked") === `form.${field}` || attribute(element, "value") === `form.${field}`), field);
   }
   assert.ok(!descendants(enhance).filter(ts.isCallExpression)
@@ -175,15 +177,15 @@ test("retired enhancement controls cannot reappear or autosave from enhancements
   assert.ok(!controls.some((element) => attribute(element, "className") === "hint-line enhance-footer-hint"));
 });
 
-test("native Fast unlock is the only Fast enhancement toggle and keeps the provider support notice", () => {
+test("marketplace unlock remains editable through explicit save without the retired browser status panel", () => {
   const enhance = component("EnhanceScreen");
-  const nativeFast = fieldControl(enhance, "form.codexAppNativeFastUnlock");
-  assert.equal(nativeFast.tagName.getText(app), "FeatureToggle");
-  assert.equal(attribute(nativeFast, "title"), 't("原生 Fast 强制解锁")');
-  assert.equal(attribute(nativeFast, "disabled"), "!masterEnabled");
-  assert.match(attribute(nativeFast, "detail") || "", /纯 API Key.*原生 Fast.*供应商决定/);
-  const handler = eventHandlerNodes(enhance, nativeFast, "onChange");
-  assert.ok(handler.some((node) => ts.isStringLiteral(node) && node.text === "codexAppNativeFastUnlock"));
+  const marketplace = fieldControl(enhance, "form.codexAppPluginMarketplaceUnlock");
+  const handler = eventHandlerNodes(enhance, marketplace, "onChange");
+  assert.ok(handler.some((node) => ts.isStringLiteral(node) && node.text === "codexAppPluginMarketplaceUnlock"));
+  assert.ok(!descendants(enhance).filter(ts.isCallExpression)
+    .some((node) => node.expression.getText(app) === "actions.saveSettingsValue"));
+  assert.doesNotMatch(appSource, /native-browser-settings|NativeBrowserStatusView/);
+  assert.match(appSource, /codexAppNativeBrowserRequireIdentification: false,/);
+  assert.match(appSource, /codexAppModelWhitelistUnlock: true,/);
   assert.match(appSource, /codexAppNativeFastUnlock: false,/);
-  assert.ok(!elements(enhance).some((element) => attribute(element, "checked") === "form.codexAppServiceTierControls"));
 });

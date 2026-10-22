@@ -69,16 +69,15 @@ test("patch diagnostics describe only patch state, not browser availability", ()
   }
 });
 
-test("consent precedes enabling, default is off, and refresh is read-only", async () => {
+test("retired browser settings stay unmounted while persisted defaults and read-only diagnostics remain compatible", async () => {
   const app = await readFile(new URL("./App.tsx", import.meta.url), "utf8");
   const component = await readFile(new URL("./native-browser-settings.tsx", import.meta.url), "utf8");
   assert.match(app, /codexAppNativeBrowserRequireIdentification: false/);
-  assert.match(app, /if \(value && !window\.confirm\(nativeBrowserConsent\)\) return;/);
+  assert.doesNotMatch(app, /native-browser-settings|NativeBrowserStatusView|nativeBrowserConsent/);
   assert.match(component, /x-browser-agent/);
   assert.match(component, /不会关闭扩展已保存的标识设置/);
   assert.match(component, /Edge \/ Chrome 稳定版扩展/);
-  assert.match(app, /原生 Edge \/ Chrome 请求标识兼容（实验）/);
-  assert.match(app, /此兼容补丁仅适配 Windows 上的 Edge \/ Chrome/);
+  assert.doesNotMatch(app, /原生 Edge \/ Chrome 请求标识兼容（实验）/);
   assert.match(nativeBrowserStatusLabel("unsupported"), /Edge \/ Chrome/);
   assert.match(component, /"native_browser_status"/);
   assert.doesNotMatch(component, /"restart|"save_settings/);

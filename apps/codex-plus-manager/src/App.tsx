@@ -65,7 +65,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { NativeBrowserStatusView, nativeBrowserConsent } from "./native-browser-settings";
 
 
 import { McpPage, PageHeader } from "./ManagementPages";
@@ -165,8 +164,6 @@ import { isProviderSyncTargetSelectable, preferredProviderSyncTarget } from "./p
 import { resolveLaunchStatus, launchCompletionNotice } from "./launch-status";
 import { t, tf } from "@/i18n";
 import { vlmTestTranslation } from "./vlm-test-translation";
-
-const isWindowsPlatform = /\bWindows\b/i.test(navigator.userAgent);
 
 type Status = "ok" | "failed" | "not_implemented" | "not_checked" | string;
 
@@ -2993,25 +2990,8 @@ function EnhanceScreen({
       <div className="enhance-general">
         <Panel className="enhance-panel">
           <CardContent className="enhance-content">
-            <div className="enhance-feature-groups">
-              <FeatureGroup title={t("插件与模型")} detail={t("管理插件市场、模型列表和服务档位相关增强。")}>
-                {isWindowsPlatform ? <>
-                  <FeatureToggle
-                    title={t("原生 Edge / Chrome 请求标识兼容（实验）")}
-                    detail={t("此兼容补丁仅适配 Windows 上的 Edge / Chrome；下次启动 Codex 时应用。扩展可能保留请求标识设置。")}
-                    checked={form.codexAppNativeBrowserRequireIdentification}
-                    disabled={!masterEnabled}
-                    onChange={(value) => {
-                      if (value && !window.confirm(nativeBrowserConsent)) return;
-                      setEnhanceFlag("codexAppNativeBrowserRequireIdentification", value);
-                    }}
-                  />
-                  <NativeBrowserStatusView />
-                </> : null}
-                <FeatureToggle title={t("插件市场解锁")} detail={t("API Key 模式下扩展插件市场请求，尽量显示完整插件列表；官方/混合模式通常不需要。")} checked={form.codexAppPluginMarketplaceUnlock} disabled={!masterEnabled} onChange={(value) => setEnhanceFlag("codexAppPluginMarketplaceUnlock", value)} />
-                <FeatureToggle title={t("模型白名单解锁")} detail={t("从环境变量和 config.toml 的 /v1/models 拉取模型并补进模型列表。")} checked={form.codexAppModelWhitelistUnlock} disabled={!masterEnabled} onChange={(value) => setEnhanceFlag("codexAppModelWhitelistUnlock", value)} />
-                <FeatureToggle title={t("原生 Fast 强制解锁")} detail={t("纯 API Key 模式恢复原生 Fast 开关；保存后重新启动 Codex 生效，实际支持与计费由供应商决定。")} checked={form.codexAppNativeFastUnlock} disabled={!masterEnabled} onChange={(value) => setEnhanceFlag("codexAppNativeFastUnlock", value)} />
-              </FeatureGroup>
+            <div className="feature-switch-grid enhance-switch-grid">
+              <FeatureToggle title={t("插件市场解锁")} detail={t("API Key 模式下扩展插件市场请求，尽量显示完整插件列表；官方/混合模式通常不需要。")} checked={form.codexAppPluginMarketplaceUnlock} disabled={!masterEnabled} onChange={(value) => setEnhanceFlag("codexAppPluginMarketplaceUnlock", value)} />
             </div>
           </CardContent>
         </Panel>
@@ -6727,18 +6707,6 @@ function FeatureItem({ title, detail, enabled }: { title: string; detail: string
       </div>
       <Badge status={enabled ? "ok" : "disabled"} />
     </div>
-  );
-}
-
-function FeatureGroup({ title, detail, children }: { title: string; detail: string; children: ReactNode }) {
-  return (
-    <section className="feature-group">
-      <div className="feature-group-head">
-        <strong>{title}</strong>
-        <small>{detail}</small>
-      </div>
-      <div className="feature-switch-grid">{children}</div>
-    </section>
   );
 }
 

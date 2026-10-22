@@ -15,13 +15,13 @@ function ruleBody(selector: string) {
   return match[1];
 }
 
-test("remaining enhancement switches keep their own height and a responsive grid", () => {
-  // 默认 align-items: stretch 会把同一行的卡片拉到行高，details 一展开左侧卡就被撑大。
+test("the remaining enhancement fits a single column without retired group layout", () => {
   assert.match(ruleBody(".feature-switch-grid"), /align-items:\s*start/);
 
   assert.match(
-    ruleBody(".enhance-feature-groups .feature-switch-grid"),
-    /grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
+    ruleBody(".enhance-switch-grid"),
+    /grid-template-columns:\s*minmax\(0,\s*1fr\)/,
   );
-  assert.doesNotMatch(styles, /\.enhance-footer-hint\b|\.enhance-feature-groups \.feature-switch-grid > \.settings-block/);
+  assert.match(ruleBody(".enhance-switch-grid"), /width:\s*min\(100%,\s*420px\)/);
+  assert.doesNotMatch(styles, /\.enhance-footer-hint\b|\.enhance-feature-groups\b/);
 });

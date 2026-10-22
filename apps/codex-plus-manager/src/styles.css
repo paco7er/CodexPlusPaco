@@ -3124,13 +3124,6 @@ details.relay-fold[open] > .relay-fold-body {
   min-width: 0;
 }
 
-.enhance-feature-groups {
-  display: grid;
-  gap: 12px;
-  margin: 14px 0;
-  min-width: 0;
-}
-
 .feature-group {
   min-width: 0;
   border: 1px solid hsl(var(--border));
@@ -6518,44 +6511,13 @@ select {
   padding: 16px 18px;
 }
 
-.enhance-feature-groups {
-  gap: 0;
+.enhance-switch-grid {
+  grid-template-columns: minmax(0, 1fr);
+  width: min(100%, 420px);
   margin: 0;
 }
 
-.enhance-feature-groups .feature-group {
-  display: grid;
-  gap: 10px;
-  border: 0;
-  border-bottom: 1px solid hsl(var(--border));
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  padding: 16px 0;
-}
-
-.enhance-feature-groups .feature-group-head {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-}
-
-.enhance-feature-groups .feature-group-head strong {
-  flex-shrink: 0;
-  font-size: 13px;
-}
-
-.enhance-feature-groups .feature-switch-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 18px;
-  margin: 0;
-}
-
-.enhance-feature-groups .feature-group:first-child .feature-switch-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.enhance-feature-groups .feature-toggle {
+.enhance-switch-grid .feature-toggle {
   border: 0;
   border-radius: 6px;
   background: hsl(var(--surface-raised) / 0.55);
@@ -6576,30 +6538,6 @@ select {
   background: hsl(var(--accent) / 0.65);
 }
 
-.enhance-feature-groups .feature-action-row {
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  border: 0;
-  border-radius: 6px;
-  background: hsl(var(--surface-raised) / 0.55);
-  padding: 10px 12px;
-}
-
-.enhance-feature-groups .feature-action-row strong {
-  font-size: 12px;
-}
-
-.enhance-feature-groups .feature-action-row small {
-  font-size: 11px;
-}
-
-@media (max-width: 1080px) {
-  .enhance-feature-groups .feature-group:first-child .feature-switch-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-}
-
 @media (max-width: 760px) {
   .enhance-page-toolbar {
     flex-wrap: wrap;
@@ -6612,21 +6550,6 @@ select {
     justify-content: space-between;
   }
 
-  .enhance-feature-groups .feature-group-head {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .enhance-feature-groups .feature-switch-grid,
-  .enhance-feature-groups .feature-group:first-child .feature-switch-grid,
-  .enhance-feature-groups .feature-action-row {
-    grid-template-columns: 1fr;
-  }
-
-  .enhance-feature-groups .feature-action-row button {
-    width: fit-content;
-  }
 }
 
 .settings-page {
