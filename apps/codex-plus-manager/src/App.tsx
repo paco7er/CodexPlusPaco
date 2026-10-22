@@ -73,7 +73,7 @@ import { SkillsPage } from "./ManagementExtra";
 import { ProjectSessionPage } from "./ProjectSessionPage";
 import { managerNavigationDestination, type ManagerNavigationIntent } from "./enhancement-navigation";
 import { DEFAULT_AUTO_COMPACT_PERCENT, autoCompactOptions, normalizeAutoCompactPercent } from "./auto-compact";
-import { defaultWhaleBalanceSettings, normalizeWhaleBalanceSettings, whaleBalanceSettingsIssue, type WhaleBalanceIssue, type WhaleBalanceProtocol, type WhaleBalanceSettings } from "./whale-settings";
+import { defaultWhaleBalanceSettings, normalizeWhaleBalanceSettings, type WhaleBalanceSettings } from "./whale-settings";
 import {
   defaultDictationSettings,
   normalizeDictationSettings,
@@ -167,8 +167,6 @@ import { t, tf } from "@/i18n";
 import { vlmTestTranslation } from "./vlm-test-translation";
 
 const isWindowsPlatform = /\bWindows\b/i.test(navigator.userAgent);
-const isMacPlatform = /\bMacintosh\b/i.test(navigator.userAgent);
-const supportsPetRealMouseLook = isWindowsPlatform || isMacPlatform;
 
 type Status = "ok" | "failed" | "not_implemented" | "not_checked" | string;
 
@@ -1325,11 +1323,6 @@ export function App() {
 
   const saveSettings = async () => {
     const next = normalizeSettings(settingsForm);
-    const whaleIssue = whaleBalanceValidationMessage(whaleBalanceSettingsIssue(next));
-    if (whaleIssue) {
-      showNotice(t("Codex 用量挂件"), whaleIssue, "failed");
-      return;
-    }
     const result = await run(() => call<SettingsResult>("save_settings", { settings: next }));
     if (result) {
       if (isSuccessStatus(result.status)) {
@@ -1342,11 +1335,6 @@ export function App() {
 
   const saveSettingsValue = async (next: BackendSettings, silent = true) => {
     const normalized = normalizeSettings(next);
-    const whaleIssue = whaleBalanceValidationMessage(whaleBalanceSettingsIssue(normalized));
-    if (whaleIssue) {
-      showNotice(t("Codex 用量挂件"), whaleIssue, "failed");
-      return null;
-    }
     const result = await run(() => call<SettingsResult>("save_settings", { settings: normalized }));
     if (result && isSuccessStatus(result.status)) {
       const saved = normalizeSettings(result.settings);
@@ -2964,61 +2952,6 @@ function envConflictSourceLabel(source: string): string {
   return source || t("环境变量");
 }
 
-function whaleBalanceValidationMessage(issue: WhaleBalanceIssue | null): string | null {
-  if (issue === "path") return t("请填写供应商同域下的余额接口路径，不包含网址、查询参数或片段。");
-  if (issue === "field") return t("请填写余额字段路径，例如 data.balance 或 data.accounts[0].balance。");
-  if (issue === "currency") return t("币种请使用三位代码，例如 USD 或 CNY。");
-  if (issue === "scale") return t("金额倍率必须是大于 0 且不超过 1e12 的有限数值。");
-  return null;
-}
-
-function WhaleBalanceSettingsFields({ form, onFormChange }: {
-  form: BackendSettings;
-  onFormChange: (value: BackendSettings) => void;
-}) {
-  if (!form.codexAppWhaleWidgetEnabled) return null;
-  const update = (patch: Partial<WhaleBalanceSettings>) => onFormChange({ ...form, ...patch });
-  const issue = whaleBalanceValidationMessage(whaleBalanceSettingsIssue(normalizeWhaleBalanceSettings(form)));
-  const disabled = !form.enhancementsEnabled;
-  return (
-    <details className="settings-block">
-      <summary>{t("API 余额（可选）")}</summary>
-      <p className="field-hint">{t("跟随 Codex++ 当前供应商查询余额；Codex 订阅额度和本地 token 无需配置此项。")}</p>
-      <Field label={t("余额查询方式")}>
-        <AppSelect<WhaleBalanceProtocol>
-          value={form.codexAppWhaleBalanceProtocol}
-          disabled={disabled}
-          onChange={(value) => update({ codexAppWhaleBalanceProtocol: value })}
-          options={[
-            { value: "auto", label: t("自动识别已支持的接口") },
-            { value: "off", label: t("仅显示 Codex 用量") },
-            { value: "custom", label: t("自定义供应商余额接口") },
-          ]}
-        />
-      </Field>
-      {form.codexAppWhaleBalanceProtocol === "custom" ? <>
-        <p className="field-hint">{t("按供应商文档填写 GET 接口和返回字段，复用当前供应商的 API Key。币种和倍率应与供应商账单一致。")}</p>
-        <Field label={t("余额接口路径")}>
-          <Input disabled={disabled} value={form.codexAppWhaleBalancePath} placeholder="/api/balance" onChange={(event) => update({ codexAppWhaleBalancePath: event.currentTarget.value })} />
-        </Field>
-        <Field label={t("余额字段路径")}>
-          <Input disabled={disabled} value={form.codexAppWhaleBalanceField} placeholder="data.balance" onChange={(event) => update({ codexAppWhaleBalanceField: event.currentTarget.value })} />
-        </Field>
-        <div className="form-row">
-          <Field label={t("余额币种")}>
-            <Input disabled={disabled} maxLength={3} value={form.codexAppWhaleBalanceCurrency} placeholder="USD" onChange={(event) => update({ codexAppWhaleBalanceCurrency: event.currentTarget.value.toUpperCase() })} />
-          </Field>
-          <Field label={t("金额倍率")}>
-            <Input disabled={disabled} type="number" step="any" min={0} value={Number.isFinite(form.codexAppWhaleBalanceScale) ? form.codexAppWhaleBalanceScale : ""} onChange={(event) => update({ codexAppWhaleBalanceScale: event.currentTarget.valueAsNumber })} />
-          </Field>
-        </div>
-        <p className="field-hint">{t("显示金额 = 接口数值 × 倍率；例如接口返回分时，倍率填 0.01。")}</p>
-        {issue ? <p className="field-hint" role="alert">{issue}</p> : null}
-      </> : null}
-    </details>
-  );
-}
-
 function EnhanceScreen({
   dirty,
   form,
@@ -3031,11 +2964,6 @@ function EnhanceScreen({
   actions: Actions;
 }) {
   const setEnhanceFlag = (key: keyof BackendSettings, value: boolean) => onFormChange({ ...form, [key]: value });
-  const setPersistedEnhanceFlag = (key: keyof BackendSettings, value: boolean) => {
-    const next = { ...form, [key]: value };
-    onFormChange(next);
-    void actions.saveSettingsValue(next, true);
-  };
   const masterEnabled = form.enhancementsEnabled;
   return (
     <div className="settings-page enhance-page">
@@ -3066,10 +2994,6 @@ function EnhanceScreen({
         <Panel className="enhance-panel">
           <CardContent className="enhance-content">
             <div className="enhance-feature-groups">
-              {/* 关闭增强时这组是唯一仍会生效的补丁，因此提到最前面；开启增强时它排在最后。 */}
-              {masterEnabled ? null : (
-                <StandaloneModeGroup form={form} onFormChange={onFormChange} masterEnabled={masterEnabled} />
-              )}
               <FeatureGroup title={t("插件与模型")} detail={t("管理插件市场、模型列表和服务档位相关增强。")}>
                 {isWindowsPlatform ? <>
                   <FeatureToggle
@@ -3117,56 +3041,11 @@ function EnhanceScreen({
                 <FeatureToggle title={t("切换对话保留位置")} detail={t("切换 thread 时恢复上一次浏览位置。")} checked={form.codexAppThreadScrollRestore} disabled={!masterEnabled} onChange={(value) => setEnhanceFlag("codexAppThreadScrollRestore", value)} />
                 <FeatureToggle title={t("用量状态栏")} detail={t("在输入框下方显示生成速度、缓存命中率和上下文占用。数据来自本机 Codex 会话记录，不改变请求内容。")} checked={form.codexAppUsageStatusLine} disabled={!masterEnabled} onChange={(value) => setEnhanceFlag("codexAppUsageStatusLine", value)} />
               </FeatureGroup>
-              <FeatureGroup title={t("挂件与桌宠")} detail={t("在 Codex 中查看用量，设置自己的角色和互动方式。")}>
-                <FeatureToggle
-                  title={t("Codex 用量挂件")}
-                  detail={t("原版角色、泡泡编辑器、音效库和提醒，显示 Codex 会话与全机用量。点击角色旁的菜单配置。")}
-                  checked={form.codexAppWhaleWidgetEnabled}
-                  disabled={!masterEnabled}
-                  onChange={(value) => setEnhanceFlag("codexAppWhaleWidgetEnabled", value)}
-                />
-                <FeatureToggle title={t("活动进度条右侧布局")} detail={t("把 Codex 原生活动进度条、状态波形和活动悬浮框移到右侧，并镜像波形方向。")} checked={form.codexAppActivityOverlayRight} disabled={!masterEnabled} onChange={(value) => setEnhanceFlag("codexAppActivityOverlayRight", value)} />
-                {supportsPetRealMouseLook ? <FeatureToggle title={t("桌宠跟随真实鼠标")} detail={t("仅支持 V2 桌宠；不会修改宠物文件。将 V2 的 Computer Use 光标朝向动作映射到真实鼠标，V1 开启后安全不生效；拖拽、原生悬停或 Computer Use 活跃时自动让步。")} checked={form.codexAppPetRealMouseLook} disabled={!masterEnabled} onChange={(value) => setPersistedEnhanceFlag("codexAppPetRealMouseLook", value)} /> : null}
-                {/* 余额配置独占一整行（CSS: > .settings-block），展开时不会牵动上面的开关卡。 */}
-                <WhaleBalanceSettingsFields form={form} onFormChange={onFormChange} />
-              </FeatureGroup>
-              {masterEnabled ? (
-                <StandaloneModeGroup form={form} onFormChange={onFormChange} masterEnabled={masterEnabled} />
-              ) : null}
-            </div>
-            <div className="hint-line enhance-footer-hint">
-              <Info className="h-4 w-4" />
-              <span>{t("如果使用官方模式或官方混入 API 模式，通常不需要开启插件市场解锁。")}</span>
             </div>
           </CardContent>
         </Panel>
       </div>
     </div>
-  );
-}
-
-// 增强总开关关闭后仍生效的独立补丁。不受总开关禁用，所以不放进 FeatureGroup 的
-// masterEnabled 门控里；关闭增强时提到最前面。
-function StandaloneModeGroup({
-  form,
-  onFormChange,
-  masterEnabled,
-}: {
-  form: BackendSettings;
-  onFormChange: (value: BackendSettings) => void;
-  masterEnabled: boolean;
-}) {
-  return (
-    <FeatureGroup title={t("独立模式")} detail={t("增强总开关关闭后仍会生效的补丁。")}>
-      <FeatureToggle
-        title={t("官方额度解锁")}
-        detail={masterEnabled
-          ? t("增强开启时此能力已自动生效；此开关只在关闭增强后生效。")
-          : t("官方登录 + API 供应商在官方订阅额度耗尽后仍可发送；只改客户端发送状态，不改变真实用量与计费。保存后重启 Codex 生效。")}
-        checked={form.codexAppStandaloneQuotaUnlock}
-        onChange={(value) => onFormChange({ ...form, codexAppStandaloneQuotaUnlock: value })}
-      />
-    </FeatureGroup>
   );
 }
 

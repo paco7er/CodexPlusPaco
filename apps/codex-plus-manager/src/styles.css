@@ -6555,12 +6555,6 @@ select {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-/* 可展开的配置块（如「API 余额（可选）」）独占一整行：展开只往下长，
-   不会拉高或顶开同一行里的功能开关卡。 */
-.enhance-feature-groups .feature-switch-grid > .settings-block {
-  grid-column: 1 / -1;
-}
-
 .enhance-feature-groups .feature-toggle {
   border: 0;
   border-radius: 6px;
@@ -6596,11 +6590,6 @@ select {
 }
 
 .enhance-feature-groups .feature-action-row small {
-  font-size: 11px;
-}
-
-.enhance-footer-hint {
-  margin: 4px 0 0;
   font-size: 11px;
 }
 

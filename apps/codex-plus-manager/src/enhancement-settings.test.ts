@@ -92,6 +92,10 @@ test("retired enhancements have no settings, navigation or command references in
     "语音输入", "下一步建议", "语音服务预设", "下载本地模型", "保存全局热键",
     "testStepwiseSettings", "test_stepwise_settings", "download_dictation_local_model",
     "dictation_local_model_status", "load_global_dictation_hotkey", "set_global_dictation_hotkey",
+    "StandaloneModeGroup", "WhaleBalanceSettingsFields", "whaleBalanceValidationMessage",
+    "whaleBalanceSettingsIssue", "supportsPetRealMouseLook", "setPersistedEnhanceFlag",
+    "挂件与桌宠", "独立模式", "Codex 用量挂件", "活动进度条右侧布局", "桌宠跟随真实鼠标", "官方额度解锁",
+    "API 余额（可选）", "如果使用官方模式或官方混入 API 模式，通常不需要开启插件市场解锁。",
   ]);
   const references = descendants(app)
     .filter((node) => ts.isIdentifier(node) || ts.isStringLiteral(node))
@@ -106,19 +110,9 @@ test("remaining enhancements use the master switch and keep their complete featu
   assert.ok(toggles.length > 0);
   for (const toggle of toggles) assert.equal(attribute(toggle, "disabled"), "!masterEnabled");
   assert.equal(attribute(fieldControl(enhance, "form.codexAppPluginMarketplaceUnlock"), "disabled"), "!masterEnabled");
-  const petGroup = elements(enhance).find((element) => element.tagName.getText(app) === "FeatureGroup"
-    && attribute(element, "title") === 't("挂件与桌宠")');
-  assert.ok(petGroup);
-  assert.equal(attribute(petGroup, "detail"), 't("在 Codex 中查看用量，设置自己的角色和互动方式。")');
-  const petLook = fieldControl(petGroup.parent, "form.codexAppPetRealMouseLook");
-  assert.ok(descendants(enhance).some((node) => ts.isConditionalExpression(node)
-    && node.condition.getText(app) === "supportsPetRealMouseLook" && descendants(node.whenTrue).includes(petLook)), "native pet mouse tracking must be available on Windows and macOS");
-  assert.ok(!descendants(enhance).some((node) => ts.isConditionalExpression(node)
-    && node.condition.getText(app) === "isWindowsPlatform" && descendants(node.whenTrue).includes(petLook)), "native pet mouse tracking must not stay Windows-only");
-  const whaleWidget = fieldControl(petGroup.parent, "form.codexAppWhaleWidgetEnabled");
-  assert.ok(!descendants(enhance).some((node) => ts.isConditionalExpression(node)
-    && node.condition.getText(app) === "isWindowsPlatform" && descendants(node.whenTrue).includes(whaleWidget)), "the Codex usage widget must be available on every platform");
-  assert.ok(fieldControl(petGroup.parent, "form.codexAppActivityOverlayRight"), "the native activity overlay mirror belongs with the pet layout settings");
+  const groups = elements(enhance).filter((element) => element.tagName.getText(app) === "FeatureGroup");
+  assert.deepEqual(groups.map((element) => attribute(element, "title")), ['t("插件与模型")', 't("对话与输入")']);
+  for (const group of groups) assert.equal(isConditional(group, enhance), false, "remaining groups stay visible when enhancements are off");
 
   const visibleEnglish = descendants(app).filter((node) => ts.isStringLiteral(node)
     || ts.isNoSubstitutionTemplateLiteral(node) || ts.isJsxText(node)).filter((node) => /Stepwise/.test(node.getText(app)));
@@ -164,46 +158,16 @@ test("enhancement saving is an explicit permanent top action", () => {
   assert.ok(general && saves[0].pos < general.pos);
 });
 
-test("standalone quota unlock stays in the general settings and remains editable when enhancements are off", () => {
+test("retired widget and standalone controls cannot reappear or autosave from enhancements", () => {
   const enhance = component("EnhanceScreen");
-  const group = component("StandaloneModeGroup");
-  const standalone = fieldControl(group, "form.codexAppStandaloneQuotaUnlock");
-  assert.equal(standalone.tagName.getText(app), "FeatureToggle");
-  assert.equal(attribute(standalone, "title"), 't("官方额度解锁")');
-  assert.equal(attribute(standalone, "disabled"), undefined, "独立模式补丁不能被增强总开关禁用");
-  assert.match(attribute(standalone, "detail") || "", /masterEnabled/, "开关说明要区分增强开启/关闭两种状态");
-  assert.match(appSource, /增强开启时此能力已自动生效；此开关只在关闭增强后生效。/);
-  assert.match(appSource, /官方登录 \+ API 供应商在官方订阅额度耗尽后仍可发送；只改客户端发送状态，不改变真实用量与计费。/);
-  const handler = eventHandlerNodes(group, standalone, "onChange");
-  assert.ok(handler.some((node) => ts.isCallExpression(node) && node.expression.getText(app) === "onFormChange"));
-  assert.ok(handler.some((node) => ts.isPropertyAssignment(node) && node.name.getText(app) === "codexAppStandaloneQuotaUnlock"));
-
-  const featureGroup = elements(group).find((element) => element.tagName.getText(app) === "FeatureGroup");
-  assert.ok(featureGroup);
-  assert.equal(attribute(featureGroup, "title"), 't("独立模式")');
-  assert.equal(attribute(featureGroup, "detail"), 't("增强总开关关闭后仍会生效的补丁。")');
-
-  // EnhanceScreen 只负责按总开关状态换位置：关闭增强时置顶，开启增强时置底。
-  const placements = elements(enhance).filter((element) => element.tagName.getText(app) === "StandaloneModeGroup");
-  assert.equal(placements.length, 2, "独立模式分组要有置顶/置底两个挂载点");
-  const conditions = placements.map((element) => {
-    let parent: ts.Node | undefined = element.parent;
-    while (parent && !ts.isConditionalExpression(parent)) parent = parent.parent;
-    assert.ok(parent && ts.isConditionalExpression(parent));
-    return parent;
-  });
-  for (const condition of conditions) assert.equal(condition.condition.getText(app), "masterEnabled");
-  assert.equal(conditions[0].whenTrue.getText(app), "null", "关闭增强时第一个挂载点生效");
-  assert.equal(conditions[1].whenFalse.getText(app), "null", "开启增强时第二个挂载点生效");
-  const firstFeatureGroup = elements(enhance).find((element) => element.tagName.getText(app) === "FeatureGroup");
-  assert.ok(firstFeatureGroup);
-  assert.ok(placements[0].pos < firstFeatureGroup.pos, "关闭增强时独立模式分组排在最前");
-  const featureGroups = elements(enhance).filter((element) => element.tagName.getText(app) === "FeatureGroup");
-  const lastFeatureGroup = featureGroups[featureGroups.length - 1];
-  assert.ok(lastFeatureGroup && placements[1].pos > lastFeatureGroup.pos, "开启增强时独立模式分组排在最后");
-  const general = elements(enhance).find((element) => attribute(element, "className") === "enhance-general");
-  assert.ok(general && ts.isJsxElement(general.parent));
-  for (const placement of placements) assert.ok(placement.pos > general.pos && placement.end < general.parent.end);
+  const controls = elements(enhance);
+  for (const field of ["codexAppWhaleWidgetEnabled", "codexAppWhaleBalanceProtocol", "codexAppWhaleBalancePath", "codexAppWhaleBalanceField",
+    "codexAppWhaleBalanceCurrency", "codexAppWhaleBalanceScale", "codexAppPetRealMouseLook", "codexAppActivityOverlayRight", "codexAppStandaloneQuotaUnlock"]) {
+    assert.ok(!controls.some((element) => attribute(element, "checked") === `form.${field}` || attribute(element, "value") === `form.${field}`), field);
+  }
+  assert.ok(!descendants(enhance).filter(ts.isCallExpression)
+    .some((node) => node.expression.getText(app) === "actions.saveSettingsValue"));
+  assert.ok(!controls.some((element) => attribute(element, "className") === "hint-line enhance-footer-hint"));
 });
 
 test("native Fast unlock is the only Fast enhancement toggle and keeps the provider support notice", () => {
