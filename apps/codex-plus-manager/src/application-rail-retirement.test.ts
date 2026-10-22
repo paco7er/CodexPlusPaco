@@ -16,10 +16,10 @@ test("application rail and retired pages cannot be navigated to", () => {
   const route = source.statements.find((node) => ts.isTypeAliasDeclaration(node) && node.name.text === "Route");
   assert.ok(route);
   const routeText = route.getText(source);
-  for (const id of ["recommendations", "agentCache", "agentCollaboration", "about", "settings"]) {
+  for (const id of ["recommendations", "agentCache", "agentCollaboration", "about", "settings", "maintenance"]) {
     assert.ok(!routeText.includes(`"${id}"`), id);
   }
-  for (const id of ["overview", "relay", "context", "skills", "sessions", "enhance", "pluginMarket", "maintenance"]) {
+  for (const id of ["overview", "relay", "context", "skills", "sessions", "enhance", "pluginMarket"]) {
     assert.ok(routeText.includes(`"${id}"`), id);
   }
   assert.match(app, /<div className="shell">/);

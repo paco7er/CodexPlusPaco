@@ -43,11 +43,18 @@ test("overview merges the local server and protocol conversion and keeps the deb
   assert.match(css, /\.overview-health-grid\s*\{\s*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
 });
 
-test("maintenance retains application entrypoint checks and repairs", () => {
-  const screen = functionSource("MaintenanceScreen");
-  assert.match(screen, /management_shortcut/);
-  assert.match(screen, /actions\.checkHealth\(\)/);
-  assert.match(screen, /actions\.repairShortcuts\(\)/);
+test("overview contains the saved application path and both picker modes", () => {
+  const screen = functionSource("OverviewScreen");
+  assert.match(screen, /t\("Codex 应用路径"\)/);
+  assert.match(screen, /settings\?\.settings\.codexAppPath/);
+  assert.match(screen, /StatusRow title=\{t\("当前识别"\)\} status=\{overview\?\.codex_app\.status\}/);
+  assert.match(screen, /value=\{savedCodexAppPath\}/);
+  assert.match(screen, /readOnly/);
+  assert.match(screen, /actions\.chooseCodexAppPath\("folder"\)/);
+  assert.match(screen, /actions\.chooseCodexAppPath\("file"\)/);
+  assert.match(screen, /actions\.clearCodexAppPath\(\)/);
+  assert.equal((screen.match(/disabled=\{!settings\}/g) ?? []).length, 3);
+  assert.match(functionSource("App"), /<OverviewScreen\s+overview=\{overview\}\s+settings=\{settings\}/);
 });
 
 test("retired settings commands are not exposed while shared configuration remains", () => {
@@ -57,31 +64,14 @@ test("retired settings commands are not exposed while shared configuration remai
   assert.match(entry, /"save_settings"/);
 });
 
-test("maintenance no longer offers the removed entrypoint management panel", () => {
-  const screen = functionSource("MaintenanceScreen");
-  assert.doesNotMatch(screen, /入口管理|安装入口|卸载入口|修复入口|卸载时移除 Codex\+\+ 托管数据/);
-  assert.doesNotMatch(screen, /actions\.installEntrypoints|actions\.uninstallEntrypoints|removeOwnedData/);
+test("maintenance page and its dedicated controls are retired", () => {
+  assert.doesNotMatch(text, /MaintenanceScreen|"maintenance"|t\("安装维护"\)|nav-section-bottom/);
   const entry = functionSource("App");
   assert.doesNotMatch(entry, /install_entrypoints|uninstall_entrypoints|removeOwnedData|installEntrypoints|uninstallEntrypoints/);
+  assert.doesNotMatch(entry, /checkHealth|repairShortcuts|setWatcher|refreshWatcher|launchForm|setAutoTakeover|refreshAutoTakeover/);
 });
 
-test("maintenance drives login startup and auto-takeover with switches", () => {
-  const screen = functionSource("MaintenanceScreen");
-  assert.match(screen, /switch-row/);
-  assert.match(screen, /actions\.setWatcherEnabled\(event\.currentTarget\.checked\)/);
-  assert.match(screen, /actions\.setWatcherStartCodex\(event\.currentTarget\.checked\)/);
-  assert.match(screen, /actions\.setWatcherStartCodexOnOpen\(event\.currentTarget\.checked\)/);
-  assert.match(screen, /actions\.setAutoTakeover\(event\.currentTarget\.checked\)/);
-  // 开关取代了这两组按钮，别再退回去。
-  assert.doesNotMatch(
-    screen,
-    /actions\.(installWatcher|uninstallWatcher|enableWatcher|disableWatcher)|设置开机启动|移除开机启动|关闭自动接管/,
-  );
-});
-
-test("watcher switch command is wired through invoke, handler and backend", () => {
-  const entry = functionSource("App");
-  assert.match(entry, /call<WatcherResult>\("set_watcher_enabled", \{ enabled \}\)/);
+test("existing startup settings keep their backend commands", () => {
   const lib = readFileSync(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
   assert.match(lib, /commands::set_watcher_enabled,/);
   const commands = readFileSync(new URL("../src-tauri/src/commands.rs", import.meta.url), "utf8");
@@ -90,4 +80,110 @@ test("watcher switch command is wired through invoke, handler and backend", () =
   assert.match(commands, /pub fn set_watcher_start_codex_on_open\(enabled: bool\)/);
   assert.match(lib, /commands::set_watcher_start_codex,/);
   assert.match(lib, /commands::set_watcher_start_codex_on_open,/);
+});
+
+function expression(name: string) {
+  let result: ts.Expression | undefined;
+  const visit = (node: ts.Node) => {
+    if ((ts.isVariableDeclaration(node) || ts.isPropertyAssignment(node)) && node.name.getText(app) === name) {
+      result = node.initializer;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(app);
+  assert.ok(result, name);
+  return ts.transpileModule(`const action = ${result.getText(app)};`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
+  }).outputText;
+}
+
+function action(name: string, scope: Record<string, unknown>) {
+  return new Function(...Object.keys(scope), `${expression(name)}\nreturn action;`)(...Object.values(scope));
+}
+
+test("path saves use shared settings persistence and refresh detection only after success", async () => {
+  const draft = { revision: "current", codexAppPath: "old", enhancementsEnabled: true };
+  const writes: unknown[] = [];
+  const refreshes: boolean[] = [];
+  let succeeds = true;
+  const save = action("saveCodexAppPath", {
+    settingsForm: draft,
+    saveSettingsValue: async (next: unknown) => { writes.push(next); return succeeds ? next : null; },
+    refreshOverview: async (silent: boolean) => { refreshes.push(silent); },
+  });
+  assert.deepEqual(await save("G:\\Portable Codex\\app"), { ...draft, codexAppPath: "G:\\Portable Codex\\app" });
+  succeeds = false;
+  assert.equal(await save(""), null);
+  assert.deepEqual(writes, [{ ...draft, codexAppPath: "G:\\Portable Codex\\app" }, { ...draft, codexAppPath: "" }]);
+  assert.deepEqual(refreshes, [true]);
+});
+
+test("pickers preserve file filters, handle cancellation and never report a failed save as success", async () => {
+  const options: Array<{ directory: boolean; filters?: unknown }> = [];
+  const paths: string[] = [];
+  const notices: unknown[][] = [];
+  let selection: string | null = " G:\\Portable Codex\\app ";
+  let succeeds = true;
+  let pickerFails = false;
+  const choose = action("chooseCodexAppPath", {
+    t: (value: string) => value,
+    tf: (value: string, detail: string) => value.replace("{0}", detail),
+    open: async (value: { directory: boolean }) => {
+      options.push(value);
+      if (pickerFails) throw new Error("picker unavailable");
+      return selection;
+    },
+    saveCodexAppPath: async (path: string) => { paths.push(path); return succeeds ? {} : null; },
+    showNotice: (...args: unknown[]) => { notices.push(args); },
+  });
+  await choose("folder");
+  assert.equal(options[0].directory, true);
+  assert.deepEqual(paths, ["G:\\Portable Codex\\app"]);
+  assert.equal(notices.length, 1);
+  succeeds = false;
+  await choose("file");
+  assert.equal(options[1].directory, false);
+  assert.deepEqual(options[1].filters, [{ name: "Codex 应用", extensions: ["exe", "app"] }]);
+  assert.equal(notices.length, 1);
+  selection = null;
+  await choose("folder");
+  assert.equal(paths.length, 2);
+  pickerFails = true;
+  await choose("file");
+  assert.equal(notices[1][2], "failed");
+  assert.match(String(notices[1][1]), /picker unavailable/);
+});
+
+test("clearing the saved path restores automatic detection only after persistence succeeds", async () => {
+  const paths: string[] = [];
+  const notices: unknown[][] = [];
+  let succeeds = false;
+  const clear = action("clearCodexAppPath", {
+    t: (value: string) => value,
+    saveCodexAppPath: async (path: string) => { paths.push(path); return succeeds ? {} : null; },
+    showNotice: (...args: unknown[]) => { notices.push(args); },
+  });
+  await clear();
+  assert.deepEqual(notices, []);
+  succeeds = true;
+  await clear();
+  assert.deepEqual(paths, ["", ""]);
+  assert.equal(notices[0][2], "ok");
+});
+
+test("launch and restart read the persisted path and retain their default ports", async () => {
+  for (const path of ["G:\\Portable Codex\\app", ""]) {
+    const calls: unknown[][] = [];
+    const launch = action("launchCommand", {
+      settings: { settings: { codexAppPath: path } },
+      run: (task: () => unknown) => task(),
+      call: (...args: unknown[]) => { calls.push(args); },
+    });
+    await launch("launch_codex_plus");
+    await launch("restart_codex_plus", true);
+    assert.deepEqual(calls, [
+      ["launch_codex_plus", { request: { appPath: path, debugPort: 9229, helperPort: 57321, syncActiveRelay: false } }],
+      ["restart_codex_plus", { request: { appPath: path, debugPort: 9229, helperPort: 57321, syncActiveRelay: true } }],
+    ]);
+  }
 });

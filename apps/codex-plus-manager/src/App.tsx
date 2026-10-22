@@ -39,6 +39,7 @@ import {
   LayoutDashboard,
   MessageCircle,
   FileCode2,
+  FolderOpen,
   Network,
   Plus,
   RefreshCw,
@@ -714,39 +715,6 @@ type SessionIndexRepairReport = {
   }[];
 };
 
-type WatcherResult = CommandResult<{
-  enabled: boolean;
-  disabled_flag: string;
-  start_minimized: boolean;
-  start_codex: boolean;
-  start_codex_on_open: boolean;
-}>;
-
-// 与 Rust 侧 `auto_takeover::AutoTakeoverPayload`（rename_all = "camelCase"）逐字段对齐。
-// 少一个字段的表现是「状态行永远空白」，所以两边要一起改。
-type AutoTakeoverResult = CommandResult<{
-  state: string;
-  enabled: boolean;
-  platformSupported: boolean;
-  activePolicy: string;
-  lastTakeoverAtMs?: number | null;
-  lastReason?: string | null;
-  lastError?: string | null;
-  actualDebugPort?: number | null;
-  appRunning?: boolean | null;
-  sessionOwned: boolean;
-  sessionStatus?: string | null;
-  restartsLastHour: number;
-  restartsTotal: number;
-  pausedInstance?: string | null;
-  running: boolean;
-}>;
-
-type InstallResult = CommandResult<{
-  silent_shortcut: { installed: boolean; path: string | null };
-  management_shortcut: { installed: boolean; path: string | null };
-}>;
-
 function providerSyncProgressMessage(result: CommandResult<ProviderSyncPayload>): string {
   const changed = result.changedSessionFiles ?? 0;
   const rows = result.sqliteRowsUpdated ?? 0;
@@ -786,13 +754,13 @@ function providerSyncTargetLabel(target: ProviderSyncTargetOption): string {
   return [...labels, ...current, ...unavailable].join(" / ") || t("发现");
 }
 
-type Route = "overview" | "relay" | "sessions" | "context" | "skills" | "enhance" | "pluginMarket" | "maintenance";
+type Route = "overview" | "relay" | "sessions" | "context" | "skills" | "enhance" | "pluginMarket";
 
 const MANAGER_NAVIGATION_EVENT = "manager-navigation-requested";
 
 // 保留 Codex 工作区导航；tool 标签兼容已有工作区归属约定。
 const routes: Array<{ id: Route; label: string; icon: LucideIcon; badge?: string; tool?: string }> = [
-  // 概览只展示 Codex 健康状态。
+  // 概览展示 Codex 应用路径与运行状态。
   { id: "overview", get label() { return t("概览"); }, icon: LayoutDashboard },
   { id: "relay", get label() { return t("供应商配置"); }, icon: KeyRound, tool: "codex" },
   { id: "sessions", get label() { return t("会话管理"); }, icon: MessageCircle, tool: "codex" },
@@ -800,11 +768,9 @@ const routes: Array<{ id: Route; label: string; icon: LucideIcon; badge?: string
   { id: "skills", label: "Skills", icon: BookOpen, tool: "codex" },
   { id: "enhance", get label() { return t("Codex增强"); }, icon: Hammer, tool: "codex" },
   { id: "pluginMarket", get label() { return t("Codex 插件市场"); }, icon: Store, tool: "codex" },
-
-  { id: "maintenance", get label() { return t("安装维护"); }, icon: Wrench, tool: "codex" },
 ];
 
-const navigationSections: Array<{ label: string; routes: Route[]; placement?: "bottom" }> = [
+const navigationSections: Array<{ label: string; routes: Route[] }> = [
   {
     get label() { return t("工作区"); },
     routes: ["overview", "relay"],
@@ -816,11 +782,6 @@ const navigationSections: Array<{ label: string; routes: Route[]; placement?: "b
   {
     get label() { return t("扩展"); },
     routes: ["enhance", "pluginMarket"],
-  },
-  {
-    get label() { return t("系统"); },
-    routes: ["maintenance"],
-    placement: "bottom",
   },
 ];
 
@@ -952,13 +913,6 @@ export function App() {
   const [pendingProviderImport, setPendingProviderImport] = useState<ProviderImportRequest | null>(null);
   const [localSessions, setLocalSessions] = useState<LocalSessionsResult | null>(null);
   const [liveContextEntries, setLiveContextEntries] = useState<CodexContextEntries | null>(null);
-
-  const [watcher, setWatcher] = useState<WatcherResult | null>(null);
-  const [launchForm, setLaunchForm] = useState({
-    appPath: "",
-    debugPort: "9229",
-    helperPort: "57321",
-  });
   const prevLaunchStatusRef = useRef<string | null>(null);
   const overviewRequestSequence = useRef(0);
   const launchPendingRef = useRef(false);
@@ -978,7 +932,6 @@ export function App() {
   const [sessionIndexRepairReport, setSessionIndexRepairReport] = useState<SessionIndexRepairReport | null>(null);
   const [sessionIndexRepairReportError, setSessionIndexRepairReportError] = useState<string | null>(null);
   const [selectedProviderSyncTarget, setSelectedProviderSyncTarget] = useState("");
-  const [autoTakeover, setAutoTakeoverState] = useState<AutoTakeoverResult | null>(null);
   const [relaySwitching, setRelaySwitching] = useState(false);
   const settingsDirty = useMemo(
     () => Boolean(settings && !backendSettingsEqual(settingsForm, settings.settings)),
@@ -1034,10 +987,6 @@ export function App() {
       setSettings(result);
       const normalized = normalizeSettings(result.settings);
       setSettingsForm(normalized);
-      setLaunchForm((current) => ({
-        ...current,
-        appPath: current.appPath || result.settings.codexAppPath || "",
-      }));
       if (!silent) showResultNotice(t("设置已加载"), result, { silentSuccess: true });
       return normalized;
     }
@@ -1269,51 +1218,6 @@ export function App() {
     return result;
   };
 
-  const refreshWatcher = async (silent = false) => {
-    const result = await run(() => call<WatcherResult>("load_watcher_state"));
-    if (result) {
-      setWatcher(result);
-      if (!silent) showResultNotice(t("Watcher 状态"), result, { silentSuccess: true });
-    }
-  };
-
-  /**
-   * 读取自动接管状态。总开关关闭时不探测：守护线程本来就不工作，
-   * 读到的只会是「未运行」，徒增一次 IPC。
-   */
-  const refreshAutoTakeover = async (silent = false) => {
-    if (settings && !settings.settings.codexAppAutoTakeover) {
-      setAutoTakeoverState(null);
-      return;
-    }
-    const result = await run(() => call<AutoTakeoverResult>("load_auto_takeover_state"));
-    if (result) {
-      setAutoTakeoverState(result);
-      if (!silent) showResultNotice(t("自动接管状态"), result, { silentSuccess: true });
-    }
-  };
-
-  /** 开关必须走既有设置保存链路，才能在设置文件里持久化并被守护线程读到。 */
-  const setAutoTakeover = async (enabled: boolean) => {
-    if (!settings) return;
-    const saved = await saveSettingsValue({ ...settings.settings, codexAppAutoTakeover: enabled }, false);
-    if (!saved) return;
-    setSettings((current) => (current ? { ...current, settings: saved } : current));
-    if (enabled) {
-      await refreshAutoTakeover(true);
-    } else {
-      setAutoTakeoverState(null);
-    }
-  };
-
-  const runAutoTakeoverCommand = async (command: string) => {
-    const result = await run(() => call<AutoTakeoverResult>(command));
-    if (result) {
-      setAutoTakeoverState(result);
-      showResultNotice(t("自动接管"), result, { silentSuccess: false });
-    }
-  };
-
   const navigate = async (next: Route) => {
     setRoute(next);
     if (next === "overview") await refreshOverview(true);
@@ -1329,12 +1233,6 @@ export function App() {
       await refreshLiveContextEntries(true);
     }
     if (next === "enhance") await refreshSettings(true);
-
-    if (next === "maintenance") {
-      await refreshOverview(true);
-      await refreshWatcher(true);
-      await refreshAutoTakeover(true);
-    }
   };
 
   const consumePendingManagerNavigation = async (): Promise<boolean> => {
@@ -1410,9 +1308,9 @@ export function App() {
     const result = await run(() =>
       call<LaunchCommandResult>(command, {
         request: {
-          appPath: launchForm.appPath,
-          debugPort: numberOrDefault(launchForm.debugPort, 9229),
-          helperPort: numberOrDefault(launchForm.helperPort, 57321),
+          appPath: settings?.settings.codexAppPath ?? "",
+          debugPort: 9229,
+          helperPort: 57321,
           syncActiveRelay,
         },
       }),
@@ -1442,46 +1340,6 @@ export function App() {
   const showLaunchCompletionNotice = (title: string, result: OverviewResult | null, requestedAt?: number) => {
     const notice = launchCompletionNotice(result?.latest_launch ?? null, requestedAt ?? 0);
     showNotice(title, t(notice.message), notice.status);
-  };
-
-  const repairShortcuts = async () => {
-    const result = await run(() => call<InstallResult>("repair_shortcuts"));
-    if (result) {
-      showNotice(t("快捷方式修复"), result.message, result.status);
-      await refreshOverview(true);
-    }
-  };
-
-  const setWatcherEnabled = async (enabled: boolean) => {
-    const result = await run(() => call<WatcherResult>("set_watcher_enabled", { enabled }));
-    if (result) {
-      setWatcher(result);
-      showNotice(t("开机打开 Codex++"), result.message, result.status);
-    }
-  };
-
-  const setWatcherStartMinimized = async (minimized: boolean) => {
-    const result = await run(() => call<WatcherResult>("set_watcher_start_minimized", { minimized }));
-    if (result) {
-      setWatcher(result);
-      showNotice(t("开机启动自动最小化"), result.message, result.status);
-    }
-  };
-
-  const setWatcherStartCodex = async (startCodex: boolean) => {
-    const result = await run(() => call<WatcherResult>("set_watcher_start_codex", { startCodex }));
-    if (result) {
-      setWatcher(result);
-      showNotice(t("登录时自动启动 Codex"), result.message, result.status);
-    }
-  };
-
-  const setWatcherStartCodexOnOpen = async (enabled: boolean) => {
-    const result = await run(() => call<WatcherResult>("set_watcher_start_codex_on_open", { enabled }));
-    if (result) {
-      setWatcher(result);
-      showNotice(t("打开 Codex++ 时自动启动 Codex"), result.message, result.status);
-    }
   };
 
   const saveSettings = async () => {
@@ -2152,16 +2010,9 @@ export function App() {
   }, []);
 
   const saveCodexAppPath = async (appPath: string) => {
-    const next = { ...settingsForm, codexAppPath: appPath };
-    const result = await run(() => call<SettingsResult>("save_settings", { settings: next }));
-    if (result) {
-      setSettings(result);
-      const normalized = normalizeSettings(result.settings);
-      setSettingsForm(normalized);
-      setLaunchForm((current) => ({ ...current, appPath: normalized.codexAppPath }));
-      await refreshOverview(true);
-    }
-    return result;
+    const saved = await saveSettingsValue({ ...settingsForm, codexAppPath: appPath });
+    if (saved) await refreshOverview(true);
+    return saved;
   };
 
   const actions = useMemo(
@@ -2169,7 +2020,6 @@ export function App() {
       refreshCurrent: () => navigate(route),
       launch,
       restart,
-      repairShortcuts,
 
       saveSettings,
       saveSettingsValue,
@@ -2198,31 +2048,13 @@ export function App() {
         if (typeof selected === "string" && selected.trim()) {
           const result = await saveCodexAppPath(selected.trim());
           if (result) {
-            showNotice(t("Codex 应用路径"), t("应用路径已保存，之后启动会自动复用。"), result.status);
+            showNotice(t("Codex 应用路径"), t("应用路径已保存，之后启动会自动复用。"), "ok");
           }
         }
       },
       clearCodexAppPath: async () => {
-        const next = { ...settingsForm, codexAppPath: "" };
-        const result = await run(() => call<SettingsResult>("save_settings", { settings: next }));
-        if (result) {
-          setSettings(result);
-          setSettingsForm(normalizeSettings(result.settings));
-          setLaunchForm((current) => ({ ...current, appPath: "" }));
-          showNotice(t("Codex 应用路径"), t("已清除保存路径，后续启动会回到自动探测。"), result.status);
-          await refreshOverview(true);
-        }
-      },
-      saveManualCodexAppPath: async () => {
-        const appPath = launchForm.appPath.trim();
-        if (!appPath) {
-          showNotice(t("Codex 应用路径"), t("请先填写或选择应用路径。"), "failed");
-          return;
-        }
-        const result = await saveCodexAppPath(appPath);
-        if (result) {
-          showNotice(t("Codex 应用路径"), t("应用路径已保存，之后启动会自动复用。"), result.status);
-        }
+        const saved = await saveCodexAppPath("");
+        if (saved) showNotice(t("Codex 应用路径"), t("已清除保存路径，后续启动会回到自动探测。"), "ok");
       },
       syncProvidersNow,
       recoverProviderSync,
@@ -2264,23 +2096,8 @@ export function App() {
 
       showMessage: async (title: string, message: string, status?: Status) => showNotice(title, message, status),
 
-      checkHealth: async () => {
-        await refreshOverview(true);
-        await refreshRelay(true);
-        await refreshWatcher(true);
-        showNotice(t("检查完成"), t("已刷新 Codex 应用、入口和 Watcher 状态。"), "ok");
-      },
-      setWatcherEnabled,
-      setWatcherStartMinimized,
-      setWatcherStartCodex,
-      setWatcherStartCodexOnOpen,
-      setAutoTakeover,
-      refreshAutoTakeover: () => refreshAutoTakeover(false),
-      takeOverNow: () => runAutoTakeoverCommand("take_over_codex_now"),
-      pauseAutoTakeover: () => runAutoTakeoverCommand("pause_auto_takeover_for_instance"),
-
     }),
-    [route, launchForm, settingsForm, settings, overview, relayFiles, localSessions, selectedProviderSyncTarget, envConflicts, ccsProviders],
+    [route, settingsForm, settings, overview, relayFiles, localSessions, selectedProviderSyncTarget, envConflicts, ccsProviders],
   );
 
   const isManagementScreen = route === "relay" || route === "sessions" || route === "context" || route === "skills";
@@ -2292,7 +2109,7 @@ export function App() {
           <nav className="nav" aria-label={t("主导航")}>
             {navigationSections.map((section) => {
               return (
-              <div className={`nav-section ${section.placement === "bottom" ? "nav-section-bottom" : ""}`} key={section.label}>
+              <div className="nav-section" key={section.label}>
                 <div className="nav-section-label">{section.label}</div>
                 {section.routes.map((routeId) => {
                   const item = routes.find((candidate) => candidate.id === routeId);
@@ -2351,6 +2168,7 @@ export function App() {
           {route === "overview" ? (
             <OverviewScreen
               overview={overview}
+              settings={settings}
               actions={actions}
             />
           ) : null}
@@ -2417,18 +2235,6 @@ export function App() {
           ) : null}
           {route === "pluginMarket" ? <PluginMarketScreen /> : null}
 
-          {route === "maintenance" ? (
-            <MaintenanceScreen
-              overview={overview}
-              launchPending={launchPending}
-              watcher={watcher}
-              autoTakeover={autoTakeover}
-              settings={settings}
-              launchForm={launchForm}
-              onLaunchFormChange={setLaunchForm}
-              actions={actions}
-            />
-          ) : null}
 
         </section>
       </main>
@@ -2609,7 +2415,6 @@ type Actions = {
   refreshCurrent: () => Promise<void>;
   launch: () => Promise<void>;
   restart: (syncActiveRelay?: boolean) => Promise<boolean>;
-  repairShortcuts: () => Promise<void>;
 
   saveSettings: () => Promise<void>;
   saveSettingsValue: (settings: BackendSettings, silent?: boolean) => Promise<BackendSettings | null>;
@@ -2617,7 +2422,6 @@ type Actions = {
 
   chooseCodexAppPath: (mode: "folder" | "file") => Promise<void>;
   clearCodexAppPath: () => Promise<void>;
-  saveManualCodexAppPath: () => Promise<void>;
   syncProvidersNow: () => Promise<void>;
   recoverProviderSync: () => Promise<void>;
   repairSessionIndex: () => Promise<void>;
@@ -2661,30 +2465,22 @@ type Actions = {
   switchPureApiMode: () => Promise<void>;
 
   showMessage: (title: string, message: string, status?: Status) => Promise<void>;
-
-  setWatcherEnabled: (enabled: boolean) => Promise<void>;
-  setWatcherStartMinimized: (minimized: boolean) => Promise<void>;
-  setWatcherStartCodex: (startCodex: boolean) => Promise<void>;
-  setWatcherStartCodexOnOpen: (enabled: boolean) => Promise<void>;
-  setAutoTakeover: (enabled: boolean) => Promise<void>;
-  refreshAutoTakeover: () => Promise<void>;
-  takeOverNow: () => Promise<void>;
-  pauseAutoTakeover: () => Promise<void>;
-
-  checkHealth: () => Promise<void>;
 };
 
-function OverviewScreen({ overview, actions }: {
+function OverviewScreen({ overview, settings, actions }: {
   overview: OverviewResult | null;
+  settings: SettingsResult | null;
   actions: Actions;
 }) {
   const health = healthItems(overview);
+  const savedCodexAppPath = settings?.settings.codexAppPath ?? "";
   return (
+    <>
     <Panel>
             <CardHeader className="panel-head overview-health-header">
               <CardTitle>{t("健康检查")}</CardTitle>
               <div className="overview-health-header-actions">
-                <CardDescription>{t("概览只展示关键问题，具体配置在对应页面处理")}</CardDescription>
+                <CardDescription>{t("Codex 应用与本地运行状态")}</CardDescription>
                 <Button
                   aria-label={t("刷新状态")}
                   title={t("刷新状态")}
@@ -2720,6 +2516,37 @@ function OverviewScreen({ overview, actions }: {
               </div>
             </CardContent>
           </Panel>
+      <Panel className="overview-app-path">
+        <CardHead title={t("Codex 应用路径")} detail={t("免安装版或解包版只需要选择一次，之后从界面启动会自动复用")} />
+        <CardContent>
+          <div className="status-table">
+            <StatusRow title={t("保存路径")} status={savedCodexAppPath ? "ok" : "not_checked"} path={savedCodexAppPath || null} />
+            <StatusRow title={t("当前识别")} status={overview?.codex_app.status} path={overview?.codex_app.path} />
+          </div>
+          <Field label={t("保存的应用路径")}>
+            <Input
+              value={savedCodexAppPath}
+              placeholder={t("选择 Codex.exe、Codex.app、app 目录或解包目录")}
+              readOnly
+            />
+          </Field>
+          <Toolbar>
+            <Button disabled={!settings} onClick={() => void actions.chooseCodexAppPath("folder")}>
+              <FolderOpen className="h-4 w-4" />
+              {t("选择应用目录")}
+            </Button>
+            <Button disabled={!settings} variant="secondary" onClick={() => void actions.chooseCodexAppPath("file")}>
+              <FileCode2 className="h-4 w-4" />
+              {t("选择 Codex.exe")}
+            </Button>
+            <Button disabled={!settings} variant="secondary" onClick={() => void actions.clearCodexAppPath()}>
+              <Trash2 className="h-4 w-4" />
+              {t("清除保存路径")}
+            </Button>
+          </Toolbar>
+        </CardContent>
+      </Panel>
+    </>
   );
 }
 
@@ -4184,209 +4011,6 @@ function SessionsScreen({
           ) : (
             <div className="empty">{t("未读取到本地会话，或当前 SQLite 会话库不存在。")}</div>
           )}
-        </CardContent>
-      </Panel>
-    </>
-  );
-}
-
-function MaintenanceScreen({
-  overview,
-  launchPending,
-  watcher,
-  autoTakeover,
-  settings,
-  launchForm,
-  onLaunchFormChange,
-  actions,
-}: {
-  overview: OverviewResult | null;
-  launchPending: boolean;
-  watcher: WatcherResult | null;
-  autoTakeover: AutoTakeoverResult | null;
-  settings: SettingsResult | null;
-  launchForm: { appPath: string; debugPort: string; helperPort: string };
-  onLaunchFormChange: (next: { appPath: string; debugPort: string; helperPort: string }) => void;
-  actions: Actions;
-}) {
-  const savedCodexAppPath = settings?.settings.codexAppPath ?? "";
-  return (
-    <>
-      <Panel>
-        <CardHead title={t("检查与修复")} detail={t("检查 Codex++ 入口、Codex 应用和开机启动状态")} />
-        <CardContent>
-          <div className="status-table">
-            <StatusRow title={t("Codex 应用")} status={overview?.codex_app.status} path={overview?.codex_app.path} />
-            <StatusRow title={t("Codex++ 应用入口")} status={overview?.management_shortcut.status} path={overview?.management_shortcut.path} />
-            <StatusRow title={t("开机打开 Codex++")} status={watcher?.enabled ? "ok" : "disabled"} path={watcher?.disabled_flag} />
-            <StatusRow
-              title={t("自动接管官方 App")}
-              status={settings?.settings.codexAppAutoTakeover && autoTakeover?.running ? "ok" : "disabled"}
-              path={autoTakeover?.lastError ?? autoTakeover?.lastReason ?? null}
-            />
-          </div>
-          <Toolbar>
-            <Button onClick={() => void actions.checkHealth()}>{t("检查")}</Button>
-            <Button variant="secondary" onClick={() => void actions.repairShortcuts()}>{t("修复快捷方式")}</Button>
-          </Toolbar>
-        </CardContent>
-      </Panel>
-      <Panel>
-        <CardHead title={t("开机打开 Codex++")} detail={t("登录系统后打开 Codex++ 界面，可选择自动启动 Codex")} />
-        <CardContent>
-          <label className="switch-row">
-            <input
-              checked={Boolean(watcher?.enabled)}
-              disabled={!watcher}
-              onChange={(event) => void actions.setWatcherEnabled(event.currentTarget.checked)}
-              type="checkbox"
-            />
-            <span>
-              <strong>{t("登录时自动打开")}</strong>
-              <small>{t("开启后注册系统登录项，关闭时移除；是否自动启动 Codex 由下面的独立开关决定。")}</small>
-            </span>
-            <ToggleVisual />
-          </label>
-          <label className="switch-row">
-            <input
-              checked={Boolean(watcher?.start_codex_on_open)}
-              disabled={!watcher}
-              onChange={(event) => void actions.setWatcherStartCodexOnOpen(event.currentTarget.checked)}
-              type="checkbox"
-            />
-            <span>
-              <strong>{t("打开 Codex++ 时自动启动 Codex")}</strong>
-              <small>{t("仅手动打开 Codex++ 时生效；已有 Codex 会先恢复，不会重复启动。")}</small>
-            </span>
-            <ToggleVisual />
-          </label>
-          <label className="switch-row">
-            <input
-              checked={Boolean(watcher?.start_codex)}
-              disabled={!watcher}
-              onChange={(event) => void actions.setWatcherStartCodex(event.currentTarget.checked)}
-              type="checkbox"
-            />
-            <span>
-              <strong>{t("登录时自动启动 Codex")}</strong>
-              <small>{t("仅登录启动 Codex++ 时自动启动 Codex；手动打开 Codex++ 仍不会自动启动。")}</small>
-            </span>
-            <ToggleVisual />
-          </label>
-          <label className="switch-row">
-            <input
-              checked={Boolean(watcher?.start_minimized)}
-              disabled={!watcher}
-              onChange={(event) => void actions.setWatcherStartMinimized(event.currentTarget.checked)}
-              type="checkbox"
-            />
-            <span>
-              <strong>{t("启动时自动最小化")}</strong>
-              <small>{t("仅登录启动时隐藏到托盘；手动打开 Codex++ 仍显示主窗口。")}</small>
-            </span>
-            <ToggleVisual />
-          </label>
-        </CardContent>
-      </Panel>
-      <Panel>
-        <CardHead title={t("自动接管官方 App")} detail={t("你自己双击启动官方 App 时，Codex++ 自动接管并注入增强")} />
-        <CardContent>
-          <label className="switch-row">
-            <input
-              checked={Boolean(settings?.settings.codexAppAutoTakeover)}
-              onChange={(event) => void actions.setAutoTakeover(event.currentTarget.checked)}
-              type="checkbox"
-            />
-            <span>
-              <strong>{t("开启自动接管")}</strong>
-              <small>{t("开启后，你自己启动官方 App 时 Codex++ 会自动接管。官方 App 已在运行且没有调试端口时，会先退出再带参数重开（可能中断正在进行的操作）。")}</small>
-            </span>
-            <ToggleVisual />
-          </label>
-          {settings?.settings.codexAppAutoTakeover ? (
-            <>
-              <div className="status-table">
-                <StatusRow
-                  title={t("接管状态")}
-                  status={autoTakeover?.state === "degraded" ? "failed" : autoTakeover?.running ? "ok" : "disabled"}
-                  path={autoTakeover?.state === "degraded" ? t("已降级") : autoTakeover?.running ? t("监听中") : t("未运行")}
-                />
-                <StatusRow title={t("官方 App")} status={autoTakeover?.appRunning ? "ok" : "disabled"} path={autoTakeover?.appRunning ? t("运行中") : t("未运行")} />
-                <StatusRow
-                  title={t("调试端口")}
-                  status={autoTakeover?.actualDebugPort ? "ok" : "not_checked"}
-                  path={autoTakeover?.actualDebugPort ? String(autoTakeover.actualDebugPort) : null}
-                />
-              </div>
-              {autoTakeover?.pausedInstance ? <p className="hint">{t("本次已跳过自动接管，重启官方 App 后恢复。")}</p> : null}
-              {autoTakeover?.lastError ? <p className="hint">{autoTakeover.lastError}</p> : null}
-              {autoTakeover?.lastTakeoverAtMs ? (
-                <p className="hint">{tf("上次接管：{0}", [new Date(autoTakeover.lastTakeoverAtMs).toLocaleString()])}</p>
-              ) : null}
-              {autoTakeover?.platformSupported ? null : <p className="hint">{t("自动接管目前只支持 macOS。")}</p>}
-              <p className="hint">{t("仅在 Codex++ 正在运行时生效；需要重启官方 App 时会自动重启。")}</p>
-              <Toolbar>
-                <Button variant="secondary" onClick={() => void actions.takeOverNow()}>{t("立即接管")}</Button>
-                <Button variant="secondary" onClick={() => void actions.pauseAutoTakeover()}>{t("本次不接管")}</Button>
-                <Button variant="secondary" onClick={() => void actions.refreshAutoTakeover()}>{t("刷新状态")}</Button>
-              </Toolbar>
-            </>
-          ) : (
-            <p className="hint">{t("仅在 Codex++ 正在运行时生效；建议同时开启上面的「开机打开 Codex++」。")}</p>
-          )}
-        </CardContent>
-      </Panel>
-      <Panel>
-        <CardHead title={t("Codex 应用路径")} detail={t("免安装版或解包版只需要选择一次，之后从界面启动会自动复用")} />
-        <CardContent>
-          <div className="status-table">
-            <StatusRow title={t("保存路径")} status={savedCodexAppPath ? "ok" : "not_checked"} path={savedCodexAppPath || null} />
-            <StatusRow title={t("当前识别")} status={overview?.codex_app.status} path={overview?.codex_app.path} />
-          </div>
-          <Field label={t("保存的应用路径")}>
-            <Input
-              value={settings?.settings.codexAppPath ?? ""}
-              placeholder={t("选择 Codex.exe、Codex.app、app 目录或解包目录")}
-              readOnly
-            />
-          </Field>
-          <Toolbar>
-            <Button onClick={() => void actions.chooseCodexAppPath("folder")}>{t("选择应用目录")}</Button>
-            <Button variant="secondary" onClick={() => void actions.chooseCodexAppPath("file")}>{t("选择 Codex.exe")}</Button>
-            <Button variant="secondary" onClick={() => void actions.clearCodexAppPath()}>{t("清除保存路径")}</Button>
-          </Toolbar>
-        </CardContent>
-      </Panel>
-      <Panel>
-        <CardHead title={t("手动启动")} detail={t("应用路径留空时使用已保存路径；没有保存路径时使用自动探测")} />
-        <CardContent>
-          <Field label={t("应用路径覆盖")}>
-            <Input
-              value={launchForm.appPath}
-              onChange={(event) => onLaunchFormChange({ ...launchForm, appPath: event.currentTarget.value })}
-              placeholder={savedCodexAppPath || t("例如 C:\\Program Files\\WindowsApps\\OpenAI.Codex...\\app")}
-            />
-          </Field>
-          <div className="form-row">
-            <Field label={t("Debug 端口")}>
-              <Input
-                value={launchForm.debugPort}
-                onChange={(event) => onLaunchFormChange({ ...launchForm, debugPort: event.currentTarget.value })}
-              />
-            </Field>
-            <Field label={t("Helper 端口")}>
-              <Input
-                value={launchForm.helperPort}
-                onChange={(event) => onLaunchFormChange({ ...launchForm, helperPort: event.currentTarget.value })}
-              />
-            </Field>
-          </div>
-          <Toolbar>
-            <Button disabled={launchPending} onClick={() => void actions.launch()}>{t("启动 Codex")}</Button>
-            <Button variant="secondary" onClick={() => void actions.saveManualCodexAppPath()}>
-              {t("保存为默认路径")}
-            </Button>
-          </Toolbar>
         </CardContent>
       </Panel>
     </>
@@ -8119,16 +7743,13 @@ function routeTitle(route: Route) {
 
 function routeSubtitle(route: Route) {
   const subtitles: Record<Route, string> = {
-    overview: t("检查问题、启动与快速修复"),
+    overview: t("应用路径与运行状态"),
     relay: t("管理 API 供应商、协议、Key 与配置文件"),
     sessions: t("查看、删除和修复 Codex 本地会话"),
     context: t("独立管理 MCP 服务器与插件"),
     skills: t("从 GitHub 仓库安装 Skill 到 Codex"),
     enhance: t("管理常用功能、语音输入与下一步建议。"),
     pluginMarket: t("检索插件，按需下载并安装到 Codex"),
-
-    maintenance: t("入口检查与修复、开机启动与应用路径"),
-
   };
   return subtitles[route];
 }
@@ -10427,11 +10048,6 @@ function aggregateRelayProfileValidation(profile: RelayProfile): string | null {
     return tf("路由规则「{0}」的优先级必须是大于等于 0 的整数。", [first.pattern]);
   }
   return tf("路由规则「{0}」的目标供应商必须是聚合成员，请先将其勾选为成员。", [first.pattern]);
-}
-
-function numberOrDefault(value: string, fallback: number) {
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function splitLogLines(text: string) {

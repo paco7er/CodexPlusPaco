@@ -459,6 +459,28 @@ body {
   font-size: 12px;
 }
 
+@media (max-width: 760px) {
+  .overview-app-path .panel-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .overview-app-path .panel-head p {
+    max-width: 100%;
+    text-align: left;
+  }
+
+  .overview-app-path .status-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .overview-app-path .status-row code {
+    grid-column: 1 / -1;
+  }
+}
+
 .metric-list {
   display: grid;
   gap: 8px;
@@ -5003,12 +5025,6 @@ select {
 .nav-section {
   display: grid;
   gap: 1px;
-}
-
-.nav-section-bottom {
-  margin-top: auto;
-  border-top: 1px solid hsl(var(--sidebar-border));
-  padding-top: 12px;
 }
 
 .nav-section-label {

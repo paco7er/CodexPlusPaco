@@ -4,12 +4,12 @@ import path from "node:path";
 import test from "node:test";
 
 /**
- * 「自动接管官方 App」的接线契约。
+ * 已有自动接管配置的后台兼容契约。
  *
  * 这条功能最容易坏在两个静默失败上：
  * 1. Rust 命令没注册到 `generate_handler!` —— 前端 `invoke` 报 command not found，
  *    但没有任何编译期检查兜底（全仓只有一处 `generate_handler!`）。
- * 2. 控件文案意外移除，导致无法识别接管状态。
+ * 2. 维护页移除后，后台生命周期意外丢失。
  *
  * 这里只做静态检查，不启动 Tauri、不碰真实进程。
  */
@@ -44,39 +44,10 @@ test("auto-takeover commands are registered in the tauri handler", () => {
   }
 });
 
-test("auto-takeover switch persists through save_settings, not a side channel", () => {
-  // 开关必须走既有设置保存链路，才能在设置文件里持久化并被守护线程读到。
-  assert.ok(
-    appSource.includes("setAutoTakeover") &&
-      appSource.includes("codexAppAutoTakeover: enabled"),
-    "维护页开关必须通过 saveSettingsValue 写入 codexAppAutoTakeover",
-  );
-  assert.ok(
-    appSource.includes('"load_auto_takeover_state"') &&
-      appSource.includes('"take_over_codex_now"') &&
-      appSource.includes('"pause_auto_takeover_for_instance"'),
-    "App.tsx 必须调用三个自动接管命令",
-  );
-});
-
-test("auto-takeover switch is visible in the maintenance screen", () => {
-  // 放在维护页而不是增强页：EnhanceScreen 有「恰好 3 个 tabpanel」的契约。
-  assert.ok(
-    appSource.includes('t("自动接管官方 App")'),
-    "维护页必须展示自动接管开关卡片",
-  );
-  assert.ok(
-    appSource.includes("autoTakeover={autoTakeover}"),
-    "MaintenanceScreen 必须拿到自动接管状态",
-  );
-});
-
 const payloadSource = () =>
   readFileSync(path.join(root, "src-tauri/src/auto_takeover.rs"), "utf8");
 
-test("auto-takeover status fields stay aligned with the Rust payload", () => {
-  // 前端按 camelCase 读，Rust 侧靠 rename_all 转换——两者必须同时存在，
-  // 少一个就会出现「状态行永远空白」这类静默失效。
+test("auto-takeover status payload keeps its existing serialization", () => {
   assert.ok(
     payloadSource().includes('#[serde(rename_all = "camelCase")]'),
     "AutoTakeoverPayload 必须序列化成 camelCase（前端按 camelCase 读）",
@@ -91,29 +62,6 @@ test("auto-takeover status fields stay aligned with the Rust payload", () => {
     assert.ok(
       payloadSource().includes(`pub ${field}:`),
       `AutoTakeoverPayload 缺少 ${field}（前端类型依赖它）`,
-    );
-  }
-  for (const camelField of ["platformSupported", "lastTakeoverAtMs", "pausedInstance"]) {
-    assert.ok(
-      appSource.includes(camelField),
-      `App.tsx 的 AutoTakeoverResult 缺少 ${camelField}`,
-    );
-  }
-});
-
-test("auto-takeover retains Chinese control labels", () => {
-  // 关掉自动接管现在是开关的反向操作，不再有「关闭自动接管」按钮文案。
-  for (const key of [
-    "自动接管官方 App",
-    "开启自动接管",
-    "立即接管",
-    "本次不接管",
-    "接管状态",
-    "上次接管：{0}",
-  ]) {
-    assert.ok(
-      appSource.includes(`"${key}"`),
-      `自动接管缺少「${key}」文案`,
     );
   }
 });

@@ -53,7 +53,7 @@ Friendly link: <a href="https://linux.do">LINUX DO</a>
 | Development workflow | Project move and thread IDs |
 | Usage status line | Live generation speed, cache hit rate, and context usage below the composer, read from local Codex session records; the context share follows the per-model window Codex sees |
 | Request shock absorption | Absorb upstream overload errors (`server_overloaded`, `server_is_overloaded`, `at capacity`, ...) at the proxy with backoff retries. Existing shock absorption settings remain effective, and the composer status line shows in-flight request status |
-| Maintenance | App detection, shortcuts, Watcher, environment cleanup, and health checks |
+| Overview | Application path selection, app detection, and runtime health checks |
 
 Every UI enhancement is independently configurable. Disabling the global enhancement switch still leaves Codex++ available as a provider and launch manager.
 
@@ -140,7 +140,7 @@ This branch does not include in-app updates; install new builds manually. Older 
 
 ### The Codex++ menu does not appear
 
-Open `Codex++` and click **Launch** to start the official app. Check the detected app path, launch status, and runtime status in the Maintenance page.
+Open `Codex++`, check or select the official app path under **Overview → Codex application path**, then click **Launch**. Overview also shows runtime health. The Maintenance page has been removed.
 
 ### Requests fail after switching providers
 
