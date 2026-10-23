@@ -8,7 +8,7 @@ const app = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
 test("persistent glass is limited to one bounded toolbar with a solid fallback", () => {
   assert.match(css, /@supports \(backdrop-filter: blur\(1px\)\)\s*\{\s*\.topbar\s*\{[^}]*backdrop-filter: blur\(12px\) saturate\(130%\)/);
   assert.match(css, /\.topbar\s*\{[^}]*background: hsl\(var\(--background\)\)/);
-  for (const selector of ["sidebar", "nav-item", "overview-health-row", "overview-path-actions"]) {
+  for (const selector of ["sidebar", "nav-item", "overview-app-identity", "overview-health-row", "overview-path-actions"]) {
     const rules = [...css.matchAll(new RegExp(`\\.${selector}(?:[\\s\\S]*?)\\{([^}]+)\\}`, "g"))];
     for (const rule of rules) assert.doesNotMatch(rule[1], /backdrop-filter|will-change/);
   }
@@ -27,7 +27,8 @@ test("glass respects transparency and contrast preferences without requiring Jav
 test("glass highlights and health items are static rather than animated filter effects", () => {
   const treatment = css.slice(css.indexOf("/* 常驻导航"), css.indexOf(".screen {", css.indexOf("/* 常驻导航")));
   assert.doesNotMatch(treatment, /@keyframes|will-change|animation:|url\(/);
-  assert.match(css, /\.overview-health-row\s*\{[^}]*border-radius: 8px;[^}]*background: hsl\(var\(--card\)\)/);
+  assert.match(css, /\.overview-app-identity > svg\s*\{[^}]*border-radius: 8px;[^}]*background: hsl\(var\(--brand-accent\) \/ 0\.07\)/);
+  assert.doesNotMatch(css.match(/\.overview-health-row\s*\{([^}]+)\}/)?.[1] ?? "", /background:|box-shadow:|border-radius:/);
   assert.match(css, /input:checked ~ \.toggle-switch-visual[^{]*\{[^}]*background: hsl\(var\(--switch-on\)\)/);
 });
 

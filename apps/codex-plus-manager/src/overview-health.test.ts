@@ -18,7 +18,7 @@ test("overview merges the local server and protocol conversion and keeps the deb
   const screen = functionSource("OverviewScreen");
   const items = functionSource("healthItems");
   assert.match(screen, /t\("Codex 版本"\)/);
-  assert.match(items, /t\("Codex 应用"\)/);
+  assert.match(screen, /t\("Codex 应用"\)/);
   assert.doesNotMatch(screen + items, /management_shortcut|Codex\+\+ 应用入口|actions\.(checkHealth|repairShortcuts)/);
   for (const title of ["本地服务器状态", "调试连接状态"]) {
     assert.ok(items.includes(`t("${title}")`));
@@ -27,7 +27,8 @@ test("overview merges the local server and protocol conversion and keeps the deb
   assert.match(items, /协议转换已启用/);
   assert.match(items, /协议转换未启用/);
   assert.doesNotMatch(items, /后台服务状态|代理服务器状态|proxy_server/);
-  assert.match(screen, /overview-health-grid/);
+  assert.match(screen, /overview-service-list/);
+  assert.doesNotMatch(items, /codex_app\.path/);
   assert.doesNotMatch(screen, /最近启动|LatestLaunch/);
   const entry = functionSource("App");
   assert.match(entry, /codexAppRunning \? actions\.restart\(\) : actions\.launch\(\)/);
@@ -40,15 +41,16 @@ test("overview merges the local server and protocol conversion and keeps the deb
   assert.match(screen, /aria-label=\{t\("刷新状态"\)\}/);
   assert.match(screen, /actions\.refreshCurrent/);
   const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
-  assert.match(css, /\.overview-health-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(css, /\.overview-service-list\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
 });
 
 test("overview shows the saved application path once and keeps both picker modes", () => {
   const screen = functionSource("OverviewScreen");
   assert.match(screen, /t\("Codex 应用路径"\)/);
   assert.match(screen, /settings\?\.settings\.codexAppPath/);
-  assert.match(screen, /StatusRow title=\{t\("当前识别"\)\} status=\{overview\?\.codex_app\.status\}/);
-  assert.match(screen, /path=\{savedCodexAppPath \|\| null\}/);
+  assert.match(screen, /<dt>\{t\("当前识别"\)\}<\/dt>/);
+  assert.match(screen, /savedCodexAppPath \|\| t\("自动检测"\)/);
+  assert.match(screen, /overview\?\.codex_app\.path/);
   assert.doesNotMatch(screen, /<Input|<Field|<Panel|<CardContent/);
   assert.match(screen, /actions\.chooseCodexAppPath\("folder"\)/);
   assert.match(screen, /actions\.chooseCodexAppPath\("file"\)/);
@@ -74,7 +76,7 @@ function renderOverview(overview: unknown, savedPath: string | null = null) {
     t: (value: string) => value,
     useState: (value: unknown) => [value, () => {}],
     useRef: (value: unknown) => ({ current: value }),
-    ...Object.fromEntries(["Button", "Badge", "StatusRow", "FeatureToggle", "RefreshCw", "Package", "Monitor", "Server", "Cable",
+    ...Object.fromEntries(["Button", "Badge", "FeatureToggle", "RefreshCw", "Monitor", "Server", "Cable",
       "FolderOpen", "FileCode2", "Trash2"].map((name) => [name, name])),
   };
   const code = ts.transpileModule(`${functionSource("healthItems")}\n${functionSource("OverviewScreen")}`, {
@@ -101,11 +103,16 @@ function renderOverview(overview: unknown, savedPath: string | null = null) {
   return { nodes, calls };
 }
 
-test("overview renders all health states, full paths and accessible compact tools", () => {
+function visibleText(node: ElementFixture | string | null): string {
+  return !node ? "" : typeof node === "string" ? node : node.children.map(visibleText).join("");
+}
+
+test("overview integrates application identity and paths above two compact service rows", () => {
   const path = `G:\\${"Long application directory\\".repeat(15)}Codex.exe`;
+  const detectedPath = `${path}.detected`;
   for (const overview of [null, {
     codex_version: "1.2.3",
-    codex_app: { status: "found", path },
+    codex_app: { status: "found", path: detectedPath },
     runtime_health: {
       local_server: { status: "running", address: "http://127.0.0.1:57321", message: "ready" },
       debugger: { status: "connected", address: "http://127.0.0.1:9229", message: "connected" },
@@ -113,15 +120,24 @@ test("overview renders all health states, full paths and accessible compact tool
     },
   }]) {
     const { nodes, calls } = renderOverview(overview, path);
-    assert.equal(nodes.filter((node) => node.props.role === "listitem").length, 4);
+    assert.equal(nodes.filter((node) => node.props.role === "listitem").length, 2);
     assert.deepEqual(nodes.filter((node) => node.type === "Badge").map((node) => node.props.status),
-      overview ? ["ok", "found", "running", "connected"] : Array(4).fill("not_checked"));
+      overview ? ["found", "running", "connected"] : Array(3).fill("not_checked"));
+    const appSection = nodes.find((node) => node.props.className === "overview-app-path");
+    assert.ok(appSection);
+    assert.match(visibleText(appSection), overview ? /版本 1\.2\.3/ : /未检测到版本/);
+    const identity = nodes.find((node) => node.props.className === "overview-app-identity");
+    assert.equal((identity?.children[0] as ElementFixture).type, "Monitor");
     const labels = nodes.filter((node) => node.props.className === "overview-health-label");
-    assert.deepEqual(labels.map((node) => (node.children[0] as ElementFixture).type), ["Package", "Monitor", "Server", "Cable"]);
-    const paths = nodes.filter((node) => node.type === "StatusRow");
+    assert.deepEqual(labels.map((node) => (node.children[0] as ElementFixture).type), ["Server", "Cable"]);
+    const paths = nodes.filter((node) => node.type === "code");
     assert.equal(paths.length, 2);
-    assert.equal(paths[0].props.path, path);
-    assert.equal(paths[1].props.path, overview?.codex_app.path);
+    assert.equal(visibleText(paths[0]), path);
+    assert.equal(visibleText(paths[1]), overview?.codex_app.path ?? "等待状态检查");
+    const serviceList = nodes.find((node) => node.props.className === "overview-service-list");
+    assert.ok(serviceList);
+    assert.ok(!visibleText(serviceList).includes(path), "paths are not repeated in the service list");
+    assert.ok(nodes.indexOf(appSection) < nodes.indexOf(serviceList));
     const tools = nodes.filter((node) => node.type === "Button");
     assert.deepEqual(tools.map((node) => node.props["aria-label"]), ["刷新状态", "选择应用目录", "选择 Codex.exe", "清除保存路径"]);
     for (const tool of tools) {
@@ -134,6 +150,22 @@ test("overview renders all health states, full paths and accessible compact tool
   }
 });
 
+test("missing applications and disconnected services preserve explicit states and automatic path detection", () => {
+  const { nodes } = renderOverview({
+    codex_version: null,
+    codex_app: { status: "missing", path: null },
+    runtime_health: {
+      local_server: { status: "stopped", message: "本地服务器未运行" },
+      debugger: { status: "disconnected", message: "Codex 调试端点未连接" },
+      protocol_conversion_enabled: false,
+    },
+  }, "");
+  assert.deepEqual(nodes.filter((node) => node.type === "Badge").map((node) => node.props.status),
+    ["missing", "stopped", "disconnected"]);
+  assert.deepEqual(nodes.filter((node) => node.type === "code").map(visibleText), ["自动检测", "未检测到应用路径"]);
+  assert.match(nodes.map(visibleText).join(""), /协议转换未启用/);
+});
+
 test("path tools stay disabled while loading and clear requires a saved path", () => {
   for (const savedPath of [null, "", "G:\\Codex.exe"]) {
     const { nodes } = renderOverview(null, savedPath);
@@ -143,12 +175,17 @@ test("path tools stay disabled while loading and clear requires a saved path", (
   }
 });
 
-test("overview layout groups individual health items with wrapping details and a narrow single column", () => {
+test("overview uses unframed service rows and wrapping application paths at every width", () => {
   const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
   assert.match(css, /\.overview-health-row\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto/);
   assert.match(css, /\.overview-health-detail\s*\{[^}]*min-width:\s*0;[^}]*overflow-wrap:\s*anywhere/);
-  assert.match(css, /@media \(max-width: 760px\)\s*\{\s*\.overview-health-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
-  assert.match(css, /\.overview-app-path \.status-row code\s*\{[^}]*grid-column:\s*1 \/ -1/);
+  assert.match(css, /\.overview-path-row\s*\{[^}]*grid-template-columns:\s*88px minmax\(0,\s*1fr\)/);
+  assert.match(css, /\.overview-path-row dd\s*\{[^}]*min-width:\s*0/);
+  assert.match(css, /\.overview-path-row code\s*\{[^}]*overflow-wrap:\s*anywhere/);
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.overview-path-section\s*\{[^}]*margin-left:\s*0/);
+  const serviceRow = css.match(/\.overview-health-row\s*\{([^}]+)\}/)?.[1];
+  assert.ok(serviceRow);
+  assert.doesNotMatch(serviceRow, /background:|box-shadow:|border-radius:/);
 });
 
 test("status styling keeps idle states neutral without suppressing failures or missing applications", () => {
