@@ -6370,46 +6370,39 @@ select {
   }
 }
 
-.overview-page {
-  display: grid;
-  gap: 20px;
-  width: min(100%, 880px);
+.mg-page.overview-page {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  margin-inline: auto;
-  padding-top: 10px;
+  overflow-y: auto;
 }
 
 .overview-app-path {
-  overflow: hidden;
-  border: 1px solid hsl(var(--hairline) / 0.18);
-  border-radius: 8px;
-  background: hsl(var(--card));
+  flex-shrink: 0;
+  min-width: 0;
 }
 
-.overview-app-header {
+.mg-header.overview-app-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  min-height: 56px;
-  padding: 16px 20px;
+  height: auto;
+  min-height: 60px;
+  padding: 12px 26px;
 }
 
 .overview-app-identity {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   min-width: 0;
 }
 
 .overview-app-identity > svg {
-  width: 44px;
-  height: 44px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
-  padding: 10px;
-  border: 1px solid hsl(var(--brand-accent) / 0.12);
-  border-radius: 8px;
-  background: hsl(var(--brand-accent) / 0.07);
   color: hsl(var(--brand-accent));
 }
 
@@ -6482,8 +6475,7 @@ select {
 }
 
 .overview-path-section {
-  padding: 10px 20px 4px;
-  border-top: 1px solid hsl(var(--hairline) / 0.14);
+  padding: 20px 26px;
 }
 
 .overview-path-list {
@@ -6527,11 +6519,10 @@ select {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
-  padding: 20px;
-  overflow: hidden;
-  border: 1px solid hsl(var(--hairline) / 0.18);
-  border-radius: 8px;
-  background: hsl(var(--card));
+  flex-shrink: 0;
+  margin: 0 26px;
+  padding: 20px 0;
+  border-top: 1px solid hsl(var(--border));
 }
 
 .overview-marketplace .feature-toggle,
@@ -6595,7 +6586,7 @@ select {
 }
 
 @media (max-width: 760px) {
-  .overview-app-header {
+  .mg-header.overview-app-header {
     gap: 10px;
     padding: 14px;
   }
@@ -6619,7 +6610,8 @@ select {
 
   .overview-marketplace {
     column-gap: 10px;
-    padding: 18px 14px;
+    margin-inline: 14px;
+    padding: 18px 0;
   }
 
   .overview-marketplace .feature-toggle {

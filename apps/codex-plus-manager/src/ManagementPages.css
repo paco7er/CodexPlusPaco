@@ -51,7 +51,6 @@
 .mg-skills-page {
   --mg-divider: color-mix(in srgb, hsl(var(--border)), hsl(var(--foreground)) 17%);
   --mg-accent-ink: color-mix(in srgb, hsl(var(--brand-accent)), hsl(var(--foreground)) 28%);
-  background:hsl(var(--background));
 }
 .dark .mg-skills-page {
   --background:228 8% 11%;
@@ -64,8 +63,6 @@
 .mg-skills-page .mg-skill-list { border-radius:8px; box-shadow:none; }
 .mg-skills-page :is(.mg-button,.mg-icon-button) { font-size:12px; font-weight:500; height:32px; white-space:nowrap; box-sizing:border-box; transition:background-color .14s,border-color .14s; }
 .mg-skills-page .mg-button { border-color:var(--mg-divider); box-shadow:none; }
-.mg-skills-page .mg-primary { background:hsl(232 76% 54%); color:#fff; border-color:transparent; }
-.mg-skills-page .mg-primary:hover { filter:brightness(1.1); }
 .mg-skills-page :is(button,input):focus-visible { outline:2px solid hsl(var(--ring)); outline-offset:2px; }
 .mg-skills-page .mg-link-button { color:var(--mg-accent-ink); }
 .mg-drawer.mg-drawer-wide { width:100vw; max-width:none; height:100dvh; border:0; box-shadow:none; }
@@ -161,22 +158,14 @@
 .mg-skill-group .mg-skill-list { border-radius:0 0 9px 9px; }
 .mg-skill-group-select { display:block; max-width:100%; margin-top:4px; border:1px solid hsl(var(--border)); border-radius:5px; background:transparent; color:inherit; font:inherit; font-size:10px; padding:2px 4px; }
 
-/* 会话管理以列表为主；覆盖共享管理页的外框，避免宽度再叠加左右 margin。 */
-.screen.management-screen > .mg-session-page {
-  width:100%;
-  min-width:0;
-  margin:0;
-  border:0;
-  border-radius:0;
-  background:transparent;
-}
+/* 会话页沿用管理页外框，列表只在剩余高度内滚动。 */
 .mg-session-page .mg-session-toolbar {
   display:flex;
   flex-wrap:wrap;
   flex-shrink:0;
   align-items:center;
   gap:12px;
-  padding:0 0 14px;
+  padding:14px 26px 0;
 }
 .mg-session-page .mg-search {
   flex:1;
@@ -203,13 +192,13 @@
 .mg-session-toolbar-actions { flex-shrink:0; }
 .mg-session-page .mg-session-refresh { width:34px; padding:0; }
 .mg-session-page .mg-session-toolbar-actions [aria-pressed=true] { background:hsl(var(--accent)); border-color:hsl(var(--ring)/.6); }
-.mg-session-page > .session-maintenance { flex-shrink:0; margin-bottom:14px; border-top:0; }
+.mg-session-page > .session-maintenance { flex-shrink:0; margin:14px 26px 0; border-top:0; }
 .screen.management-screen > .mg-session-page > .mg-content {
   flex:1 1 auto;
   min-width:0;
   min-height:0;
   margin:0;
-  padding:0;
+  padding:20px;
   border:0;
   border-radius:0;
   background:transparent;
@@ -268,7 +257,7 @@
 .mg-session-page .mg-session-delete { opacity:0; color:hsl(var(--muted-foreground)); }
 .mg-session-page .mg-session-row:is(:hover,:focus-within) .mg-session-delete { opacity:1; }
 .mg-session-page .mg-session-delete:hover { color:hsl(var(--destructive)); background:hsl(var(--destructive)/.1); }
-.mg-session-selection { flex-shrink:0; margin:0 0 12px; padding:10px 12px; border:1px solid hsl(var(--border)); border-radius:8px; background:hsl(var(--muted)/.25); }
+.mg-session-selection { flex-shrink:0; margin:14px 26px 0; padding:10px 12px; border:1px solid hsl(var(--border)); border-radius:8px; background:hsl(var(--muted)/.25); }
 .mg-session-selection-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
 .mg-session-selected-count { margin-right:4px; font-size:12px; color:hsl(var(--foreground)); white-space:nowrap; }
 .mg-session-batch-actions { margin-left:auto; }
@@ -276,10 +265,14 @@
 .mg-session-page .mg-session-danger:not(:disabled):hover { background:hsl(var(--destructive)/.15); }
 .mg-session-selection-hint { display:flex; align-items:flex-start; gap:6px; margin:9px 0 0; color:hsl(var(--muted-foreground)); font-size:11px; line-height:1.5; }
 .mg-session-selection-hint > svg { flex-shrink:0; margin-top:1px; }
-.mg-session-page .mg-pagination { flex-shrink:0; justify-content:space-between; gap:12px; min-height:50px; padding:12px 0 0; font-size:12px; }
+.mg-session-page .mg-pagination { flex-shrink:0; justify-content:space-between; gap:12px; min-height:50px; padding:0 26px 16px; font-size:12px; }
 .mg-session-page .mg-pagination > span { white-space:nowrap; font-variant-numeric:tabular-nums; }
 @media (hover:none) { .mg-session-page .mg-session-delete { opacity:1; } }
 @media (max-width:760px) {
+  .mg-session-page .mg-session-toolbar { padding-inline:14px; }
+  .mg-session-page > .session-maintenance,.mg-session-selection { margin-inline:14px; }
+  .screen.management-screen > .mg-session-page > .mg-content { padding:14px; }
+  .mg-session-page .mg-pagination { padding-inline:14px; }
   .mg-session-page .mg-search { flex-basis:100%; }
   .mg-session-page .mg-session-row { grid-template-columns:minmax(0,1fr) 32px; gap:8px; }
   .mg-session-page .mg-session-row[data-selection=true] { grid-template-columns:20px minmax(0,1fr) 32px; }
@@ -287,4 +280,29 @@
   .mg-session-group-toggle { padding-inline:10px; gap:8px; }
   .mg-session-group-count { min-width:52px; }
   .mg-session-page .mg-pagination { flex-wrap:wrap; }
+}
+
+/* 页头与工具栏共用同一节奏；窄窗口换行，不挤压搜索和标题。 */
+.mg-header { height:auto; min-height:60px; flex-shrink:0; flex-wrap:wrap; padding-block:12px; gap:12px; }
+.mg-header-title { min-width:0; flex-shrink:0; }
+.mg-header-title h1 { letter-spacing:0; }
+.mg-header-actions { flex-wrap:wrap; justify-content:flex-end; }
+.mg-toolbar,.mg-tabs-bar { flex-shrink:0; flex-wrap:wrap; }
+.mg-tabs-bar .mg-search { flex:1; min-width:180px; max-width:340px; }
+.mg-skills-page .mg-tabs-bar .mg-segmented { flex-shrink:0; }
+.mg-skills-page .mg-skill-group { flex-shrink:0; min-width:0; }
+.mg-skill-group .mg-skill-list { max-height:min(60vh,680px); overflow:auto; }
+.mg-skill-group-head { min-width:0; flex-wrap:wrap; gap:8px; padding-right:8px; }
+.mg-skill-group-head .mg-group-head { min-width:0; width:auto; }
+.mg-skill-group-head .mg-group-head strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mg-skill-group-head .mg-row-actions { flex-wrap:wrap; padding:4px 0; }
+.mg-skill-group:has(.mg-group-head[aria-expanded=false]) .mg-skill-group-head { border-bottom:1px solid hsl(var(--border)); border-radius:8px; }
+@media (max-width:760px) {
+  .mg-header { padding-inline:14px; }
+  .mg-header-actions { gap:6px; }
+  .mg-tabs-bar { padding-inline:14px; }
+  .mg-tabs-bar .mg-search { order:1; flex-basis:100%; max-width:none; margin-left:0; }
+}
+@media (max-width:680px) {
+  .mg-skills-page :is(.mg-skill-head,.mg-skill-row) { min-width:520px; }
 }

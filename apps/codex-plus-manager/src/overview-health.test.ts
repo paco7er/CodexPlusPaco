@@ -172,7 +172,7 @@ test("overview preserves wrapping application paths at every width", () => {
   assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.overview-path-section\s*\{[^}]*padding-inline:\s*14px/);
 });
 
-test("overview groups share rounded clipped boundaries without nested frames or extra effects", () => {
+test("overview uses the management workspace with separated unframed sections", () => {
   const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
   const rule = (selector: string) => {
     const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -180,19 +180,18 @@ test("overview groups share rounded clipped boundaries without nested frames or 
     assert.ok(match, selector);
     return match[1];
   };
-  assert.match(rule(".overview-page"), /display:\s*grid;[^}]*gap:\s*20px/);
+  assert.match(rule(".mg-page.overview-page"), /display:\s*flex;[^}]*flex-direction:\s*column/);
   for (const selector of [".overview-app-path", ".overview-marketplace"]) {
     const body = rule(selector);
-    assert.match(body, /border:\s*1px solid hsl\(var\(--hairline\) \/ 0\.18\)/);
-    assert.match(body, /border-radius:\s*8px/);
-    assert.match(body, /overflow:\s*hidden/);
-    assert.match(body, /background:\s*hsl\(var\(--card\)\)/);
-    assert.doesNotMatch(body, /box-shadow:|backdrop-filter:|animation:/);
+    assert.match(body, /flex-shrink:\s*0/);
+    assert.doesNotMatch(body, /border-radius:|background:|box-shadow:|backdrop-filter:|animation:/);
   }
+  assert.match(rule(".overview-marketplace"), /border-top:\s*1px solid hsl\(var\(--border\)\)/);
+  assert.match(rule(".mg-header.overview-app-header"), /min-height:\s*60px/);
   assert.match(css, /\.overview-health-header-actions button,\s*\.overview-path-actions\s*\{[^}]*border-radius:\s*6px/);
   assert.match(rule(".overview-path-actions button"), /border-radius:\s*4px/);
   assert.doesNotMatch(rule(".overview-path-section"), /border-radius:|background:|box-shadow:/);
-  assert.match(rule(".overview-path-section"), /padding:\s*10px 20px 4px;[^}]*border-top:/);
+  assert.match(rule(".overview-path-section"), /padding:\s*20px 26px/);
   assert.match(rule(".overview-path-row + .overview-path-row"), /border-top:/);
 });
 

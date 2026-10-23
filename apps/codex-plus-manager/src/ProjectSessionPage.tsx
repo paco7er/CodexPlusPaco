@@ -1,8 +1,8 @@
 import { useState, type ButtonHTMLAttributes, type ReactNode } from "react";
-import { Archive, ArrowLeft, ArrowRight, ChevronDown, Copy, Info, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Archive, ArrowLeft, ArrowRight, ChevronDown, Copy, History, Info, RefreshCw, Search, Trash2 } from "lucide-react";
 import { t, tf } from "./i18n";
 import { matchesManagementQuery, sessionGroups, type ManagedSession } from "./management-model";
-import { ManagementDrawer } from "./ManagementPages";
+import { ManagementDrawer, PageHeader } from "./ManagementPages";
 import "./ManagementPages.css";
 
 type SessionPageData = { sessions: ManagedSession[]; totalCount: number; hasMore: boolean; offset: number; limit: number };
@@ -90,15 +90,17 @@ export function ProjectSessionPage({
   const pageSize = sessions?.limit || 50;
   const page = sessions ? Math.floor(sessions.offset / pageSize) + 1 : 0;
   return <div className="mg-page mg-session-page">
+    <PageHeader icon={<History size={20} />} title={t("会话管理")} actions={
+      <div className="mg-session-toolbar-actions">
+        <Button className="mg-session-refresh" onClick={() => void onRefresh()} title={t("刷新列表")} aria-label={t("刷新列表")}><RefreshCw size={15} aria-hidden="true" /></Button>
+        <Button aria-pressed={selection} onClick={() => { setSelection((old) => !old); setSelected(new Map()); }}>{selection ? t("完成") : t("选择多个…")}</Button>
+      </div>
+    } />
     <div className="mg-session-toolbar">
       <SearchBox value={query} onChange={(value) => { setQuery(value); setExpanded(new Map()); }} placeholder={t("搜索标题、目录或会话 ID")} />
       <div className="mg-segmented" role="group" aria-label={t("会话视图")}>
         <button type="button" data-active={mode === "project"} aria-pressed={mode === "project"} onClick={() => setMode("project")}>{t("按项目")}</button>
         <button type="button" data-active={mode === "time"} aria-pressed={mode === "time"} onClick={() => setMode("time")}>{t("按时间")}</button>
-      </div>
-      <div className="mg-session-toolbar-actions">
-        <Button className="mg-session-refresh" onClick={() => void onRefresh()} title={t("刷新列表")} aria-label={t("刷新列表")}><RefreshCw size={15} aria-hidden="true" /></Button>
-        <Button aria-pressed={selection} onClick={() => { setSelection((old) => !old); setSelected(new Map()); }}>{selection ? t("完成") : t("选择多个…")}</Button>
       </div>
     </div>
     {repairPanel}

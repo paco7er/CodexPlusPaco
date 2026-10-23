@@ -27,7 +27,7 @@ test("glass respects transparency and contrast preferences without requiring Jav
 test("glass highlights and overview surfaces are static rather than animated filter effects", () => {
   const treatment = css.slice(css.indexOf("/* 常驻导航"), css.indexOf(".screen {", css.indexOf("/* 常驻导航")));
   assert.doesNotMatch(treatment, /@keyframes|will-change|animation:|url\(/);
-  assert.match(css, /\.overview-app-identity > svg\s*\{[^}]*border-radius: 8px;[^}]*background: hsl\(var\(--brand-accent\) \/ 0\.07\)/);
+  assert.match(css, /\.overview-app-identity > svg\s*\{[^}]*width: 20px;[^}]*height: 20px;[^}]*color: hsl\(var\(--brand-accent\)\)/);
   assert.doesNotMatch(css, /\.overview-health-row\b/);
   assert.match(css, /input:checked ~ \.toggle-switch-visual[^{]*\{[^}]*background: hsl\(var\(--switch-on\)\)/);
 });

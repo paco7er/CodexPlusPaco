@@ -1978,7 +1978,7 @@ export function App() {
     [route, settingsForm, settings, overview, relayFiles, localSessions, selectedProviderSyncTarget, envConflicts],
   );
 
-  const isManagementScreen = route === "relay" || route === "sessions" || route === "context" || route === "skills";
+  const isManagementScreen = route === "overview" || route === "relay" || route === "sessions" || route === "context" || route === "skills";
   const codexAppRunning = overview?.runtime_health?.codex_app?.status === "running";
 
   return (
@@ -2361,9 +2361,9 @@ function OverviewScreen({ overview, settings, form, actions }: {
     }
   };
   return (
-    <div className="overview-page">
+    <div className="mg-page overview-page">
       <section className="overview-app-path" aria-labelledby="overview-app-title">
-        <header className="overview-app-header">
+        <header className="mg-header overview-app-header">
           <div className="overview-app-identity">
             <Monitor aria-hidden="true" />
             <div>

@@ -9,7 +9,11 @@ type Tree = { type: string; props: Record<string, any>; children: unknown[] };
 const source = readFileSync(new URL("./ProjectSessionPage.tsx", import.meta.url), "utf8");
 const file = ts.createSourceFile("ProjectSessionPage.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const functions = file.statements.filter((node) => ts.isFunctionDeclaration(node));
-const code = ts.transpileModule(functions.map((node) => node.getText(file).replace(/^export /, "")).join("\n"), {
+const sharedSource = readFileSync(new URL("./ManagementPages.tsx", import.meta.url), "utf8");
+const sharedFile = ts.createSourceFile("ManagementPages.tsx", sharedSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const header = sharedFile.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "PageHeader");
+assert.ok(header);
+const code = ts.transpileModule([header.getText(sharedFile).replace(/^export /, ""), ...functions.map((node) => node.getText(file).replace(/^export /, ""))].join("\n"), {
   compilerOptions: { jsx: ts.JsxEmit.React, jsxFactory: "jsx", jsxFragmentFactory: "fragment", target: ts.ScriptTarget.ES2022 },
 }).outputText;
 
@@ -88,6 +92,17 @@ test("session management exposes bulk actions only during selection and finishin
   assert.equal(bulkButtons(tree).length, 0);
   button(tree, "选择多个…").props.onClick();
   assert.equal(button(f.render(), "删除已选 (0)").props.disabled, true);
+});
+
+test("session page shares the management header and keeps its actions above the search toolbar", () => {
+  const tree = fixture().render();
+  const all = nodes(tree);
+  const headerNode = all.find((node) => node.props.className === "mg-header");
+  assert.ok(headerNode);
+  assert.match(text(headerNode), /会话管理/);
+  assert.equal(button(headerNode, "选择多个…").props["aria-pressed"], false);
+  assert.ok(nodes(headerNode).some((node) => node.props["aria-label"] === "刷新列表"));
+  assert.ok(all.find((node) => node.props.className === "mg-session-toolbar"));
 });
 
 test("search and pagination retain selected sessions, and cancelled deletion keeps them available", async () => {

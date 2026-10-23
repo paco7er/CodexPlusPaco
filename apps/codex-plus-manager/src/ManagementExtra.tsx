@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { ArrowLeft, ArrowRight, BookOpen, ChevronDown, Copy, Edit3, ExternalLink, History, Link, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { t, tf } from "./i18n";
 import { matchesManagementQuery, sessionGroups, type ManagedSession } from "./management-model";
-import { ManagementDrawer } from "./ManagementPages";
+import { ManagementDrawer, PageHeader } from "./ManagementPages";
 import "./ManagementPages.css";
 import { parseSkillRepository } from "./skill-repository";
 import { SkillListViewport } from "./SkillListViewport";
@@ -344,7 +344,7 @@ export function SkillsPage({ notify }: { notify: Notify }) {
     </div>
   </div>;
   return <div className="mg-page mg-skills-page">
-    <Header icon={<BookOpen size={20}/>} title="Skills" actions={<>
+    <PageHeader icon={<BookOpen size={20}/>} title="Skills" actions={<>
       <Button onClick={() => void load()} disabled={busy || loading}><RefreshCw size={14}/>{t("刷新目录")}</Button>
       <Button onClick={() => void run("import_ccs_skills", {})} disabled={busy}><BookOpen size={14}/>{t("从 cc-switch 导入")}</Button>
       <Button onClick={() => setRepoOpen(true)}><Link size={14}/>{t("管理仓库")}</Button>
@@ -368,7 +368,7 @@ export function SkillsPage({ notify }: { notify: Notify }) {
         const custom = customGroupNames.includes(source);
         return <section className="mg-skill-group" key={source}>
           <div className="mg-skill-group-head">
-            <button type="button" className="mg-group-head" onClick={() => setCollapsedGroups((old) => { const next = new Set(old); next.has(source) ? next.delete(source) : next.add(source); return next; })}>
+            <button type="button" className="mg-group-head" aria-expanded={!collapsed} onClick={() => setCollapsedGroups((old) => { const next = new Set(old); next.has(source) ? next.delete(source) : next.add(source); return next; })}>
               <ChevronDown size={15} className={collapsed ? "mg-chevron-collapsed" : ""}/><strong>{source}</strong><small>{groupItems.length} {t("个 Skill")}</small>
             </button>
             <div className="mg-row-actions">
