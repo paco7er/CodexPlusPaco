@@ -76,6 +76,11 @@ pub fn run() {
                 main_window_builder = main_window_builder.icon(icon)?;
             }
             let main_window = main_window_builder.build()?;
+            // Tauri 的窗口图标只设置 ICON_SMALL，任务栏还需要 ICON_BIG。
+            #[cfg(windows)]
+            if let (Ok(hwnd), Ok(executable)) = (main_window.hwnd(), std::env::current_exe()) {
+                codex_plus_core::windows_apply_icons_to_window(hwnd.0 as isize, executable);
+            }
             install_tray(app)?;
             if start_minimized {
                 set_manager_activation_policy(app.handle(), false);

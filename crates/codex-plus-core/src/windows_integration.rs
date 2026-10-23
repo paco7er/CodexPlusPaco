@@ -1196,6 +1196,17 @@ fn is_auxiliary_window_class(class_name: &str) -> bool {
 }
 
 #[cfg(windows)]
+pub fn apply_icons_to_window(window_handle: isize, icon_resource_path: PathBuf) -> bool {
+    if window_handle == 0 {
+        return false;
+    }
+    apply_window_icons(
+        HWND(window_handle as *mut core::ffi::c_void),
+        &icon_resource_path,
+    )
+}
+
+#[cfg(windows)]
 fn apply_window_icons(hwnd: HWND, icon_resource_path: &PathBuf) -> bool {
     let Some((large_icon, small_icon)) = load_cached_icons(icon_resource_path) else {
         return false;
@@ -1361,6 +1372,47 @@ impl Drop for RegistryKeyGuard {
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn window_icons_include_both_taskbar_and_titlebar_icons() {
+        use windows::Win32::UI::WindowsAndMessaging::{
+            CreateWindowExW, DestroyWindow, WINDOW_EX_STYLE, WM_GETICON, WS_OVERLAPPEDWINDOW,
+        };
+        use windows::core::w;
+
+        let hwnd = unsafe {
+            CreateWindowExW(
+                WINDOW_EX_STYLE::default(),
+                w!("STATIC"),
+                w!("Codex++ icon test"),
+                WS_OVERLAPPEDWINDOW,
+                0,
+                0,
+                100,
+                100,
+                None,
+                None,
+                None,
+                None,
+            )
+        }
+        .expect("创建隐藏测试窗口");
+        struct WindowGuard(HWND);
+        impl Drop for WindowGuard {
+            fn drop(&mut self) {
+                let _ = unsafe { DestroyWindow(self.0) };
+            }
+        }
+        let _guard = WindowGuard(hwnd);
+        let icon = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../apps/codex-plus-manager/src-tauri/icons/icon.ico");
+        assert!(!apply_icons_to_window(0, icon.clone()));
+        assert!(apply_icons_to_window(hwnd.0 as isize, icon));
+        for kind in [ICON_BIG, ICON_SMALL] {
+            let handle = unsafe { SendMessageW(hwnd, WM_GETICON, WPARAM(kind as usize), LPARAM(0)) };
+            assert_ne!(handle.0, 0, "缺少图标类型 {kind}");
+        }
+    }
 
     #[test]
     fn application_window_outranks_titled_ime_and_tool_windows() {

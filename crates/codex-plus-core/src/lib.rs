@@ -78,6 +78,14 @@ pub fn windows_activate_process_window(process_id: u32) -> bool {
 }
 
 #[cfg(windows)]
+pub fn windows_apply_icons_to_window(
+    window_handle: isize,
+    icon_resource_path: std::path::PathBuf,
+) -> bool {
+    windows_integration::apply_icons_to_window(window_handle, icon_resource_path)
+}
+
+#[cfg(windows)]
 pub fn windows_apply_codexplusplus_icon_to_process_window(
     process_id: u32,
     icon_resource_path: std::path::PathBuf,
