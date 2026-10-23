@@ -1285,6 +1285,9 @@ pub fn save_settings(mut settings: BackendSettings, expected_revision: Option<St
         Ok(_) => {
             // 自动接管是常驻行为，保存后立刻生效，不必重启管理器。
             crate::auto_takeover::apply_enabled(settings.codex_app_auto_takeover);
+            codex_plus_core::launcher::set_http_body_limit_bytes(
+                settings.helper_max_request_body_bytes(),
+            );
             settings_payload("设置已保存。", "设置保存后重新读取失败")
         }
         Err(error) => {
@@ -1724,6 +1727,10 @@ fn normalized_codex_app_path_for_save(raw: &str) -> String {
 }
 
 fn normalize_settings_before_save(mut settings: BackendSettings) -> BackendSettings {
+    settings.helper_max_request_body_mib =
+        codex_plus_core::settings::clamp_helper_max_request_body_mib(
+            settings.helper_max_request_body_mib,
+        );
     settings.codex_app_path = normalized_codex_app_path_for_save(&settings.codex_app_path);
     settings.relay_common_config_contents =
         codex_plus_core::relay_config::sanitize_common_config_contents(
@@ -3137,6 +3144,7 @@ pub fn switch_relay_profile(
     let store = SettingsStore::default();
     let previous_active_relay_id = request.previous_active_relay_id;
     let settings = normalize_settings_before_save(request.settings);
+    let mut error_secrets = relay_switch_error_secrets(&settings);
     log_manager_event(
         "manager.switch_relay_profile.start",
         json!({
@@ -3168,20 +3176,72 @@ pub fn switch_relay_profile(
         Err(error) => {
             let status = codex_plus_core::relay_config::relay_status_from_home(&home);
             let settings = store.load().unwrap_or_default();
+            error_secrets.extend(relay_switch_error_secrets(&settings));
+            let error_detail = relay_switch_error_detail(&error, &error_secrets);
             log_manager_event(
                 "manager.switch_relay_profile.failed",
                 json!({
                     "previousActiveRelayId": previous_active_relay_id,
                     "activeRelayId": settings.active_relay_id,
-                    "error": error.to_string()
+                    "error": error_detail
                 }),
             );
             failed(
-                &format!("供应商切换失败：{error}"),
+                &format!("供应商切换失败：{error_detail}"),
                 relay_switch_payload(settings, status, None),
             )
         }
     }
+}
+
+fn relay_switch_error_secrets(settings: &BackendSettings) -> Vec<String> {
+    fn collect_strings(value: &Value, secrets: &mut Vec<String>) {
+        match value {
+            Value::String(value) => secrets.push(value.clone()),
+            Value::Object(values) => {
+                for value in values.values() {
+                    collect_strings(value, secrets);
+                }
+            }
+            Value::Array(values) => {
+                for value in values {
+                    collect_strings(value, secrets);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut secrets = vec![settings.relay_api_key.clone()];
+    for profile in &settings.relay_profiles {
+        secrets.push(profile.api_key.clone());
+        secrets.extend(profile.api_keys.iter().map(|entry| entry.api_key.clone()));
+        secrets.extend(
+            profile.custom_headers.iter()
+                .filter(|header| codex_plus_core::relay_headers::is_sensitive(&header.key))
+                .map(|header| header.value.clone()),
+        );
+        if let Ok(auth) = serde_json::from_str::<Value>(&profile.auth_contents) {
+            for key in ["OPENAI_API_KEY", "tokens"] {
+                if let Some(value) = auth.get(key) {
+                    collect_strings(value, &mut secrets);
+                }
+            }
+        }
+    }
+    secrets.retain(|value| !value.is_empty());
+    secrets
+}
+
+fn relay_switch_error_detail(error: &anyhow::Error, secrets: &[String]) -> String {
+    let mut detail = format!("{error:#}");
+    let mut secrets = secrets.iter().filter(|value| !value.is_empty()).collect::<Vec<_>>();
+    // 合并新旧配置后统一排序，避免短 Key 是旧令牌前缀时留下尾部。
+    secrets.sort_by_key(|value| std::cmp::Reverse(value.len()));
+    secrets.dedup();
+    for secret in secrets {
+        detail = detail.replace(secret, "***");
+    }
+    codex_plus_core::vision::redact_secrets(&detail, "")
 }
 
 #[tauri::command]
@@ -6391,6 +6451,42 @@ enabled = true
             "指向 Codex++ 自身的路径不该落库，实际是 {}",
             normalized.codex_app_path
         );
+    }
+
+    #[test]
+    fn relay_switch_error_detail_keeps_cause_and_masks_credentials() {
+        let mut settings = BackendSettings::default();
+        settings.relay_profiles[0].api_key = "fake-api-secret".to_string();
+        settings.relay_profiles[0].auth_contents =
+            r#"{"tokens":{"access_token":"fake-oauth-secret"}}"#.to_string();
+        let error = anyhow::anyhow!(
+            "permission denied; fake-api-secret; fake-oauth-secret; Bearer fake-bearer-secret"
+        ).context("保存供应商设置失败");
+        let detail = relay_switch_error_detail(&error, &relay_switch_error_secrets(&settings));
+        assert!(detail.contains("保存供应商设置失败"));
+        assert!(detail.contains("permission denied"));
+        for secret in ["fake-api-secret", "fake-oauth-secret", "fake-bearer-secret"] {
+            assert!(!detail.contains(secret));
+        }
+        let overlapping = anyhow::anyhow!("fake-prefix-long");
+        assert_eq!(
+            relay_switch_error_detail(&overlapping, &["fake-prefix".into(), "fake-prefix-long".into()]),
+            "***"
+        );
+    }
+
+    #[test]
+    fn normalize_settings_before_save_clamps_helper_body_limit() {
+        for (value, expected) in [(9999, 512), (1, 32), (256, 256)] {
+            let settings = BackendSettings {
+                helper_max_request_body_mib: value,
+                ..BackendSettings::default()
+            };
+            assert_eq!(
+                normalize_settings_before_save(settings).helper_max_request_body_mib,
+                expected
+            );
+        }
     }
 
     #[test]

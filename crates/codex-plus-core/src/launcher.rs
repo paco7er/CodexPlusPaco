@@ -647,6 +647,8 @@ where
     let mut debug_port = hooks.select_debug_port(options.debug_port);
     let mut helper_port = hooks.select_helper_port(options.helper_port);
     let settings = hooks.load_settings().await?.marketplace_only_enhancements();
+    // 在 helper 接收请求前应用设置；环境变量优先级在读取请求时统一处理。
+    set_http_body_limit_bytes(settings.helper_max_request_body_bytes());
     let app_dir = hooks.resolve_app_dir(options.app_dir.as_deref(), &settings)?;
     let status_store = options.status_store.clone();
     let mut helper_started = false;
@@ -3203,16 +3205,57 @@ mod computer_use_tests {
 }
 
 const MAX_HTTP_HEADER_BYTES: usize = 64 * 1024;
-const MAX_HTTP_BODY_BYTES: usize = 32 * 1024 * 1024;
-const MAX_CONFIGURED_HTTP_BODY_BYTES: usize = 512 * 1024 * 1024;
+const DEFAULT_HTTP_BODY_BYTES: usize =
+    crate::settings::DEFAULT_HELPER_MAX_REQUEST_BODY_MIB as usize * 1024 * 1024;
+const MIN_HTTP_BODY_BYTES: usize =
+    crate::settings::MIN_HELPER_MAX_REQUEST_BODY_MIB as usize * 1024 * 1024;
+const MAX_HTTP_BODY_BYTES: usize =
+    crate::settings::MAX_HELPER_MAX_REQUEST_BODY_MIB as usize * 1024 * 1024;
+
+// 0 表示设置尚未应用，使用默认值。
+static CONFIGURED_HTTP_BODY_BYTES: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+/// 保存设置后对后续请求生效，无需重启 helper。
+pub fn set_http_body_limit_bytes(bytes: usize) {
+    CONFIGURED_HTTP_BODY_BYTES.store(
+        normalize_http_body_bytes(bytes),
+        std::sync::atomic::Ordering::Relaxed,
+    );
+}
+
+fn normalize_http_body_bytes(bytes: usize) -> usize {
+    bytes.clamp(MIN_HTTP_BODY_BYTES, MAX_HTTP_BODY_BYTES)
+}
+
+fn parse_env_http_body_bytes(value: &str) -> Option<usize> {
+    value
+        .trim()
+        .parse::<usize>()
+        .ok()
+        .filter(|bytes| *bytes >= MIN_HTTP_BODY_BYTES)
+        .map(normalize_http_body_bytes)
+}
+
+fn resolve_http_body_bytes(env_value: Option<&str>, setting_bytes: usize) -> usize {
+    env_value
+        .and_then(parse_env_http_body_bytes)
+        .unwrap_or_else(|| normalize_http_body_bytes(setting_bytes))
+}
 
 fn configured_http_body_bytes() -> usize {
-    std::env::var("CODEX_PLUS_MAX_HTTP_BODY_BYTES")
-        .ok()
-        .and_then(|value| value.trim().parse::<usize>().ok())
-        .filter(|value| *value >= MAX_HTTP_BODY_BYTES)
-        .map(|value| value.min(MAX_CONFIGURED_HTTP_BODY_BYTES))
-        .unwrap_or(MAX_HTTP_BODY_BYTES)
+    let stored = CONFIGURED_HTTP_BODY_BYTES.load(std::sync::atomic::Ordering::Relaxed);
+    let setting_bytes = if stored == 0 {
+        DEFAULT_HTTP_BODY_BYTES
+    } else {
+        stored
+    };
+    resolve_http_body_bytes(
+        std::env::var("CODEX_PLUS_MAX_HTTP_BODY_BYTES")
+            .ok()
+            .as_deref(),
+        setting_bytes,
+    )
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -3222,10 +3265,14 @@ struct HttpBodyLimits {
 }
 
 fn http_body_limits() -> HttpBodyLimits {
-    let decoded = configured_http_body_bytes();
+    http_body_limits_from(configured_http_body_bytes())
+}
+
+fn http_body_limits_from(decoded: usize) -> HttpBodyLimits {
+    let decoded = normalize_http_body_bytes(decoded);
     HttpBodyLimits {
         decoded,
-        encoded: decoded.saturating_mul(2).min(MAX_CONFIGURED_HTTP_BODY_BYTES),
+        encoded: decoded.saturating_mul(2).min(MAX_HTTP_BODY_BYTES),
     }
 }
 
@@ -3249,10 +3296,11 @@ impl HttpRequestReadError {
     }
 
     fn payload_too_large_with_limit(limit: usize) -> Self {
+        let limit_mib = limit / (1024 * 1024);
         Self {
             status: "413 Payload Too Large",
             message: format!(
-                "HTTP 请求体超过 {limit} 字节限制（可通过 CODEX_PLUS_MAX_HTTP_BODY_BYTES 调大）"
+                "HTTP 请求体超过 {limit_mib} MiB（{limit} 字节）上限：可调大 settings.json 的 helperMaxRequestBodyMib（32~512 MiB），或设置环境变量 CODEX_PLUS_MAX_HTTP_BODY_BYTES（字节）"
             ),
         }
     }
@@ -3304,7 +3352,7 @@ struct ChunkedScanState {
 
 impl ChunkedScanState {
     fn advance(&mut self, encoded: &[u8]) -> Result<ChunkedBodyScan, HttpRequestReadError> {
-        self.advance_with_limit(encoded, MAX_HTTP_BODY_BYTES)
+        self.advance_with_limit(encoded, DEFAULT_HTTP_BODY_BYTES)
     }
 
     fn advance_with_limit(
@@ -3385,7 +3433,13 @@ impl ChunkedScanState {
 async fn read_http_request(
     stream: &mut tokio::net::TcpStream,
 ) -> Result<HttpRequest, HttpRequestReadError> {
-    let limits = http_body_limits();
+    read_http_request_with_limits(stream, http_body_limits()).await
+}
+
+async fn read_http_request_with_limits(
+    stream: &mut tokio::net::TcpStream,
+    limits: HttpBodyLimits,
+) -> Result<HttpRequest, HttpRequestReadError> {
     let mut buffer = Vec::new();
     let mut chunk = vec![0_u8; 4096];
     let mut header_end = None;
@@ -3510,7 +3564,7 @@ fn content_length_body(
     encoded: &[u8],
     content_length: usize,
 ) -> Result<Vec<u8>, HttpRequestReadError> {
-    content_length_body_with_limit(encoded, content_length, MAX_HTTP_BODY_BYTES)
+    content_length_body_with_limit(encoded, content_length, DEFAULT_HTTP_BODY_BYTES)
 }
 
 fn content_length_body_with_limit(
@@ -3528,7 +3582,7 @@ fn content_length_body_with_limit(
 }
 
 fn decode_chunked_body(encoded: &[u8]) -> Result<ChunkedBody, HttpRequestReadError> {
-    decode_chunked_body_with_limit(encoded, MAX_HTTP_BODY_BYTES)
+    decode_chunked_body_with_limit(encoded, DEFAULT_HTTP_BODY_BYTES)
 }
 
 fn decode_chunked_body_with_limit(
@@ -5396,18 +5450,22 @@ mod tests {
         assert_eq!(multiple.status(), "400 Bad Request");
     }
 
+    const TEST_HTTP_BODY_BYTES: usize = 4 * 1024;
+
     #[test]
     fn chunked_decoder_accepts_exact_body_limit_and_rejects_one_byte_more() {
-        let mut exact = format!("{:X}\r\n", MAX_HTTP_BODY_BYTES).into_bytes();
-        exact.resize(exact.len() + MAX_HTTP_BODY_BYTES, b'a');
+        let mut exact = format!("{:X}\r\n", TEST_HTTP_BODY_BYTES).into_bytes();
+        exact.resize(exact.len() + TEST_HTTP_BODY_BYTES, b'a');
         exact.extend_from_slice(b"\r\n0\r\n\r\n");
-        let ChunkedBody::Complete(decoded) = decode_chunked_body(&exact).unwrap() else {
+        let ChunkedBody::Complete(decoded) =
+            decode_chunked_body_with_limit(&exact, TEST_HTTP_BODY_BYTES).unwrap()
+        else {
             panic!("expected complete chunked body");
         };
-        assert_eq!(decoded.len(), MAX_HTTP_BODY_BYTES);
+        assert_eq!(decoded.len(), TEST_HTTP_BODY_BYTES);
 
-        let oversized = format!("{:X}\r\n", MAX_HTTP_BODY_BYTES + 1).into_bytes();
-        let error = decode_chunked_body(&oversized).unwrap_err();
+        let oversized = format!("{:X}\r\n", TEST_HTTP_BODY_BYTES + 1).into_bytes();
+        let error = decode_chunked_body_with_limit(&oversized, TEST_HTTP_BODY_BYTES).unwrap_err();
         assert_eq!(error.status(), "413 Payload Too Large");
     }
 
@@ -5445,16 +5503,95 @@ mod tests {
 
     #[test]
     fn content_length_body_accepts_exact_limit_and_rejects_one_byte_more() {
-        let exact = vec![b'a'; MAX_HTTP_BODY_BYTES];
+        let exact = vec![b'a'; TEST_HTTP_BODY_BYTES];
         assert_eq!(
-            content_length_body(&exact, MAX_HTTP_BODY_BYTES)
+            content_length_body_with_limit(&exact, TEST_HTTP_BODY_BYTES, TEST_HTTP_BODY_BYTES)
                 .unwrap()
                 .len(),
-            MAX_HTTP_BODY_BYTES
+            TEST_HTTP_BODY_BYTES
         );
 
-        let error = content_length_body(&[], MAX_HTTP_BODY_BYTES + 1).unwrap_err();
+        let error =
+            content_length_body_with_limit(&[], TEST_HTTP_BODY_BYTES + 1, TEST_HTTP_BODY_BYTES)
+                .unwrap_err();
         assert_eq!(error.status(), "413 Payload Too Large");
+    }
+
+    #[test]
+    fn http_body_limit_defaults_to_128_mib_and_resolves_env_over_setting() {
+        let mib = 1024 * 1024;
+        assert_eq!(DEFAULT_HTTP_BODY_BYTES, 128 * mib);
+        assert_eq!(MIN_HTTP_BODY_BYTES, 32 * mib);
+        assert_eq!(MAX_HTTP_BODY_BYTES, 512 * mib);
+        for (env, setting, expected) in [
+            (None, DEFAULT_HTTP_BODY_BYTES, 128 * mib),
+            (None, 256 * mib, 256 * mib),
+            (None, 8 * mib, 32 * mib),
+            (None, usize::MAX, 512 * mib),
+            (Some(" 402653184 "), 64 * mib, 384 * mib),
+            (Some("1048576"), 64 * mib, 64 * mib),
+            (Some("not-a-number"), 64 * mib, 64 * mib),
+            (Some("1073741824"), 64 * mib, 512 * mib),
+        ] {
+            assert_eq!(resolve_http_body_bytes(env, setting), expected);
+        }
+    }
+
+    #[test]
+    fn http_body_limits_allow_double_encoded_body_and_cap_at_512_mib() {
+        let mib = 1024 * 1024;
+        let limits = http_body_limits_from(128 * mib);
+        assert_eq!(limits.decoded, 128 * mib);
+        assert_eq!(limits.encoded, 256 * mib);
+        let limits = http_body_limits_from(MAX_HTTP_BODY_BYTES);
+        assert_eq!(limits.decoded, MAX_HTTP_BODY_BYTES);
+        assert_eq!(limits.encoded, MAX_HTTP_BODY_BYTES);
+        assert_eq!(http_body_limits_from(1).decoded, 32 * mib);
+    }
+
+    #[tokio::test]
+    async fn read_http_request_uses_injected_limit_instead_of_global_default() {
+        let limits = HttpBodyLimits {
+            decoded: TEST_HTTP_BODY_BYTES,
+            encoded: TEST_HTTP_BODY_BYTES * 2,
+        };
+        for size in [TEST_HTTP_BODY_BYTES + 1, TEST_HTTP_BODY_BYTES] {
+            let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let client = tokio::spawn(async move {
+                let mut stream = tokio::net::TcpStream::connect(address).await.unwrap();
+                let mut text = format!(
+                    "POST /v1/responses HTTP/1.1\r\nContent-Length: {size}\r\n\r\n"
+                );
+                if size == TEST_HTTP_BODY_BYTES {
+                    text.push_str(&"a".repeat(size));
+                }
+                stream.write_all(text.as_bytes()).await.unwrap();
+                // 超限只发头部，保持连接，验证服务端在正文到达前拒绝。
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            });
+            let (mut server, _) = listener.accept().await.unwrap();
+            let result = tokio::time::timeout(
+                std::time::Duration::from_secs(2),
+                read_http_request_with_limits(&mut server, limits),
+            ).await.unwrap();
+            if size > TEST_HTTP_BODY_BYTES {
+                let error = result.err().expect("oversized body must be rejected");
+                assert_eq!(error.status(), "413 Payload Too Large");
+            } else {
+                assert_eq!(result.unwrap().body.len(), size);
+            }
+            client.await.unwrap();
+        }
+    }
+
+    #[test]
+    fn oversized_body_hint_does_not_refer_to_retired_proxy_settings_page() {
+        let error = HttpRequestReadError::payload_too_large_with_limit(DEFAULT_HTTP_BODY_BYTES);
+        assert!(error.message.contains("128 MiB"));
+        assert!(error.message.contains("helperMaxRequestBodyMib"));
+        assert!(error.message.contains("CODEX_PLUS_MAX_HTTP_BODY_BYTES"));
+        assert!(!error.message.contains("代理设置"));
     }
 
     #[tokio::test]
@@ -5471,7 +5608,7 @@ mod tests {
     async fn helper_returns_413_before_reading_oversized_content_length_body() {
         let request = format!(
             "POST /v1/audio/transcriptions HTTP/1.1\r\nContent-Type: multipart/form-data; boundary=x\r\nContent-Length: {}\r\n\r\n",
-            MAX_HTTP_BODY_BYTES + 1
+            DEFAULT_HTTP_BODY_BYTES + 1
         );
         let response = send_raw_helper_request(request.as_bytes()).await;
 

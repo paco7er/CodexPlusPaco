@@ -1029,6 +1029,34 @@ fn provider_sync_skips_rollout_locked_after_planning() {
     assert_eq!(fs::read(&rollout).unwrap(), original_rollout);
 }
 
+#[cfg(unix)]
+#[test]
+fn provider_sync_skips_rollout_unreadable_after_planning() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let tmp = tempdir().unwrap();
+    let home = tmp.path().join(".codex");
+    fs::create_dir(&home).unwrap();
+    write_provider_config(&home, "apigather");
+    let rollout = home.join("sessions/rollout-unreadable.jsonl");
+    write_rollout(&rollout, "openai", "thread-1", "C:/workspace");
+    let original_rollout = fs::read(&rollout).unwrap();
+    let mut revoked = false;
+
+    let result = run_provider_sync_with_target_and_progress(Some(&home), None, |event| {
+        if !revoked && event.phase == ProviderSyncProgressPhase::Planning {
+            fs::set_permissions(&rollout, fs::Permissions::from_mode(0o000)).unwrap();
+            revoked = true;
+        }
+    });
+
+    fs::set_permissions(&rollout, fs::Permissions::from_mode(0o644)).unwrap();
+    assert!(revoked);
+    assert_eq!(result.status, ProviderSyncStatus::Synced, "{}", result.message);
+    assert!(result.skipped_locked_rollout_files.contains(&rollout));
+    assert_eq!(fs::read(&rollout).unwrap(), original_rollout);
+}
+
 #[test]
 fn provider_sync_skips_rollout_changed_after_scanning() {
     let tmp = tempdir().unwrap();

@@ -52,6 +52,11 @@ pub fn run() {
             }
         }
     }
+    if let Ok(settings) = codex_plus_core::settings::SettingsStore::default().load() {
+        codex_plus_core::launcher::set_http_body_limit_bytes(
+            settings.helper_max_request_body_bytes(),
+        );
+    }
     let autostart = std::env::args().any(|arg| arg == "--autostart");
     let start_minimized = autostart
         && codex_plus_core::watcher::watcher_start_minimized();

@@ -36,7 +36,7 @@ fn windows_pac_proxy(url: &str) -> Option<String> {
     unsafe {
         let mut config = WINHTTP_CURRENT_USER_IE_PROXY_CONFIG::default();
         WinHttpGetIEProxyConfigForCurrentUser(&mut config).ok()?;
-        let pac = config.lpszAutoConfigUrl.to_string().unwrap_or_default();
+        let pac = wide_ptr_to_string(config.lpszAutoConfigUrl.0).unwrap_or_default();
         let auto_detect = config.fAutoDetect.as_bool();
         for pointer in [config.lpszAutoConfigUrl, config.lpszProxy, config.lpszProxyBypass] {
             if !pointer.is_null() { let _ = GlobalFree(HGLOBAL(pointer.0.cast())); }
@@ -57,7 +57,7 @@ fn windows_pac_proxy(url: &str) -> Option<String> {
         let mut info = WINHTTP_PROXY_INFO::default();
         let result = WinHttpGetProxyForUrl(session, PCWSTR(url_wide.as_ptr()), &mut options, &mut info);
         let proxy = if result.is_ok() && info.dwAccessType != WINHTTP_ACCESS_TYPE_NO_PROXY {
-            info.lpszProxy.to_string().ok().and_then(|value| parse_windows_proxy_server(&value))
+            wide_ptr_to_string(info.lpszProxy.0).and_then(|value| parse_windows_proxy_server(&value))
         } else { None };
         for pointer in [info.lpszProxy, info.lpszProxyBypass] {
             if !pointer.is_null() { let _ = GlobalFree(HGLOBAL(pointer.0.cast())); }
@@ -65,6 +65,23 @@ fn windows_pac_proxy(url: &str) -> Option<String> {
         let _ = WinHttpCloseHandle(session);
         proxy
     }
+}
+
+/// 将 WinHTTP 返回的 UTF-16 字符串转为 Rust 字符串；未配置 PAC 时返回的是 NULL。
+///
+/// # Safety
+///
+/// 非 NULL 时 `ptr` 必须指向以 0 结尾、可读的 UTF-16 字符串。
+#[cfg(any(test, windows))]
+unsafe fn wide_ptr_to_string(ptr: *const u16) -> Option<String> {
+    if ptr.is_null() {
+        return None;
+    }
+    let mut len = 0usize;
+    while unsafe { *ptr.add(len) } != 0 {
+        len += 1;
+    }
+    String::from_utf16(unsafe { std::slice::from_raw_parts(ptr, len) }).ok()
 }
 
 fn normalize_proxy_url(value: &str) -> Option<String> {
@@ -242,6 +259,24 @@ fn windows_system_proxy() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wide_ptr_to_string_treats_null_as_missing() {
+        assert_eq!(unsafe { wide_ptr_to_string(std::ptr::null()) }, None);
+    }
+
+    #[test]
+    fn wide_ptr_to_string_reads_until_nul() {
+        let wide: Vec<u16> = "http://pac.example.test/proxy.pac\0ignored"
+            .encode_utf16()
+            .collect();
+        assert_eq!(
+            unsafe { wide_ptr_to_string(wide.as_ptr()) },
+            Some("http://pac.example.test/proxy.pac".to_string())
+        );
+        assert_eq!(unsafe { wide_ptr_to_string([0u16].as_ptr()) }, Some(String::new()));
+        assert_eq!(unsafe { wide_ptr_to_string([0xD800u16, 0].as_ptr()) }, None);
+    }
 
     #[test]
     fn windows_proxy_server_prefers_https_scheme_entry() {

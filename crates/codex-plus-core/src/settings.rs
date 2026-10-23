@@ -765,6 +765,12 @@ pub struct BackendSettings {
         default = "default_protocol_proxy_auto_retry_commit_delay_ms"
     )]
     pub protocol_proxy_auto_retry_commit_delay_ms: u64,
+    /// 本地 helper 的请求体上限（MiB），范围 32~512；环境变量字节数可覆盖。
+    #[serde(
+        rename = "helperMaxRequestBodyMib",
+        default = "default_helper_max_request_body_mib"
+    )]
+    pub helper_max_request_body_mib: u32,
     /// 按工具分区的配置。`tools.codex` 是上面那批扁平字段的镜像（写盘时同步），
     /// 保留历史工具分片，避免升级时丢失供应商配置。见 `crate::tools`。
     #[serde(rename = "tools", default)]
@@ -847,6 +853,7 @@ impl Default for BackendSettings {
             protocol_proxy_auto_retry_mode: default_protocol_proxy_auto_retry_mode(),
             protocol_proxy_auto_retry_commit_delay_ms:
                 default_protocol_proxy_auto_retry_commit_delay_ms(),
+            helper_max_request_body_mib: default_helper_max_request_body_mib(),
             tools: BTreeMap::new(),
             active_tool: ToolId::Codex,
         }
@@ -854,6 +861,10 @@ impl Default for BackendSettings {
 }
 
 impl BackendSettings {
+    pub fn helper_max_request_body_bytes(&self) -> usize {
+        clamp_helper_max_request_body_mib(self.helper_max_request_body_mib) as usize * 1024 * 1024
+    }
+
     /// 只约束运行时快照，保留磁盘中的旧字段和供应商配置以兼容历史数据。
     pub fn marketplace_only_enhancements(mut self) -> Self {
         self.codex_app_standalone_quota_unlock = false;
@@ -1214,6 +1225,18 @@ pub fn default_protocol_proxy_auto_retry_commit_delay_ms() -> u64 {
 
 pub fn clamp_protocol_proxy_auto_retry_commit_delay_ms(value: u64) -> u64 {
     value.min(10_000)
+}
+
+pub const DEFAULT_HELPER_MAX_REQUEST_BODY_MIB: u32 = 128;
+pub const MIN_HELPER_MAX_REQUEST_BODY_MIB: u32 = 32;
+pub const MAX_HELPER_MAX_REQUEST_BODY_MIB: u32 = 512;
+
+pub fn default_helper_max_request_body_mib() -> u32 {
+    DEFAULT_HELPER_MAX_REQUEST_BODY_MIB
+}
+
+pub fn clamp_helper_max_request_body_mib(value: u32) -> u32 {
+    value.clamp(MIN_HELPER_MAX_REQUEST_BODY_MIB, MAX_HELPER_MAX_REQUEST_BODY_MIB)
 }
 
 pub fn default_relay_profiles() -> Vec<RelayProfile> {
@@ -1792,6 +1815,13 @@ fn merge_known_setting_fields(target: &mut Map<String, Value>, source: &Map<Stri
         target.insert(
             "protocolProxyAutoRetryCommitDelayMs".to_string(),
             Value::from(clamp_protocol_proxy_auto_retry_commit_delay_ms(value)),
+        );
+    }
+    if let Some(value) = source.get("helperMaxRequestBodyMib").and_then(Value::as_u64) {
+        let clamped = value.min(u64::from(MAX_HELPER_MAX_REQUEST_BODY_MIB)) as u32;
+        target.insert(
+            "helperMaxRequestBodyMib".to_string(),
+            Value::from(clamp_helper_max_request_body_mib(clamped)),
         );
     }
     if let Some(value) = source.get("enhancementsEnabled").and_then(Value::as_bool) {
@@ -2411,6 +2441,8 @@ fn normalize_settings_config_sections(mut settings: BackendSettings) -> BackendS
         clamp_protocol_proxy_auto_retry_commit_delay_ms(
             settings.protocol_proxy_auto_retry_commit_delay_ms,
         );
+    settings.helper_max_request_body_mib =
+        clamp_helper_max_request_body_mib(settings.helper_max_request_body_mib);
     // 扁平字段始终是 Codex 的唯一事实来源，这里把它镜像进 tools.codex；
     // 其它工具的分片原样保留。放在函数末尾，所有 load / save / update 路径
     // 都会经过，两边不会漂移。
