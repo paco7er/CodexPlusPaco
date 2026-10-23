@@ -1998,6 +1998,8 @@ export function App() {
                   return (
                     <button
                       className={`nav-item ${route === item.id ? "active" : ""}`}
+                      data-route={item.id}
+                      aria-current={route === item.id ? "page" : undefined}
                       key={item.id}
                       onClick={() => void navigate(item.id)}
                       title={item.label}

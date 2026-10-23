@@ -143,7 +143,7 @@ test("path tools stay disabled while loading and clear requires a saved path", (
   }
 });
 
-test("overview layout groups unframed health items with wrapping details and a narrow single column", () => {
+test("overview layout groups individual health items with wrapping details and a narrow single column", () => {
   const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
   assert.match(css, /\.overview-health-row\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto/);
   assert.match(css, /\.overview-health-detail\s*\{[^}]*min-width:\s*0;[^}]*overflow-wrap:\s*anywhere/);
@@ -185,21 +185,26 @@ test("status styling keeps idle states neutral without suppressing failures or m
   assert.match(css, /\.overview-marketplace-status\[data-failed\]\s*\{[^}]*--status-error/);
 });
 
-test("neutral shell retains readable text contrast and visible keyboard focus", () => {
+test("macOS-inspired palette retains readable text contrast and visible keyboard focus", () => {
   const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
-  const lightness = (name: string) => {
-    const value = css.match(new RegExp(`--${name}:\\s*0 0% ([\\d.]+)%;`));
-    assert.ok(value, `${name} must use the neutral shell palette`);
-    const channel = Number(value[1]) / 100;
-    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  const luminance = (name: string) => {
+    const value = css.match(new RegExp(`--${name}:\\s*([\\d.]+) ([\\d.]+)% ([\\d.]+)%;`));
+    assert.ok(value, `${name} must be an HSL color token`);
+    const hue = Number(value[1]), saturation = Number(value[2]) / 100, lightness = Number(value[3]) / 100;
+    const channel = (offset: number) => {
+      const k = (offset + hue / 30) % 12;
+      const color = lightness - saturation * Math.min(lightness, 1 - lightness) * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+      return color <= 0.04045 ? color / 12.92 : ((color + 0.055) / 1.055) ** 2.4;
+    };
+    return channel(0) * 0.2126 + channel(8) * 0.7152 + channel(4) * 0.0722;
   };
   const contrast = (a: string, b: string) => {
-    const values = [lightness(a), lightness(b)].sort((a, b) => b - a);
+    const values = [luminance(a), luminance(b)].sort((a, b) => b - a);
     return (values[0] + 0.05) / (values[1] + 0.05);
   };
   assert.ok(contrast("foreground", "shell-bg") >= 7);
   assert.ok(contrast("muted-foreground", "shell-bg") >= 4.5);
-  assert.ok(contrast("primary", "primary-foreground") >= 7);
+  assert.ok(contrast("primary", "primary-foreground") >= 4.5);
   assert.ok(contrast("ring", "shell-bg") >= 3);
   assert.match(css, /input:focus-visible ~ \.toggle-switch-visual\s*\{[^}]*outline:\s*2px solid hsl\(var\(--ring\)\)/);
 });

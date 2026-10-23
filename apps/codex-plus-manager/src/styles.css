@@ -29,33 +29,34 @@
 
 :root {
   --background: 0 0% 100%;
-  --foreground: 0 0% 13%;
+  --foreground: 240 6% 13%;
   --card: 0 0% 100%;
-  --card-foreground: 0 0% 13%;
+  --card-foreground: 240 6% 13%;
   --popover: 0 0% 100%;
-  --popover-foreground: 0 0% 13%;
-  --primary: 0 0% 16%;
+  --popover-foreground: 240 6% 13%;
+  --primary: 211 100% 43%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 0 0% 96%;
-  --secondary-foreground: 0 0% 22%;
-  --muted: 0 0% 96%;
-  --muted-foreground: 0 0% 43%;
+  --secondary: 240 5% 96%;
+  --secondary-foreground: 240 5% 22%;
+  --muted: 240 5% 95%;
+  --muted-foreground: 240 3% 40%;
   --accent: 0 0% 94%;
-  --accent-foreground: 0 0% 16%;
+  --accent-foreground: 240 6% 16%;
   --destructive: 358 68% 50%;
   --destructive-foreground: 0 0% 100%;
-  --border: 0 0% 90%;
-  --input: 0 0% 83%;
-  --ring: 0 0% 40%;
-  --shell-bg: 0 0% 100%;
-  --sidebar-bg: 0 0% 97.5%;
-  --sidebar-muted: 0 0% 92%;
-  --sidebar-border: 0 0% 90%;
+  --border: 240 5% 88%;
+  --input: 240 4% 81%;
+  --ring: 211 100% 43%;
+  --shell-bg: 240 8% 97%;
+  --sidebar-bg: 240 9% 94%;
+  --sidebar-muted: 240 7% 89%;
+  --sidebar-border: 240 5% 86%;
   --surface-raised: 0 0% 100%;
-  --surface-sunken: 0 0% 97%;
-  --brand-accent: 0 0% 16%;
-  --brand-accent-2: 0 0% 32%;
+  --surface-sunken: 240 7% 96%;
+  --brand-accent: 211 100% 43%;
+  --brand-accent-2: 183 45% 36%;
   --switch-track: 0 0% 78%;
+  --switch-on: 142 64% 38%;
   --switch-thumb: 0 0% 100%;
   --status-success: 152 58% 40%;
   --status-warning: 32 86% 46%;
@@ -3197,7 +3198,7 @@ details.relay-fold[open] > .relay-fold-body {
 
 .feature-toggle > input:checked ~ .toggle-switch-visual,
 .switch-row > input:checked ~ .toggle-switch-visual {
-  background: hsl(var(--brand-accent));
+  background: hsl(var(--switch-on));
   box-shadow: inset 0 0 0 1px hsl(var(--foreground) / 0.06);
 }
 
@@ -4813,8 +4814,11 @@ select {
 .sidebar {
   display: flex;
   flex-direction: column;
-  border-right: 1px solid hsl(var(--sidebar-border));
-  background: hsl(var(--sidebar-bg));
+  border-right: 1px solid hsl(var(--hairline) / 0.09);
+  background:
+    linear-gradient(160deg, hsl(var(--background) / 0.7), hsl(var(--sidebar-bg) / 0.94) 65%),
+    hsl(var(--sidebar-bg));
+  box-shadow: inset -1px 0 hsl(var(--background) / 0.65);
   padding: 14px 12px 12px;
 }
 
@@ -4846,13 +4850,14 @@ select {
 }
 
 .nav-item {
+  --nav-tint: 211 95% 48%;
   position: relative;
-  grid-template-columns: 20px minmax(0, 1fr) auto;
-  min-height: 34px;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  min-height: 36px;
   gap: 10px;
   border: 0;
   border-radius: var(--radius-md);
-  color: hsl(var(--muted-foreground));
+  color: hsl(var(--secondary-foreground));
   padding: 0 10px;
   font-size: 13px;
   transition:
@@ -4868,36 +4873,45 @@ select {
 
 .nav-item.active {
   border-color: transparent;
-  background: hsl(var(--background));
+  background: hsl(var(--brand-accent) / 0.1);
   color: hsl(var(--foreground));
   font-weight: 600;
-  box-shadow: 0 1px 3px hsl(var(--hairline) / 0.06), inset 0 0 0 1px hsl(var(--border) / 0.8);
+  box-shadow: inset 0 1px hsl(var(--background) / 0.7), inset 0 0 0 1px hsl(var(--brand-accent) / 0.08);
 }
 
-/* 活动指示条 */
 .nav-item.active::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: -12px;
-  width: 3px;
-  height: 18px;
-  border-radius: 0 3px 3px 0;
-  background: hsl(var(--brand-accent));
-  transform: translateY(-50%);
+  content: none;
+}
+
+.nav-item[data-route="relay"] {
+  --nav-tint: 183 58% 33%;
+}
+
+.nav-item[data-route="context"] {
+  --nav-tint: 215 8% 48%;
+}
+
+.nav-item[data-route="skills"] {
+  --nav-tint: 28 88% 47%;
+}
+
+.nav-item[data-route="sessions"] {
+  --nav-tint: 262 55% 55%;
 }
 
 .nav-icon,
 .nav-item.active .nav-icon {
-  width: 20px;
-  height: 20px;
-  border-radius: 0;
-  background: transparent;
-  color: currentcolor;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: hsl(var(--nav-tint));
+  color: hsl(var(--primary-foreground));
+  box-shadow: inset 0 1px hsl(var(--background) / 0.25), 0 1px 2px hsl(var(--hairline) / 0.08);
 }
 
-.nav-item.active .nav-icon {
-  color: hsl(var(--brand-accent));
+.nav-icon svg {
+  width: 14px;
+  height: 14px;
 }
 
 .nav-label {
@@ -4925,10 +4939,10 @@ select {
   top: 0;
   z-index: 20;
   align-items: center;
-  min-height: 60px;
-  border-bottom: 1px solid hsl(var(--border) / 0.6);
-  background: hsl(var(--shell-bg) / 0.72);
-  backdrop-filter: saturate(180%) blur(20px);
+  min-height: 64px;
+  border-bottom: 1px solid hsl(var(--hairline) / 0.08);
+  background: hsl(var(--background));
+  box-shadow: inset 0 -1px hsl(var(--background) / 0.65);
   padding: 10px 22px;
 }
 
@@ -4971,8 +4985,83 @@ select {
 .topbar-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 12px;
   min-width: 0;
+}
+
+.topbar-actions > button {
+  border: 1px solid hsl(var(--brand-accent) / 0.45);
+  border-radius: 8px;
+  background-image: linear-gradient(hsl(var(--background) / 0.18), hsl(var(--background) / 0));
+  box-shadow: inset 0 1px hsl(var(--background) / 0.35), 0 1px 2px hsl(var(--hairline) / 0.12);
+  letter-spacing: 0;
+}
+
+/* 常驻导航仅顶栏使用小面积模糊；侧栏与控件的高光由静态填充绘制。 */
+@supports (backdrop-filter: blur(1px)) {
+  .topbar {
+    background:
+      linear-gradient(hsl(var(--background) / 0.38), hsl(var(--background) / 0.04)),
+      hsl(var(--background) / 0.72);
+    backdrop-filter: blur(12px) saturate(130%);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
+  .topbar {
+    background: hsl(var(--background));
+    backdrop-filter: none;
+  }
+
+  .sidebar {
+    background: hsl(var(--sidebar-bg));
+    box-shadow: none;
+  }
+
+  .topbar-actions > button {
+    background-image: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .nav-icon,
+  .nav-item.active .nav-icon {
+    border: 1px solid CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .nav-item.active {
+    outline: 1px solid Highlight;
+  }
+
+  .toggle-switch-visual {
+    forced-color-adjust: none;
+    border: 1px solid ButtonText;
+    background: Canvas;
+    box-shadow: none;
+  }
+
+  .toggle-switch-thumb {
+    background: CanvasText;
+    box-shadow: none;
+  }
+
+  .feature-toggle > input:checked ~ .toggle-switch-visual,
+  .switch-row > input:checked ~ .toggle-switch-visual {
+    border-color: Highlight;
+    background: Highlight;
+  }
+
+  .feature-toggle > input:checked ~ .toggle-switch-visual .toggle-switch-thumb,
+  .switch-row > input:checked ~ .toggle-switch-visual .toggle-switch-thumb {
+    background: HighlightText;
+  }
+
+  .feature-toggle > input:focus-visible ~ .toggle-switch-visual,
+  .switch-row > input:focus-visible ~ .toggle-switch-visual {
+    outline-color: Highlight;
+  }
 }
 
 .screen {
@@ -5447,10 +5536,6 @@ select {
 }
 
 /* ── 浅色微调 ───────────────────────────────────────────────── */
-
-.sidebar {
-  background: hsl(var(--sidebar-bg));
-}
 
 .panel,
 .feature-group,
@@ -6302,7 +6387,7 @@ select {
 .overview-section-header h2 {
   margin: 0;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.5;
 }
 
@@ -6314,10 +6399,38 @@ select {
   gap: 6px;
 }
 
+.overview-health-header-actions button,
+.overview-path-actions {
+  border: 1px solid hsl(var(--hairline) / 0.1);
+  border-radius: 8px;
+  background: linear-gradient(hsl(var(--background) / 0.98), hsl(var(--background) / 0.72));
+  box-shadow: inset 0 1px hsl(var(--background)), 0 1px 2px hsl(var(--hairline) / 0.04);
+}
+
+.overview-path-actions {
+  gap: 2px;
+  padding: 2px;
+}
+
+.overview-path-actions button {
+  border-color: transparent;
+  border-radius: 5px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.nav-item:focus-visible,
+.topbar-actions > button:focus-visible,
+.overview-health-header-actions button:focus-visible,
+.overview-path-actions button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
 .overview-health-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 28px;
+  gap: 12px;
 }
 
 .overview-health-row {
@@ -6328,8 +6441,11 @@ select {
   gap: 6px 12px;
   min-width: 0;
   min-height: 100px;
-  padding: 18px 0;
-  border-bottom: 1px solid hsl(var(--border) / 0.75);
+  padding: 16px;
+  border: 1px solid hsl(var(--hairline) / 0.08);
+  border-radius: 8px;
+  background: hsl(var(--card));
+  box-shadow: 0 1px 2px hsl(var(--hairline) / 0.025);
 }
 
 .overview-health-label {
@@ -6345,6 +6461,16 @@ select {
   height: 28px;
   padding: 6px;
   border-radius: 6px;
+  background: hsl(var(--brand-accent) / 0.08);
+  color: hsl(var(--brand-accent));
+}
+
+.overview-health-row:nth-child(3) .overview-health-label svg {
+  background: hsl(var(--brand-accent-2) / 0.08);
+  color: hsl(var(--brand-accent-2));
+}
+
+.overview-health-row:nth-child(4) .overview-health-label svg {
   background: hsl(var(--muted));
   color: hsl(var(--muted-foreground));
 }
