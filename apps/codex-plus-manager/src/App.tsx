@@ -535,23 +535,6 @@ type ProviderDoctorResult = CommandResult<{
   checks: ProviderDoctorCheck[];
 }>;
 
-type CcsProviderImport = {
-  sourceId: string;
-  name: string;
-  baseUrl: string;
-  apiKey: string;
-  protocol: RelayProtocol;
-  configContents: string;
-  authContents: string;
-};
-
-type CcsProvidersResult = CommandResult<{
-  dbPath: string;
-  configuredDbPath: string;
-  fallbackReason?: string | null;
-  providers: CcsProviderImport[];
-}>;
-
 type SkillInventoryResult = CommandResult<{
   skills: Array<{ id: string; name: string; description: string; enabled: boolean; bundled: boolean }>;
   codexSkillsDir: string;
@@ -881,7 +864,6 @@ export function App() {
   const [relay, setRelay] = useState<RelayResult | null>(null);
   const [relayFiles, setRelayFiles] = useState<RelayFilesResult | null>(null);
   const [envConflicts, setEnvConflicts] = useState<EnvConflictsResult | null>(null);
-  const [ccsProviders, setCcsProviders] = useState<CcsProvidersResult | null>(null);
   const [pendingProviderImport, setPendingProviderImport] = useState<ProviderImportRequest | null>(null);
   const [localSessions, setLocalSessions] = useState<LocalSessionsResult | null>(null);
   const [liveContextEntries, setLiveContextEntries] = useState<CodexContextEntries | null>(null);
@@ -1002,25 +984,6 @@ export function App() {
     }
   };
 
-  const refreshCcsProviders = async (silent = false) => {
-    const result = await run(() => call<CcsProvidersResult>("load_ccs_providers"));
-    if (result) {
-      setCcsProviders(result);
-      if (!silent || !isSuccessStatus(result.status)) showResultNotice(t("cc-switch 导入"), result, { silentSuccess: true });
-    }
-    return result;
-  };
-
-  const importCcsProviders = async (bindings: Record<string, string> = {}) => {
-    const result = await run(() => call<SettingsResult>("import_ccs_providers", { bindings }));
-    if (result) {
-      setSettings(result);
-      setSettingsForm(normalizeSettings(result.settings));
-      showResultNotice(t("cc-switch 导入"), result);
-      await refreshCcsProviders(true);
-    }
-  };
-
   const refreshPendingProviderImport = async (silent = true) => {
     const result = await run(() => call<PendingProviderImportResult>("load_pending_provider_import"));
     if (result) {
@@ -1037,7 +1000,6 @@ export function App() {
       setSettings(result);
       setSettingsForm(normalizeSettings(result.settings));
       showResultNotice(t("Codex++ 导入"), result);
-      await refreshCcsProviders(true);
     }
   };
 
@@ -1985,8 +1947,6 @@ export function App() {
       refreshRelayFiles,
       refreshEnvConflicts,
       removeEnvConflicts,
-      refreshCcsProviders,
-      importCcsProviders,
       refreshLiveContextEntries,
       syncLiveContextEntries,
       refreshLocalSessions,
@@ -2014,7 +1974,7 @@ export function App() {
       showMessage: async (title: string, message: string, status?: Status) => showNotice(title, message, status),
 
     }),
-    [route, settingsForm, settings, overview, relayFiles, localSessions, selectedProviderSyncTarget, envConflicts, ccsProviders],
+    [route, settingsForm, settings, overview, relayFiles, localSessions, selectedProviderSyncTarget, envConflicts],
   );
 
   const isManagementScreen = route === "relay" || route === "sessions" || route === "context" || route === "skills";
@@ -2095,7 +2055,6 @@ export function App() {
               settings={settings}
               relayFiles={relayFiles}
               envConflicts={envConflicts}
-              ccsProviders={ccsProviders}
               form={settingsForm}
               actions={actions}
             />
@@ -2336,8 +2295,6 @@ type Actions = {
   refreshRelayFiles: () => Promise<RelayFilesResult | null>;
   refreshEnvConflicts: (silent?: boolean) => Promise<EnvConflictsResult | null>;
   removeEnvConflicts: (names: string[]) => Promise<void>;
-  refreshCcsProviders: (silent?: boolean) => Promise<CcsProvidersResult | null>;
-  importCcsProviders: (bindings?: Record<string, string>) => Promise<void>;
   refreshLiveContextEntries: () => Promise<LiveContextEntriesResult | null>;
   syncLiveContextEntries: (settings: BackendSettings, silent?: boolean) => Promise<LiveContextEntriesResult | null>;
   refreshLocalSessions: (silent?: boolean, offset?: number) => Promise<LocalSessionsResult | null>;
@@ -2492,14 +2449,12 @@ function RelayScreen({
   settings: _settings,
   relayFiles,
   envConflicts,
-  ccsProviders,
   form,
   actions,
 }: {
   settings: SettingsResult | null;
   relayFiles: RelayFilesResult | null;
   envConflicts: EnvConflictsResult | null;
-  ccsProviders: CcsProvidersResult | null;
   form: BackendSettings;
   actions: Actions;
 }) {
@@ -2507,39 +2462,6 @@ function RelayScreen({
   const [detailProfileId, setDetailProfileId] = useState<string | null>(null);
   const [newProfileDraft, setNewProfileDraft] = useState<RelayProfile | null>(null);
   const [providerCatalogOpen, setProviderCatalogOpen] = useState(false);
-  const [thirdPartyImportOpen, setThirdPartyImportOpen] = useState(false);
-  const thirdPartyImportTriggerRef = useRef<HTMLDivElement>(null);
-  const [thirdPartyImportPosition, setThirdPartyImportPosition] = useState<{ top: number; right: number } | null>(null);
-  const [ccsDbPathDraft, setCcsDbPathDraft] = useState(normalized.ccsDbPath);
-  const [ccsPathSaving, setCcsPathSaving] = useState(false);
-  const [ccsBindings, setCcsBindings] = useState<Record<string, string>>({});
-  useEffect(() => setCcsDbPathDraft(normalized.ccsDbPath), [normalized.ccsDbPath]);
-  const saveCcsDbPath = async (path = ccsDbPathDraft) => {
-    setCcsPathSaving(true);
-    try {
-      const saved = await actions.saveSettingsValue({ ...normalized, ccsDbPath: path.trim() }, true);
-      if (saved) await actions.refreshCcsProviders();
-    } finally {
-      setCcsPathSaving(false);
-    }
-  };
-  const selectCcsDatabase = async () => {
-    try {
-      const selected = await open({
-        title: t("选择 cc-switch 数据库"),
-        multiple: false,
-        directory: false,
-        filters: [{ name: "SQLite", extensions: ["db", "sqlite", "sqlite3"] }],
-      });
-      const path = Array.isArray(selected) ? selected[0] : selected;
-      if (path) {
-        setCcsDbPathDraft(path);
-        await saveCcsDbPath(path);
-      }
-    } catch (error) {
-      await actions.showMessage(t("cc-switch 导入"), stringifyError(error), "failed");
-    }
-  };
   const detailProfile = newProfileDraft || (detailProfileId
     ? normalized.relayProfiles.find((profile) => profile.id === detailProfileId) || null
     : null);
@@ -2570,39 +2492,6 @@ function RelayScreen({
       void actions.refreshRelayFiles();
     }
   }, [detailProfileId, newProfileDraft, normalized.activeRelayId]);
-  const openThirdPartyImport = () => {
-    const next = !thirdPartyImportOpen;
-    if (next) {
-      // 菜单改为 fixed 定位：它原本挂在 .mg-content（overflow:auto）里，
-      // 面板较矮时后半截会被裁掉（ccswitch 导入按钮、刷新列表都看不到）。
-      const rect = thirdPartyImportTriggerRef.current?.getBoundingClientRect();
-      setThirdPartyImportPosition(
-        rect
-          ? { top: Math.round(rect.bottom + 8), right: Math.round(Math.max(12, window.innerWidth - rect.right)) }
-          : null,
-      );
-    }
-    setThirdPartyImportOpen(next);
-    if (!ccsProviders) void actions.refreshCcsProviders(true);
-  };
-  useEffect(() => {
-    if (!thirdPartyImportOpen) return;
-    const close = () => setThirdPartyImportOpen(false);
-    // 菜单挂在 .mg-page（overflow:hidden）里，只能自己判定外点，不然点空白处收不起来。
-    const handlePointerDown = (event: PointerEvent) => {
-      if (thirdPartyImportTriggerRef.current?.contains(event.target as Node)) return;
-      close();
-    };
-    document.addEventListener("pointerdown", handlePointerDown, true);
-    window.addEventListener("resize", close);
-    // capture 监听内层 .mg-content 的滚动。
-    window.addEventListener("scroll", close, { capture: true, passive: true });
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown, true);
-      window.removeEventListener("resize", close);
-      window.removeEventListener("scroll", close, { capture: true });
-    };
-  }, [thirdPartyImportOpen]);
   if (detailProfile) {
     return (
       <RelayProfileDetail
@@ -2668,63 +2557,6 @@ function RelayScreen({
             </span>
             <ToggleVisual />
           </label>
-          <div className="relay-add-row">
-            <div className="third-party-import" ref={thirdPartyImportTriggerRef}>
-              <Button
-                onClick={openThirdPartyImport}
-                variant="secondary"
-              >
-                <Download className="h-4 w-4" />
-                {t("从第三方导入")}
-              </Button>
-              {thirdPartyImportOpen ? (
-                <div
-                  className="third-party-import-menu"
-                  style={thirdPartyImportPosition
-                    ? { position: "fixed", top: thirdPartyImportPosition.top, right: thirdPartyImportPosition.right }
-                    : undefined}
-                >
-                  <label>
-                    {t("cc-switch 数据库路径")}
-                    <Input value={ccsDbPathDraft} onChange={(event) => setCcsDbPathDraft(event.currentTarget.value)} placeholder={t("留空使用默认路径")} />
-                  </label>
-                  <button disabled={ccsPathSaving} onClick={() => void selectCcsDatabase()} type="button">{t("选择数据库")}</button>
-                  <button disabled={ccsPathSaving} onClick={() => void saveCcsDbPath()} type="button">{t("保存路径并刷新")}</button>
-                  {ccsProviders && isSuccessStatus(ccsProviders.status) ? <span className="text-xs break-all">{t("实际来源")}：{ccsProviders.dbPath}</span> : null}
-                  {ccsProviders?.fallbackReason ? <span className="text-xs break-all">{ccsProviders.fallbackReason}</span> : null}
-                  {ccsProviders?.providers.map((provider) => <label key={provider.sourceId}>
-                    {provider.name}
-                    <select value={ccsBindings[provider.sourceId] || ""} onChange={(event) => setCcsBindings((current) => ({ ...current, [provider.sourceId]: event.currentTarget.value }))}>
-                      <option value="">{t("自动识别来源或新增")}</option>
-                      {normalized.relayProfiles.map((profile) => <option key={profile.id} value={profile.id}>{t("关联已有")}：{profile.name}</option>)}
-                    </select>
-                  </label>)}
-                  <button
-                    disabled={ccsPathSaving || ccsDbPathDraft.trim() !== normalized.ccsDbPath || !ccsProviders?.providers.length}
-                    onClick={() => {
-                      setThirdPartyImportOpen(false);
-                      void actions.importCcsProviders(ccsBindings);
-                    }}
-                    type="button"
-                  >
-                    <strong>ccswitch</strong>
-                    <span>{ccsProviderSummary(ccsProviders)}</span>
-                  </button>
-                  <button
-                    onClick={() => void actions.refreshCcsProviders()}
-                    type="button"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                    {t("刷新列表")}
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          </div>
-          <div className="provider-list-heading">
-            <Cable className="h-4 w-4" />
-            <strong>{t("直连")}</strong>
-          </div>
           {!visibleProfiles.length ? (
             <div className="provider-direct-empty">
               <strong>{t("还没有直连供应商")}</strong>
@@ -7922,13 +7754,6 @@ function relayProtocolLabel(protocol: RelayProtocol): string {
   if (protocol === "chatCompletions") return t("Chat Completions 转 Responses");
   if (protocol === "anthropicMessages") return t("Anthropic Messages 转 Responses");
   return "Responses API";
-}
-
-function ccsProviderSummary(result: CcsProvidersResult | null): string {
-  if (!result) return t("读取 ~/.cc-switch/cc-switch.db");
-  if (!isSuccessStatus(result.status)) return result.message || t("读取 cc-switch 供应商失败。");
-  const count = result.providers.length;
-  return count ? tf("发现 {0} 个 Codex 供应商", [count]) : t("未发现可导入供应商");
 }
 
 function normalizeRelayMode(mode: RelayMode | undefined): RelayMode {

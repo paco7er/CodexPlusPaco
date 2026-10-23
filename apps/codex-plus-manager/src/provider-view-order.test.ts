@@ -27,7 +27,7 @@ function fixture() {
   let cursor = 0;
   const context = vm.createContext({
     ...Object.fromEntries(["PageHeader", "Button", "Panel", "CardContent", "EnvConflictNotice", "ToggleVisual",
-      "RelayProfileList", "RelayProfileDetail", "ProviderCatalogScreen", "KeyRound", "Plus", "Download", "Cable"]
+      "RelayProfileList", "RelayProfileDetail", "ProviderCatalogScreen", "KeyRound", "Plus"]
       .map((name) => [name, name])),
     jsx: (type: string, props: Record<string, any>, ...children: unknown[]) => ({ type, props: props ?? {}, children }),
     useState: (initial: any) => {
@@ -35,14 +35,14 @@ function fixture() {
       if (!(index in slots)) slots[index] = initial;
       return [slots[index], (value: any) => { slots[index] = value; }];
     },
-    useRef: () => ({ current: null }), useEffect: () => {},
+    useEffect: () => {},
     normalizeSettings: (form: unknown) => form,
     normalizeRelayModelRoutes, isAggregateProfile, t: (value: string) => value,
   });
   vm.runInContext(code, context);
   const render = (form: any, actions: any = {}) => {
     cursor = 0;
-    return context.RelayScreen({ form, actions, relayFiles: null, envConflicts: null, ccsProviders: null }) as Tree;
+    return context.RelayScreen({ form, actions, relayFiles: null, envConflicts: null }) as Tree;
   };
   return { render };
 }
@@ -74,6 +74,36 @@ test("provider list shows only direct profiles and passes complete settings to s
   assert.equal(list.props.form, form);
   await list.props.onFormChange(form);
   assert.equal(saved, form);
+  assert.equal(JSON.stringify(form), before);
+});
+
+test("provider cards follow the switching control without an import toolbar or group heading", () => {
+  const tree = fixture().render(settingsFixture());
+  const content = nodes(tree).find((node) => node.type === "CardContent");
+  assert.ok(content);
+  const children = content.children.filter((child): child is Tree =>
+    !!child && typeof child === "object" && "type" in child);
+  assert.deepEqual(children.map((node) => node.type), ["EnvConflictNotice", "label", "RelayProfileList"]);
+  assert.ok(!nodes(tree).some((node) =>
+    node.children.includes("从第三方导入") || node.children.includes("直连")));
+});
+
+test("changing the switching control preserves existing providers and legacy import settings", async () => {
+  const form = { ...settingsFixture(), ccsDbPath: "C:/legacy/cc-switch.db" };
+  const before = JSON.stringify(form);
+  let saved: typeof form | undefined;
+  const tree = fixture().render(form, {
+    saveSettingsValue: async (next: typeof form) => { saved = next; return next; },
+  });
+  const toggle = nodes(tree).find((node) => node.type === "input" && node.props.type === "checkbox");
+  assert.ok(toggle);
+  toggle.props.onChange({ currentTarget: { checked: false } });
+  await Promise.resolve();
+  assert.ok(saved);
+  assert.equal(saved.relayProfilesEnabled, false);
+  assert.equal(saved.relayProfiles, form.relayProfiles);
+  assert.equal(saved.activeRelayId, form.activeRelayId);
+  assert.equal(saved.ccsDbPath, form.ccsDbPath);
   assert.equal(JSON.stringify(form), before);
 });
 

@@ -568,73 +568,6 @@ body {
   gap: 10px;
 }
 
-.relay-add-row {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.third-party-import {
-  position: relative;
-}
-
-.third-party-import-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 8px);
-  z-index: 20;
-  display: grid;
-  gap: 6px;
-  min-width: 260px;
-  /* 视口内兜底：菜单改 fixed 定位后也不允许超出窗口，超高时内部滚动。 */
-  max-width: calc(100vw - 24px);
-  max-height: calc(100vh - 24px);
-  overflow-y: auto;
-  border: 1px solid hsl(var(--border));
-  border-radius: 8px;
-  background: hsl(var(--popover));
-  box-shadow: 0 12px 26px hsl(var(--foreground) / 0.08);
-  padding: 8px;
-}
-
-.third-party-import-menu button {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 3px;
-  width: 100%;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: hsl(var(--foreground));
-  cursor: pointer;
-  font: inherit;
-  padding: 9px 10px;
-  text-align: left;
-}
-
-.third-party-import-menu button.third-party-import-action {
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-}
-
-.third-party-import-menu button:hover:not(:disabled) {
-  background: hsl(var(--secondary));
-}
-
-.third-party-import-menu button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.third-party-import-menu span {
-  color: hsl(var(--muted-foreground));
-  font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .env-conflict-notice {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) auto;
@@ -5503,7 +5436,6 @@ select {
 
 /* ── 浮层 ───────────────────────────────────────────────────── */
 
-.third-party-import-menu,
 .modal-card,
 .toast-card {
   border-color: hsl(var(--border));
@@ -5586,8 +5518,7 @@ select {
 }
 
 .toast-card,
-.modal-card,
-.third-party-import-menu {
+.modal-card {
   box-shadow: var(--shadow-lg);
 }
 
@@ -6559,7 +6490,6 @@ select {
 /* 外层页面边框：包住管理页标题栏与全部内容，内部列表只保留分组边框。 */
 .mg-page{margin:0 22px 22px;border:1px solid hsl(var(--border));border-radius:14px;overflow:hidden}.mg-page>.mg-content{margin:0;border:0;border-radius:0;background:transparent;box-shadow:none;padding:20px}.relay-management-page>.mg-content>.relay-management-panel{border:0;border-radius:0}.relay-management-page>.mg-content>.relay-management-panel>.card-content{padding:0}@media(max-width:760px){.mg-page{margin:0 14px 18px}.mg-page>.mg-content{padding:14px}}
 
-.provider-list-heading{display:flex;align-items:center;gap:8px;margin:18px 0 14px;color:hsl(var(--foreground));font-size:14px}
 .provider-direct-empty{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:0 0 14px;padding:18px;border:1px dashed hsl(var(--border));border-radius:8px}
 .provider-direct-empty strong{font-size:14px}
 @media(max-width:760px){.provider-direct-empty{align-items:flex-start;flex-direction:column}}
