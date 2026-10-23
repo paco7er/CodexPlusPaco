@@ -6371,10 +6371,18 @@ select {
 }
 
 .overview-page {
+  display: grid;
+  gap: 20px;
   width: min(100%, 880px);
   min-width: 0;
   margin-inline: auto;
   padding-top: 10px;
+}
+
+.overview-app-path {
+  border-top: 1px solid hsl(var(--hairline) / 0.18);
+  border-bottom: 1px solid hsl(var(--hairline) / 0.18);
+  background: hsl(var(--card));
 }
 
 .overview-app-header {
@@ -6383,6 +6391,7 @@ select {
   justify-content: space-between;
   gap: 16px;
   min-height: 56px;
+  padding: 16px 20px;
 }
 
 .overview-app-identity {
@@ -6429,9 +6438,9 @@ select {
 .overview-section-header h2,
 .overview-section-header h3 {
   margin: 0;
-  color: hsl(var(--muted-foreground));
-  font-size: 12px;
-  font-weight: 500;
+  color: hsl(var(--foreground));
+  font-size: 13px;
+  font-weight: 600;
   line-height: 1.5;
 }
 
@@ -6472,9 +6481,16 @@ select {
 }
 
 .overview-health {
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid hsl(var(--border));
+  border-top: 1px solid hsl(var(--hairline) / 0.18);
+  border-bottom: 1px solid hsl(var(--hairline) / 0.18);
+  background: hsl(var(--card));
+}
+
+.overview-health > .overview-section-header {
+  min-height: 42px;
+  padding: 0 20px;
+  border-bottom: 1px solid hsl(var(--hairline) / 0.14);
+  background: hsl(var(--muted));
 }
 
 .overview-service-list {
@@ -6489,11 +6505,11 @@ select {
   gap: 3px 16px;
   min-width: 0;
   min-height: 76px;
-  padding: 14px 0;
+  padding: 14px 20px;
 }
 
 .overview-health-row + .overview-health-row {
-  border-top: 1px solid hsl(var(--hairline) / 0.06);
+  border-top: 1px solid hsl(var(--hairline) / 0.14);
 }
 
 .overview-health-label {
@@ -6535,14 +6551,13 @@ select {
 }
 
 .overview-path-section {
-  margin-top: 20px;
-  margin-left: 58px;
+  padding: 10px 20px 4px;
+  border-top: 1px solid hsl(var(--hairline) / 0.14);
 }
 
 .overview-path-list {
   display: grid;
-  gap: 12px;
-  margin: 12px 0 0;
+  margin: 4px 0 0;
 }
 
 .overview-path-row {
@@ -6550,8 +6565,14 @@ select {
   grid-template-columns: 88px minmax(0, 1fr);
   align-items: baseline;
   gap: 12px;
+  min-height: 40px;
+  padding: 10px 0;
   font-size: 12px;
   line-height: 1.7;
+}
+
+.overview-path-row + .overview-path-row {
+  border-top: 1px solid hsl(var(--hairline) / 0.1);
 }
 
 .overview-path-row dt {
@@ -6575,9 +6596,10 @@ select {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
-  margin-top: 16px;
-  padding: 20px 0;
-  border-top: 1px solid hsl(var(--border));
+  padding: 20px;
+  border-top: 1px solid hsl(var(--hairline) / 0.18);
+  border-bottom: 1px solid hsl(var(--hairline) / 0.18);
+  background: hsl(var(--card));
 }
 
 .overview-marketplace .feature-toggle,
@@ -6648,6 +6670,7 @@ select {
 @media (max-width: 760px) {
   .overview-app-header {
     gap: 10px;
+    padding: 14px;
   }
 
   .overview-health-header-actions {
@@ -6655,7 +6678,15 @@ select {
   }
 
   .overview-path-section {
-    margin-left: 0;
+    padding-inline: 14px;
+  }
+
+  .overview-health > .overview-section-header {
+    padding-inline: 14px;
+  }
+
+  .overview-health-row {
+    padding-inline: 14px;
   }
 
   .overview-path-row {
@@ -6669,7 +6700,7 @@ select {
 
   .overview-marketplace {
     column-gap: 10px;
-    padding: 18px 0;
+    padding: 18px 14px;
   }
 
   .overview-marketplace .feature-toggle {
