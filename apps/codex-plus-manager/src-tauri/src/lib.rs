@@ -15,6 +15,7 @@ const TRAY_ID: &str = "codex_plus_tray";
 static APP_EXITING: AtomicBool = AtomicBool::new(false);
 static SHUTDOWN_STARTED: AtomicBool = AtomicBool::new(false);
 static SHUTDOWN_COMPLETE: AtomicBool = AtomicBool::new(false);
+const SHUTDOWN_WATCHDOG: std::time::Duration = std::time::Duration::from_secs(10);
 const TRAY_MENU_SHOW: &str = "tray_show_main";
 const TRAY_MENU_QUIT: &str = "tray_quit_app";
 const MANAGER_NAVIGATION_EVENT: &str = "manager-navigation-requested";
@@ -209,6 +210,21 @@ pub fn run() {
                     api.prevent_exit();
                     if !SHUTDOWN_STARTED.swap(true, Ordering::SeqCst) {
                         APP_EXITING.store(true, Ordering::SeqCst);
+                        std::thread::spawn(|| {
+                            shutdown_watchdog(&SHUTDOWN_COMPLETE, SHUTDOWN_WATCHDOG, || {
+                                // 日志磁盘也可能卡住，不能让诊断写入再次阻塞强制退出。
+                                let (sent, received) = std::sync::mpsc::channel();
+                                let _ = std::thread::Builder::new().spawn(move || {
+                                    let _ = codex_plus_core::diagnostic_log::append_diagnostic_log(
+                                        "app.shutdown_watchdog_forced",
+                                        serde_json::json!({ "waitedSeconds": SHUTDOWN_WATCHDOG.as_secs() }),
+                                    );
+                                    let _ = sent.send(());
+                                });
+                                let _ = received.recv_timeout(std::time::Duration::from_millis(200));
+                                std::process::exit(0);
+                            });
+                        });
                         auto_takeover::stop_supervisor();
                         let app = app_handle.clone();
                         tauri::async_runtime::spawn_blocking(move || {
@@ -242,6 +258,68 @@ pub fn run() {
                     "error": error.to_string()
                 }),
             );
+        }
+    }
+}
+
+fn shutdown_watchdog(
+    complete: &AtomicBool,
+    timeout: std::time::Duration,
+    force_exit: impl FnOnce(),
+) {
+    std::thread::sleep(timeout);
+    if !complete.load(Ordering::SeqCst) {
+        force_exit();
+    }
+}
+
+#[cfg(test)]
+mod shutdown_tests {
+    use super::*;
+
+    #[test]
+    fn watchdog_forces_exit_only_when_cleanup_is_incomplete() {
+        for complete in [false, true] {
+            let forced = AtomicBool::new(false);
+            shutdown_watchdog(&AtomicBool::new(complete), std::time::Duration::ZERO, || {
+                forced.store(true, Ordering::SeqCst);
+            });
+            assert_eq!(forced.load(Ordering::SeqCst), !complete);
+        }
+    }
+
+    #[test]
+    fn watchdog_can_exit_a_process_with_stuck_cleanup() {
+        const CHILD_ENV: &str = "CODEX_PLUS_SHUTDOWN_WATCHDOG_TEST";
+        if std::env::var_os(CHILD_ENV).is_some() {
+            let complete = AtomicBool::new(false);
+            std::thread::spawn(move || {
+                shutdown_watchdog(&complete, std::time::Duration::from_millis(10), || {
+                    std::process::exit(73);
+                });
+            });
+            loop {
+                std::thread::park();
+            }
+        }
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "shutdown_tests::watchdog_can_exit_a_process_with_stuck_cleanup"])
+            .env(CHILD_ENV, "1")
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                assert_eq!(status.code(), Some(73));
+                break;
+            }
+            if std::time::Instant::now() >= deadline {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("退出看门狗未在时限内结束进程");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
     }
 }

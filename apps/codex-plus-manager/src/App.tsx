@@ -47,6 +47,7 @@ import {
   TestTube,
   Trash2,
   Wrench,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { createPresetPatch } from "@/components/ProviderPresetSelector";
@@ -501,10 +502,15 @@ type RelaySwitchResult = CommandResult<{
   settings: BackendSettings;
   settingsPath: string;
   relay: RelayPayload;
+  liveConflict?: { profileId: string; profileName: string; liveRevision: string };
 }>;
+
+type LiveConflictResolution = "importAsNewProfile" | "discardLiveChanges";
+type LiveConflictChoice = { resolution: LiveConflictResolution; liveRevision: string };
 
 type SettingsBackfillResult = CommandResult<{
   settings: BackendSettings;
+  liveConflict?: boolean;
 }>;
 
 type RelayProfileTestResult = CommandResult<{
@@ -858,6 +864,10 @@ export function App() {
   const [sessionIndexCleanupDialog, setSessionIndexCleanupDialog] = useState<{
     candidates: SessionIndexCleanupCandidate[];
     resolve: (selectedIds: string[] | null) => void;
+  } | null>(null);
+  const [liveConflictDialog, setLiveConflictDialog] = useState<{
+    profileName: string;
+    resolve: (choice: LiveConflictResolution | null) => void;
   } | null>(null);
   const [overview, setOverview] = useState<OverviewResult | null>(null);
   const [settings, setSettings] = useState<SettingsResult | null>(null);
@@ -1671,7 +1681,11 @@ export function App() {
     showNotice(t("纯 API 模式"), t("已切换到纯 API。"), "ok");
   };
 
-  const switchRelayProfile = async (next: BackendSettings, previousActiveRelayId = settingsForm.activeRelayId) => {
+  const switchRelayProfile = async (
+    next: BackendSettings,
+    previousActiveRelayId = settingsForm.activeRelayId,
+    liveConflictChoice?: LiveConflictChoice,
+  ): Promise<void> => {
     if (relaySwitching) {
       showNotice(t("供应商切换中"), t("上一次切换还没有完成，请稍后再试。"), "failed");
       return;
@@ -1699,7 +1713,9 @@ export function App() {
       showNotice(t("供应商配置可能不正确"), validationError, "failed");
       return;
     }
-    switchSettings = await snapshotActiveRelayFilesBeforeSwitch(switchSettings, previousActiveRelayId);
+    if (!liveConflictChoice) {
+      switchSettings = await snapshotActiveRelayFilesBeforeSwitch(switchSettings, previousActiveRelayId);
+    }
     const selectedAfterSave = activeRelayProfile(switchSettings);
     const command = relayProfileSwitchCommand(selectedAfterSave);
 
@@ -1709,11 +1725,12 @@ export function App() {
       previousActiveRelayId,
       command,
     });
+    let liveConflict: RelaySwitchResult["liveConflict"];
     setRelaySwitching(true);
     try {
       const result = await run(() =>
         call<RelaySwitchResult>("switch_relay_profile", {
-          request: { settings: switchSettings, previousActiveRelayId },
+          request: { settings: switchSettings, previousActiveRelayId, liveConflictChoice },
         }),
       );
       if (!result) {
@@ -1744,16 +1761,32 @@ export function App() {
           message: result.message,
           activeRelayId: selectedSettings.activeRelayId,
         });
-        showNotice(t("供应商切换"), result.message, result.status);
-        return;
+        if (result.liveConflict && !liveConflictChoice) {
+          liveConflict = result.liveConflict;
+        } else {
+          showNotice(t("供应商切换"), result.message, result.status);
+        }
+      } else {
+        const currentSelected = activeRelayProfile(selectedSettings);
+        logDiagnostic("switchRelayProfile.ok", {
+          targetRelayId: currentSelected.id,
+          status: result.status,
+        });
+        if (liveConflictChoice) showNotice(t("供应商切换"), result.message, result.status);
       }
-      const currentSelected = activeRelayProfile(selectedSettings);
-      logDiagnostic("switchRelayProfile.ok", {
-        targetRelayId: currentSelected.id,
-        status: result.status,
-      });
     } finally {
       setRelaySwitching(false);
+    }
+    if (!liveConflict) return;
+    const conflict = liveConflict;
+    const resolution = await new Promise<LiveConflictResolution | null>((resolve) => {
+      setLiveConflictDialog({ profileName: conflict.profileName, resolve });
+    });
+    if (resolution) {
+      await switchRelayProfile(next, previousActiveRelayId, {
+        resolution,
+        liveRevision: conflict.liveRevision,
+      });
     }
   };
 
@@ -1769,6 +1802,8 @@ export function App() {
       }),
     );
     if (!result) return next;
+    // 切换接口将返回可处理的冲突，避免预回填阶段先弹一次错误。
+    if (result.liveConflict) return next;
     const normalized = normalizeSettings(result.settings);
     // degraded = 后端跳过了回填（例如 live config.toml 有语法错误，issue #618）。
     // 切换本身照常继续，只是用原配置走；提示一下原因即可，不能按 failed 处理，
@@ -2119,6 +2154,15 @@ export function App() {
           onConfirm={() => {
             confirmDialog.resolve(true);
             setConfirmDialog(null);
+          }}
+        />
+      ) : null}
+      {liveConflictDialog ? (
+        <LiveConflictDialog
+          profileName={liveConflictDialog.profileName}
+          onChoose={(choice) => {
+            liveConflictDialog.resolve(choice);
+            setLiveConflictDialog(null);
           }}
         />
       ) : null}
@@ -6522,6 +6566,72 @@ function ConfirmDialog({
             {confirm.confirmText}
           </Button>
           <Button onClick={onCancel} variant="secondary">{confirm.cancelText}</Button>
+        </Toolbar>
+      </div>
+    </div>
+  );
+}
+
+function LiveConflictDialog({
+  profileName,
+  onChoose,
+}: {
+  profileName: string;
+  onChoose: (choice: LiveConflictResolution | null) => void;
+}) {
+  const cancelButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement;
+    cancelButton.current?.focus();
+    return () => {
+      if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+    };
+  }, []);
+  return (
+    <div
+      className="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="live-conflict-title"
+      aria-describedby="live-conflict-description"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") onChoose(null);
+        if (event.key === "Tab") {
+          const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button"));
+          const first = buttons[0];
+          const last = buttons[buttons.length - 1];
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+          }
+        }
+      }}
+    >
+      <div className="modal-card confirm-modal">
+        <div className="modal-head">
+          <h2 id="live-conflict-title">实时配置已被修改</h2>
+          <button className="toast-close" aria-label="关闭" title="关闭" onClick={() => onChoose(null)} type="button">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="confirm-modal-body" id="live-conflict-description">
+          <p className="modal-message">当前生效的供应商地址与「{profileName}」保存的不一致。请选择要保留哪份配置。</p>
+          <p className="modal-message">导入为新供应商会保存当前地址与认证，原供应商保持不变。</p>
+          <p className="modal-message">放弃实时改动会先将原文件备份到 Codex++ 数据目录，再继续切换。</p>
+        </div>
+        <Toolbar className="confirm-modal-actions">
+          <Button onClick={() => onChoose("importAsNewProfile")}>
+            <Download className="h-4 w-4" />
+            导入为新供应商
+          </Button>
+          <Button onClick={() => onChoose("discardLiveChanges")} variant="secondary">
+            <ShieldCheck className="h-4 w-4" />
+            备份并继续切换
+          </Button>
+          <Button ref={cancelButton} onClick={() => onChoose(null)} variant="ghost">取消</Button>
         </Toolbar>
       </div>
     </div>

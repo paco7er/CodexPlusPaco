@@ -2,9 +2,11 @@ use std::io::ErrorKind;
 use std::path::Path;
 
 use anyhow::Context;
+use sha2::{Digest, Sha256};
 
 use crate::relay_config::{
-    backfill_relay_profile_from_home_with_common, relay_config_status_from_home,
+    LiveEndpointChanged, RelayBackfillPolicy, backfill_relay_profile_from_home_with_common,
+    backfill_relay_profile_from_home_with_common_and_policy, relay_config_status_from_home,
 };
 use crate::settings::{BackendSettings, RelayMode, SettingsStore};
 
@@ -15,12 +17,66 @@ pub struct RelaySwitchResult {
     pub backup_path: Option<String>,
 }
 
+#[derive(Debug)]
+pub struct LiveEndpointConflict {
+    pub profile_id: String,
+    pub live_revision: String,
+    pub message: String,
+}
+
+impl std::fmt::Display for LiveEndpointConflict {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for LiveEndpointConflict {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LiveConflictResolution {
+    ImportAsNewProfile,
+    DiscardLiveChanges,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveConflictChoice {
+    pub resolution: LiveConflictResolution,
+    pub live_revision: String,
+}
+
+#[derive(Debug, Default)]
+pub struct LiveConflictOutcome {
+    pub imported_profile_id: Option<String>,
+    pub live_backup_path: Option<String>,
+}
+
 pub fn switch_relay_profile_in_home(
     store: &SettingsStore,
     home: &Path,
     next_settings: BackendSettings,
     previous_active_relay_id: &str,
 ) -> anyhow::Result<RelaySwitchResult> {
+    switch_relay_profile_in_home_resolving_conflict(
+        store,
+        home,
+        next_settings,
+        previous_active_relay_id,
+        None,
+        &crate::paths::default_app_state_dir().join("backups"),
+    )
+    .map(|(result, _)| result)
+}
+
+pub fn switch_relay_profile_in_home_resolving_conflict(
+    store: &SettingsStore,
+    home: &Path,
+    next_settings: BackendSettings,
+    previous_active_relay_id: &str,
+    choice: Option<&LiveConflictChoice>,
+    backup_root: &Path,
+) -> anyhow::Result<(RelaySwitchResult, LiveConflictOutcome)> {
     let mut selected_settings = next_settings;
     if !selected_settings.relay_profiles_enabled {
         anyhow::bail!("供应商配置总开关已关闭，未写入 config.toml / auth.json。");
@@ -37,11 +93,50 @@ pub fn switch_relay_profile_in_home(
     // 先补回被过滤掉的供应商，再做上一个供应商的回填：回填按 id 在列表里找
     // 「当前供应商」，子集请求里同样可能缺它（否则会误报「已不在配置列表中」）。
     restore_missing_saved_profiles(&mut selected_settings, &saved_settings);
+    let mut outcome = LiveConflictOutcome::default();
     if !previous_active_relay_id.trim().is_empty()
         && previous_active_relay_id != selected_settings.active_relay_id
     {
-        backfill_profile_before_switch(home, &mut selected_settings, previous_active_relay_id)?;
+        let mut backfilled = selected_settings.clone();
+        match backfill_profile_before_switch(home, &mut backfilled, previous_active_relay_id) {
+            Ok(()) => {
+                anyhow::ensure!(choice.is_none(), "实时配置冲突已变化，请重新切换供应商。");
+                selected_settings = backfilled;
+            }
+            Err(error) if error.chain().any(|cause| cause.is::<LiveEndpointChanged>()) => {
+                let revision = live_snapshot.revision();
+                let Some(choice) = choice else {
+                    return Err(LiveEndpointConflict {
+                        profile_id: previous_active_relay_id.to_string(),
+                        live_revision: revision,
+                        message: format!("{error:#}"),
+                    }.into());
+                };
+                anyhow::ensure!(
+                    choice.live_revision == revision,
+                    "实时配置在确认期间发生变化，已停止切换；请重新检查后再试。"
+                );
+                match choice.resolution {
+                    LiveConflictResolution::ImportAsNewProfile => {
+                        outcome.imported_profile_id = Some(import_live_as_new_profile(
+                            home, &mut selected_settings, previous_active_relay_id,
+                        )?);
+                    }
+                    LiveConflictResolution::DiscardLiveChanges => {
+                        outcome.live_backup_path = Some(live_snapshot.backup(backup_root)
+                            .context("备份实时配置失败，已停止切换")?);
+                    }
+                }
+            }
+            Err(error) => return Err(error),
+        }
+    } else {
+        anyhow::ensure!(choice.is_none(), "切换目标已变化，请重新切换供应商。");
     }
+    anyhow::ensure!(
+        LiveFilesSnapshot::capture(home)? == live_snapshot,
+        "实时配置在切换准备期间发生变化，已停止切换并保留原配置。"
+    );
     crate::codex_app_state::capture_app_state_snapshot_nonfatal(home, "relay_switch.before");
 
     let committed_revision = store
@@ -62,7 +157,7 @@ pub fn switch_relay_profile_in_home(
                 &selected_settings,
                 "relay_switch.after",
             );
-            Ok(result)
+            Ok((result, outcome))
         }
         Err(error) => {
             // 内部回滚恢复已验证原始字节，保留unknown字段并避免2→default1保护误拦。
@@ -125,13 +220,59 @@ fn restore_missing_saved_profiles(selected: &mut BackendSettings, saved: &Backen
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct LiveFilesSnapshot {
     config: Option<Vec<u8>>,
     auth: Option<Vec<u8>>,
 }
 
 impl LiveFilesSnapshot {
+    fn revision(&self) -> String {
+        let mut hash = Sha256::new();
+        for contents in [&self.config, &self.auth] {
+            match contents {
+                Some(bytes) => {
+                    hash.update([1]);
+                    hash.update((bytes.len() as u64).to_le_bytes());
+                    hash.update(bytes);
+                }
+                None => hash.update([0]),
+            }
+        }
+        format!("{:x}", hash.finalize())
+    }
+
+    fn backup(&self, root: &Path) -> anyhow::Result<String> {
+        // 自有备份不写 CODEX_HOME；每次使用独立目录，避免覆盖旧备份。
+        let directory = root.join(format!("codex-plus-live-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(root)?;
+        let builder = std::fs::DirBuilder::new();
+        #[cfg(unix)]
+        let builder = {
+            use std::os::unix::fs::DirBuilderExt;
+            let mut builder = builder;
+            builder.mode(0o700);
+            builder
+        };
+        builder.create(&directory)?;
+        for (name, contents) in [("config.toml", &self.config), ("auth.json", &self.auth)] {
+            if let Some(contents) = contents {
+                use std::io::Write;
+                let mut options = std::fs::OpenOptions::new();
+                options.write(true).create_new(true);
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::OpenOptionsExt;
+                    options.mode(0o600);
+                }
+                let mut file = options.open(directory.join(name))?;
+                file.write_all(contents)?;
+                file.sync_all()?;
+            }
+        }
+        Ok(directory.to_string_lossy().into_owned())
+    }
+
     fn capture(home: &Path) -> anyhow::Result<Self> {
         Ok(Self {
             config: read_optional_bytes(&home.join("config.toml"))?,
@@ -201,7 +342,40 @@ fn backfill_profile_before_switch(
         &mut settings.relay_context_config_contents,
     )
     .with_context(|| format!("回填当前供应商配置失败（供应商：{previous_active_relay_id}）"))
-    .map_err(|error| anyhow::anyhow!("{error:#}"))
+    .map_err(|error| {
+        if error.chain().any(|cause| cause.is::<LiveEndpointChanged>()) {
+            error
+        } else {
+            anyhow::anyhow!("{error:#}")
+        }
+    })
+}
+
+fn import_live_as_new_profile(
+    home: &Path,
+    settings: &mut BackendSettings,
+    previous_active_relay_id: &str,
+) -> anyhow::Result<String> {
+    let mut imported = settings.relay_profiles.iter()
+        .find(|profile| profile.id == previous_active_relay_id)
+        .cloned()
+        .context("原供应商已不存在，已停止导入实时配置")?;
+    let base_name = if imported.name.trim().is_empty() {
+        imported.id.clone()
+    } else {
+        imported.name.trim().to_string()
+    };
+    imported.id = format!("relay-{}", uuid::Uuid::new_v4());
+    imported.name = format!("{base_name}（实时配置）");
+    backfill_relay_profile_from_home_with_common_and_policy(
+        home,
+        &mut imported,
+        &mut settings.relay_context_config_contents,
+        RelayBackfillPolicy::AdoptLiveIdentity,
+    ).context("把实时配置导入为新供应商失败，已停止切换")?;
+    let id = imported.id.clone();
+    settings.relay_profiles.push(imported);
+    Ok(id)
 }
 
 fn apply_selected_relay_profile(

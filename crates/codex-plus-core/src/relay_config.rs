@@ -1645,6 +1645,20 @@ pub fn live_config_matches_other_profile_in_home(
     }))
 }
 
+/// 实时地址与供应商快照不一致，只能由用户显式决定如何处理。
+#[derive(Debug)]
+pub struct LiveEndpointChanged;
+
+impl std::fmt::Display for LiveEndpointChanged {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(
+            "实时供应商 endpoint 已改变，无法区分外部接管与手工编辑，已停止回填并保留原配置。请先将实时 config.toml / auth.json 显式导入为新供应商，或在编辑器明确保存新的 URL 与 Key 后再切换。",
+        )
+    }
+}
+
+impl std::error::Error for LiveEndpointChanged {}
+
 fn validate_backfill_endpoint_identity(profile: &RelayProfile, config: &str) -> anyhow::Result<()> {
     if profile.relay_mode == RelayMode::Official && !profile.official_mix_api_key {
         return Ok(());
@@ -1673,9 +1687,7 @@ fn validate_backfill_endpoint_identity(profile: &RelayProfile, config: &str) -> 
     {
         return Ok(());
     }
-    anyhow::bail!(
-        "实时供应商 endpoint 已改变，无法区分外部接管与手工编辑，已停止回填并保留原配置。请先将实时 config.toml / auth.json 显式导入为新供应商，或在编辑器明确保存新的 URL 与 Key 后再切换。"
-    )
+    Err(LiveEndpointChanged.into())
 }
 
 /// 纯官方快照保留非认证设置，去掉第三方路由/认证和托管目录指针。

@@ -154,12 +154,23 @@ pub struct RelaySwitchPayload {
     pub settings: BackendSettings,
     pub relay: RelayPayload,
     pub settings_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub live_conflict: Option<LiveConflictPayload>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveConflictPayload {
+    pub profile_id: String,
+    pub profile_name: String,
+    pub live_revision: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsBackfillPayload {
     pub settings: BackendSettings,
+    pub live_conflict: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -3117,6 +3128,8 @@ pub struct RelayProfileSwitchRequest {
     pub settings: BackendSettings,
     #[serde(default)]
     pub previous_active_relay_id: String,
+    #[serde(default)]
+    pub live_conflict_choice: Option<codex_plus_core::relay_switch::LiveConflictChoice>,
 }
 
 #[tauri::command]
@@ -3146,24 +3159,35 @@ pub fn switch_relay_profile(
             "targetRelayId": settings.active_relay_id
         }),
     );
-    match codex_plus_core::relay_switch::switch_relay_profile_in_home(
+    match codex_plus_core::relay_switch::switch_relay_profile_in_home_resolving_conflict(
         &store,
         &home,
         settings,
         &previous_active_relay_id,
+        request.live_conflict_choice.as_ref(),
+        &codex_plus_core::paths::default_app_state_dir().join("backups"),
     ) {
-        Ok(result) => {
+        Ok((result, outcome)) => {
             let status = codex_plus_core::relay_config::relay_status_from_home(&home);
             log_manager_event(
                 "manager.switch_relay_profile.ok",
                 json!({
                     "targetRelayId": result.settings.active_relay_id,
                     "configured": status.configured,
-                    "backupPath": result.backup_path.as_ref()
+                    "backupPath": result.backup_path.as_ref(),
+                    "importedProfileId": outcome.imported_profile_id.as_ref(),
+                    "liveBackupPath": outcome.live_backup_path.as_ref()
                 }),
             );
+            let message = if outcome.imported_profile_id.is_some() {
+                "已把实时配置保存为新供应商，原供应商保持不变，并完成切换。".to_string()
+            } else if let Some(path) = outcome.live_backup_path {
+                format!("供应商已切换。实时配置已备份到：{path}")
+            } else {
+                "供应商已切换。".to_string()
+            };
             ok(
-                "供应商已切换。",
+                &message,
                 relay_switch_payload(result.settings, status, result.backup_path),
             )
         }
@@ -3172,6 +3196,16 @@ pub fn switch_relay_profile(
             let settings = store.load().unwrap_or_default();
             error_secrets.extend(relay_switch_error_secrets(&settings));
             let error_detail = relay_switch_error_detail(&error, &error_secrets);
+            let live_conflict = error
+                .downcast_ref::<codex_plus_core::relay_switch::LiveEndpointConflict>()
+                .map(|conflict| LiveConflictPayload {
+                    profile_id: conflict.profile_id.clone(),
+                    profile_name: settings.relay_profiles.iter()
+                        .find(|profile| profile.id == conflict.profile_id)
+                        .map(|profile| profile.name.clone())
+                        .unwrap_or_else(|| conflict.profile_id.clone()),
+                    live_revision: conflict.live_revision.clone(),
+                });
             log_manager_event(
                 "manager.switch_relay_profile.failed",
                 json!({
@@ -3180,9 +3214,11 @@ pub fn switch_relay_profile(
                     "error": error_detail
                 }),
             );
+            let mut payload = relay_switch_payload(settings, status, None);
+            payload.live_conflict = live_conflict;
             failed(
                 &format!("供应商切换失败：{error_detail}"),
-                relay_switch_payload(settings, status, None),
+                payload,
             )
         }
     }
@@ -3303,7 +3339,7 @@ pub fn backfill_relay_profile_from_live(
         );
         return failed(
             "当前供应商已不在配置列表中，已停止切换以避免覆盖用户改动。",
-            SettingsBackfillPayload { settings },
+            SettingsBackfillPayload { settings, live_conflict: false },
         );
     };
 
@@ -3322,7 +3358,7 @@ pub fn backfill_relay_profile_from_live(
         );
         return degraded(
             &format!("config.toml 有语法错误，已跳过回填并保留原有配置（切换照常进行）：{error}"),
-            SettingsBackfillPayload { settings },
+            SettingsBackfillPayload { settings, live_conflict: false },
         );
     }
 
@@ -3335,14 +3371,14 @@ pub fn backfill_relay_profile_from_live(
             Ok(true) => {
                 return ok(
                     "实时配置属于其它已保存供应商，已保留原快照。",
-                    SettingsBackfillPayload { settings },
+                    SettingsBackfillPayload { settings, live_conflict: false },
                 );
             }
             Ok(false) => {}
             Err(error) => {
                 return failed(
                     &format!("读取实时配置归属失败，已保留原配置：{error}"),
-                    SettingsBackfillPayload { settings },
+                    SettingsBackfillPayload { settings, live_conflict: false },
                 );
             }
         }
@@ -3381,20 +3417,23 @@ pub fn backfill_relay_profile_from_live(
                 } else {
                     "当前供应商配置已从 live 文件回填。"
                 },
-                SettingsBackfillPayload { settings },
+                SettingsBackfillPayload { settings, live_conflict: false },
             )
         }
         Err(error) => {
+            let live_conflict = error.chain()
+                .any(|cause| cause.is::<codex_plus_core::relay_config::LiveEndpointChanged>());
+            let error_detail = relay_switch_error_detail(&error, &relay_switch_error_secrets(&settings));
             log_manager_event(
                 "manager.backfill_relay_profile_from_live.failed",
                 json!({
                     "profileId": requested_profile_id,
-                    "error": error.to_string()
+                    "error": error_detail
                 }),
             );
             failed(
-                &format!("回填当前供应商配置失败：{error}"),
-                SettingsBackfillPayload { settings },
+                &format!("回填当前供应商配置失败：{error_detail}"),
+                SettingsBackfillPayload { settings, live_conflict },
             )
         }
     }
@@ -4575,6 +4614,7 @@ fn relay_switch_payload(
     backup_path: Option<String>,
 ) -> RelaySwitchPayload {
     RelaySwitchPayload {
+        live_conflict: None,
         settings,
         relay: relay_payload(status, backup_path),
         settings_path: codex_plus_core::paths::default_settings_path()
@@ -6449,10 +6489,14 @@ enabled = true
 
     #[test]
     fn relay_switch_error_detail_keeps_cause_and_masks_credentials() {
-        let mut settings = BackendSettings::default();
-        settings.relay_profiles[0].api_key = "fake-api-secret".to_string();
-        settings.relay_profiles[0].auth_contents =
-            r#"{"tokens":{"access_token":"fake-oauth-secret"}}"#.to_string();
+        let settings = BackendSettings {
+            relay_profiles: vec![codex_plus_core::settings::RelayProfile {
+                api_key: "fake-api-secret".to_string(),
+                auth_contents: r#"{"tokens":{"access_token":"fake-oauth-secret"}}"#.to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
         let error = anyhow::anyhow!(
             "permission denied; fake-api-secret; fake-oauth-secret; Bearer fake-bearer-secret"
         ).context("保存供应商设置失败");
