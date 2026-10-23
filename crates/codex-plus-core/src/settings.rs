@@ -895,8 +895,7 @@ impl BackendSettings {
 
     pub fn active_relay_profile(&self) -> RelayProfile {
         if self.active_relay_id == default_active_relay_id()
-            && self.relay_profiles.len() == 1
-            && self.relay_profiles[0] == RelayProfile::default()
+            && (self.relay_profiles.is_empty() || is_default_single_profile(&self.relay_profiles))
             && (!self.relay_api_key.is_empty() || self.relay_base_url != default_relay_base_url())
         {
             return RelayProfile {
@@ -1240,7 +1239,7 @@ pub fn clamp_helper_max_request_body_mib(value: u32) -> u32 {
 }
 
 pub fn default_relay_profiles() -> Vec<RelayProfile> {
-    vec![RelayProfile::default()]
+    Vec::new()
 }
 
 /// 判断一份供应商列表是否退化成了「仅剩默认 profile」。
@@ -2709,7 +2708,7 @@ mod tests {
         assert!(settings.codex_app_path.is_empty());
         assert_eq!(settings.relay_base_url, default_relay_base_url());
         assert!(settings.relay_api_key.is_empty());
-        assert_eq!(settings.relay_profiles[0].relay_mode, RelayMode::Official);
+        assert!(settings.relay_profiles.is_empty());
         assert!(settings.relay_common_config_contents.is_empty());
         assert!(!settings.codex_app_stepwise_enabled);
         assert_eq!(settings.codex_app_stepwise_generation_mode, "auto");
@@ -3785,7 +3784,7 @@ experimental_bearer_token = "sk-existing""#
         ] {
             let mut old = serde_json::to_value(BackendSettings::default()).unwrap();
             old["launchMode"] = value;
-            old["relayProfiles"][0]["relayMode"] = json!("pureApi");
+            old["relayProfiles"] = json!([{ "id": "default", "name": "已有供应商", "relayMode": "pureApi" }]);
             let loaded: BackendSettings = serde_json::from_value(old).unwrap();
             assert!(loaded.enhancements_enabled);
             assert_eq!(loaded.relay_profiles[0].relay_mode, RelayMode::PureApi);
@@ -3805,7 +3804,7 @@ experimental_bearer_token = "sk-existing""#
         let store = SettingsStore::new(path.clone());
         let mut old = serde_json::to_value(BackendSettings::default()).unwrap();
         old["launchMode"] = json!("relay");
-        old["relayProfiles"][0]["relayMode"] = json!("pureApi");
+        old["relayProfiles"] = json!([{ "id": "default", "name": "已有供应商", "relayMode": "pureApi" }]);
         old["dictation"]["enabled"] = json!(true);
         old["dictation"]["apiKey"] = json!("fake-asr-private-key");
         old["preservedUnknownSetting"] = json!("keep");

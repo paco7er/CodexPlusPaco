@@ -741,6 +741,42 @@ const navigationSections: Array<{ label: string; routes: Route[] }> = [
   },
 ];
 
+const defaultRelayProfile: RelayProfile = {
+  id: "default",
+  name: t("默认中转"),
+  model: "",
+  baseUrl: "",
+  upstreamBaseUrl: "",
+  apiKey: "",
+  protocol: "responses",
+  relayMode: "official",
+  officialMixApiKey: false,
+  hideOfficialUsageAlert: false,
+  testModel: "",
+  configContents: "",
+  authContents: "",
+  useCommonConfig: true,
+  contextSelection: emptyContextSelection(),
+  contextSelectionInitialized: true,
+  contextWindow: "",
+  autoCompactLimit: "",
+  modelList: "",
+  modelWindows: "",
+  modelAutoCompact: "",
+  modelMetadata: "",
+  modelVlm: "",
+  vlmApiKey: "",
+  vlmModel: "",
+  vlmBaseUrl: "",
+  userAgent: "",
+  customHeaders: [],
+  sub2apiEnabled: false,
+  noAuth: false,
+  sub2apiMultiplier: "",
+  standardOpenaiProtocol: false,
+  webSearchHistoryCompat: false,
+};
+
 const defaultSettings: BackendSettings = {
   ...defaultWhaleBalanceSettings(),
   codexAppPath: "",
@@ -796,47 +832,11 @@ const defaultSettings: BackendSettings = {
   codexGoalsEnabled: false,
   relayBaseUrl: "",
   relayApiKey: "",
-  relayProfiles: [
-    {
-      id: "default",
-      name: t("默认中转"),
-      model: "",
-      baseUrl: "",
-      upstreamBaseUrl: "",
-      apiKey: "",
-      protocol: "responses",
-      relayMode: "official",
-      officialMixApiKey: false,
-      hideOfficialUsageAlert: false,
-      testModel: "",
-      configContents: "",
-      authContents: "",
-      useCommonConfig: true,
-      contextSelection: emptyContextSelection(),
-      contextSelectionInitialized: true,
-      contextWindow: "",
-      autoCompactLimit: "",
-      modelList: "",
-      modelWindows: "",
-      modelAutoCompact: "",
-      modelMetadata: "",
-      modelVlm: "",
-      vlmApiKey: "",
-      vlmModel: "",
-      vlmBaseUrl: "",
-      userAgent: "",
-      customHeaders: [],
-      sub2apiEnabled: false,
-      noAuth: false,
-      sub2apiMultiplier: "",
-      standardOpenaiProtocol: false,
-      webSearchHistoryCompat: false,
-    },
-  ],
+  relayProfiles: [],
   relayCommonConfigContents: "",
   relayPreserveNonproviderSettings: false,
   relayContextConfigContents: "",
-  activeRelayId: "default",
+  activeRelayId: "",
   aggregateRelayProfiles: [],
   activeAggregateRelayId: "",
 
@@ -7467,11 +7467,11 @@ function normalizeSettings(settings: BackendSettings): BackendSettings {
     relayContextConfigContents,
   });
   const profiles =
-    settings.relayProfiles?.length
+    Array.isArray(settings.relayProfiles)
       ? settings.relayProfiles.map((profile) =>
           normalizeRelayProfile(hydrateAggregateRelayProfile(profile, backendAggregates.get(profile.id)), defaultContextSelection),
         )
-      : [
+      : settings.relayBaseUrl || settings.relayApiKey ? [
           {
             id: settings.activeRelayId || "default",
             name: t("默认中转"),
@@ -7508,10 +7508,10 @@ function normalizeSettings(settings: BackendSettings): BackendSettings {
             standardOpenaiProtocol: false,
             webSearchHistoryCompat: false,
           },
-        ];
+        ] : [];
   const activeRelayId = profiles.some((profile) => profile.id === settings.activeRelayId)
     ? settings.activeRelayId
-    : profiles[0]?.id || "default";
+    : profiles[0]?.id || "";
   return syncLegacyRelayFields({
     ...defaultSettings,
     ...settings,
@@ -7677,7 +7677,7 @@ function activeRelayProfile(settings: BackendSettings): RelayProfile {
   return (
     settings.relayProfiles.find((profile) => profile.id === settings.activeRelayId) ||
     settings.relayProfiles[0] ||
-    defaultSettings.relayProfiles[0]
+    defaultRelayProfile
   );
 }
 
@@ -8616,6 +8616,9 @@ function tomlString(value: string): string {
 }
 
 function syncLegacyRelayFields(settings: BackendSettings): BackendSettings {
+  if (!settings.relayProfiles.length) {
+    return { ...settings, activeRelayId: "", aggregateRelayProfiles: [], activeAggregateRelayId: "" };
+  }
   // 先规范化非聚合供应商：聚合成员的"存在性"要用**规范化后仍然在列表里**的那些 id，
   // 否则同一批 profile 里排在聚合后面的成员会被当成不存在而丢掉（顺序相关的老问题）。
   const nonAggregate = settings.relayProfiles

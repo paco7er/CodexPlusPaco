@@ -804,9 +804,12 @@ mod dictation_privacy_tests {
     #[test]
     fn settings_bridge_never_returns_named_key_lists() {
         let mut settings = BackendSettings::default();
-        settings.relay_profiles[0].api_keys = vec![crate::settings::RelayApiKey {
-            id: "backup".into(), name: "备用".into(), api_key: "fake-backup-secret".into(),
-        }];
+        settings.relay_profiles.push(crate::settings::RelayProfile {
+            api_keys: vec![crate::settings::RelayApiKey {
+                id: "backup".into(), name: "备用".into(), api_key: "fake-backup-secret".into(),
+            }],
+            ..crate::settings::RelayProfile::default()
+        });
         let result = settings_payload_value(settings, String::new()).unwrap();
         assert!(result["relayProfiles"][0].get("apiKeys").is_none());
         assert!(!result.to_string().contains("fake-backup-secret"));

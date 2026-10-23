@@ -228,8 +228,11 @@ mod tests {
     fn sync_mirrors_flat_fields_into_codex_shard() {
         let mut settings = BackendSettings::default();
         settings.active_relay_id = "relay-x".to_string();
-        settings.relay_profiles[0].name = "测试供应商".to_string();
-        settings.relay_profiles[0].relay_mode = RelayMode::PureApi;
+        settings.relay_profiles.push(RelayProfile {
+            name: "测试供应商".to_string(),
+            relay_mode: RelayMode::PureApi,
+            ..RelayProfile::default()
+        });
 
         settings.sync_tool_shards();
 
@@ -312,7 +315,10 @@ mod tests {
             let mut settings = BackendSettings::default();
             settings.active_tool = ToolId::parse(tool);
             let mut legacy = ToolConfig::default();
-            legacy.relay_profiles[0].name = "历史供应商".to_string();
+            legacy.relay_profiles.push(RelayProfile {
+                name: "历史供应商".to_string(),
+                ..RelayProfile::default()
+            });
             settings.tools.insert(ToolId::parse(tool), legacy.clone());
 
             settings.sync_tool_shards();

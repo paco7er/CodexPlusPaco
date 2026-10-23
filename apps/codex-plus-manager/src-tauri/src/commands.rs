@@ -1226,13 +1226,8 @@ pub fn load_settings() -> CommandResult<SettingsPayload> {
     if let Err(error) = codex_plus_core::aggregate_catalog::recover_pending_catalog_refresh(&store, &home) {
         return failed(&format!("模型目录存在待恢复操作：{error}"), fallback_settings_payload());
     }
-    match codex_plus_core::provider_import::initialize_local_config_provider(&store, &home) {
-        Ok(_) => {
-            let settings = match store.load() {
-                Ok(settings) => settings,
-                Err(error) => return failed(&format!("重新读取设置失败：{error}"), fallback_settings_payload()),
-            };
-            ok(
+    match store.load() {
+        Ok(settings) => ok(
             "设置已加载。",
             SettingsPayload {
                 revision: settings.settings_revision.clone(),
@@ -1241,10 +1236,9 @@ pub fn load_settings() -> CommandResult<SettingsPayload> {
                     .to_string_lossy()
                     .to_string(),
             },
-        )
-        },
+        ),
         Err(error) => failed(
-            &format!("读取本机默认供应商失败：{error}"),
+            &format!("读取设置失败：{error}"),
             fallback_settings_payload(),
         ),
     }

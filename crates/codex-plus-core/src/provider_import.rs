@@ -141,13 +141,17 @@ pub fn initialize_local_config_provider(
             settings.aggregate_relay_profiles.push(aggregate);
         }
 
-        if settings.relay_profiles == crate::settings::default_relay_profiles() {
+        if crate::settings::is_default_single_profile(&settings.relay_profiles) {
             let legacy = settings.active_relay_profile();
             if legacy == RelayProfile::default() {
                 settings.relay_profiles.clear();
             } else {
                 settings.relay_profiles[0] = legacy;
             }
+        } else if settings.relay_profiles.is_empty()
+            && (!settings.relay_api_key.is_empty() || !settings.relay_base_url.is_empty())
+        {
+            settings.relay_profiles.push(settings.active_relay_profile());
         }
         if settings.relay_profiles.is_empty() {
             settings.active_relay_id = profile.id.clone();
@@ -576,29 +580,30 @@ mod tests {
         assert!(!second.imported);
         assert_eq!(first.profile_id, second.profile_id);
         assert_eq!(settings.active_relay_id, first.profile_id);
-        assert_eq!(settings.relay_profiles.len(), 2);
+        assert_eq!(settings.relay_profiles.len(), 1);
+        let profile = &settings.relay_profiles[0];
         assert_eq!(
-            settings.relay_profiles[1].protocol,
+            profile.protocol,
             RelayProtocol::Responses
         );
-        assert_eq!(settings.relay_profiles[1].relay_mode, RelayMode::PureApi);
+        assert_eq!(profile.relay_mode, RelayMode::PureApi);
         assert_eq!(
-            settings.relay_profiles[1].upstream_base_url,
+            profile.upstream_base_url,
             "https://jojocode.com/v1"
         );
         assert!(
-            !settings.relay_profiles[1]
+            !profile
                 .config_contents
                 .contains("notify")
         );
         assert!(
-            !settings.relay_profiles[1]
+            !profile
                 .config_contents
                 .contains("mcp_servers")
         );
-        assert!(!settings.relay_profiles[1].auth_contents.contains("exec"));
+        assert!(!profile.auth_contents.contains("exec"));
         assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&settings.relay_profiles[1].auth_contents)
+            serde_json::from_str::<serde_json::Value>(&profile.auth_contents)
                 .unwrap(),
             serde_json::json!({ "OPENAI_API_KEY": "sk-test" })
         );
@@ -655,7 +660,7 @@ mod tests {
         let settings = store.load().unwrap();
 
         assert!(result.imported);
-        assert_eq!(settings.relay_profiles.len(), 2);
+        assert_eq!(settings.relay_profiles.len(), 1);
         assert!(
             load_pending_provider_import_at(&pending_path)
                 .unwrap()
