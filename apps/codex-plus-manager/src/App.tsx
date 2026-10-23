@@ -33,14 +33,17 @@ import {
   KeyRound,
   LayoutDashboard,
   MessageCircle,
+  Monitor,
   FileCode2,
   FolderOpen,
   Network,
+  Package,
   Plus,
   RefreshCw,
   Rocket,
   Save,
   Search,
+  Server,
   ShieldCheck,
   ShieldAlert,
   Stethoscope,
@@ -2023,6 +2026,7 @@ export function App() {
                 <span className="codex-app-state" aria-live="polite">
                   <UiBadge
                     className={statusClass(overview?.runtime_health?.codex_app?.status ?? "not_checked")}
+                    data-status={overview?.runtime_health?.codex_app?.status ?? "not_checked"}
                     variant="secondary"
                   >
                     Codex {statusLabel(overview?.runtime_health?.codex_app?.status ?? "not_checked")}
@@ -2377,7 +2381,7 @@ function OverviewScreen({ overview, settings, form, actions }: {
         <div className="overview-health-grid" role="list">
           <div className={`overview-health-row ${overview?.codex_version ? "ok" : "needs-fix"}`} role="listitem">
             <div className="overview-health-label">
-              {overview?.codex_version ? <CheckCircle2 className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+              <Package className="h-4 w-4" />
               <strong>{t("Codex 版本")}</strong>
             </div>
             <span className="overview-health-detail">{overview?.codex_version ?? t("未检测到 Codex 应用版本。")}</span>
@@ -2386,7 +2390,7 @@ function OverviewScreen({ overview, settings, form, actions }: {
           {health.map((item) => (
             <div className={`overview-health-row ${item.ok ? "ok" : "needs-fix"}`} role="listitem" key={item.title}>
               <div className="overview-health-label">
-                {item.ok ? <CheckCircle2 className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+                <item.icon className="h-4 w-4" />
                 <strong>{item.title}</strong>
               </div>
               <span className="overview-health-detail">{item.detail}</span>
@@ -2444,7 +2448,7 @@ function OverviewScreen({ overview, settings, form, actions }: {
           disabled={!settings || savingMarketplace}
           onChange={(enabled) => void updateMarketplaceUnlock(enabled)}
         />
-        <span className="overview-marketplace-status" role="status" aria-live="polite">
+        <span className="overview-marketplace-status" role="status" aria-live="polite" data-failed={marketplaceSaveFailed || undefined}>
           {!settings ? t("加载中...") : savingMarketplace ? t("保存中...") : marketplaceSaveFailed ? t("保存失败") : t("已保存")}
         </span>
       </div>
@@ -6806,7 +6810,7 @@ function StatusRow({ title, status = "unknown", path }: { title: string; status?
 }
 
 function Badge({ status }: { status: string }) {
-  return <UiBadge className={statusClass(status)} variant="secondary">{statusLabel(status)}</UiBadge>;
+  return <UiBadge className={statusClass(status)} data-status={status} variant="secondary">{statusLabel(status)}</UiBadge>;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
@@ -7476,8 +7480,9 @@ function healthItems(overview: OverviewResult | null) {
   const conversionDetail = typeof conversionEnabled === "boolean"
     ? t(conversionEnabled ? "协议转换已启用" : "协议转换未启用")
     : undefined;
-  const serviceItem = (title: string, state: RuntimeServiceState | undefined, extraDetail?: string) => ({
+  const serviceItem = (title: string, icon: LucideIcon, state: RuntimeServiceState | undefined, extraDetail?: string) => ({
     title,
+    icon,
     status: state?.status ?? "not_checked",
     ok: ["running", "connected", "disabled"].includes(state?.status ?? ""),
     detail: state ? [state.address, t(state.message), extraDetail].filter(Boolean).join(" · ") : t("等待状态检查"),
@@ -7485,12 +7490,13 @@ function healthItems(overview: OverviewResult | null) {
   return [
     {
       title: t("Codex 应用"),
+      icon: Monitor,
       status: overview?.codex_app.status ?? "not_checked",
       ok: overview?.codex_app.status === "found",
       detail: overview?.codex_app.path || t("尚未检查 Codex 应用路径。"),
     },
-    serviceItem(t("本地服务器状态"), overview?.runtime_health?.local_server, conversionDetail),
-    serviceItem(t("调试连接状态"), overview?.runtime_health?.debugger),
+    serviceItem(t("本地服务器状态"), Server, overview?.runtime_health?.local_server, conversionDetail),
+    serviceItem(t("调试连接状态"), Cable, overview?.runtime_health?.debugger),
   ];
 }
 

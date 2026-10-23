@@ -29,39 +29,39 @@
 
 :root {
   --background: 0 0% 100%;
-  --foreground: 226 26% 14%;
+  --foreground: 0 0% 13%;
   --card: 0 0% 100%;
-  --card-foreground: 226 26% 14%;
+  --card-foreground: 0 0% 13%;
   --popover: 0 0% 100%;
-  --popover-foreground: 226 26% 14%;
-  --primary: 232 82% 56%;
+  --popover-foreground: 0 0% 13%;
+  --primary: 0 0% 16%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 224 24% 95%;
-  --secondary-foreground: 226 26% 18%;
-  --muted: 224 24% 95.5%;
-  --muted-foreground: 224 12% 44%;
-  --accent: 224 26% 94%;
-  --accent-foreground: 226 26% 16%;
+  --secondary: 0 0% 96%;
+  --secondary-foreground: 0 0% 22%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 43%;
+  --accent: 0 0% 94%;
+  --accent-foreground: 0 0% 16%;
   --destructive: 358 68% 50%;
   --destructive-foreground: 0 0% 100%;
-  --border: 224 18% 89%;
-  --input: 224 16% 85%;
-  --ring: 232 82% 58%;
-  --shell-bg: 224 30% 98.5%;
-  --sidebar-bg: 224 30% 97%;
-  --sidebar-muted: 224 26% 92%;
-  --sidebar-border: 224 20% 90%;
+  --border: 0 0% 90%;
+  --input: 0 0% 83%;
+  --ring: 0 0% 40%;
+  --shell-bg: 0 0% 100%;
+  --sidebar-bg: 0 0% 97.5%;
+  --sidebar-muted: 0 0% 92%;
+  --sidebar-border: 0 0% 90%;
   --surface-raised: 0 0% 100%;
-  --surface-sunken: 224 30% 97.5%;
-  --brand-accent: 232 82% 56%;
-  --brand-accent-2: 268 74% 58%;
-  --switch-track: 224 14% 80%;
+  --surface-sunken: 0 0% 97%;
+  --brand-accent: 0 0% 16%;
+  --brand-accent-2: 0 0% 32%;
+  --switch-track: 0 0% 78%;
   --switch-thumb: 0 0% 100%;
   --status-success: 152 58% 40%;
   --status-warning: 32 86% 46%;
   --status-error: 358 68% 52%;
-  --hairline: 226 26% 14%;
-  --shadow-color: 226 30% 62%;
+  --hairline: 0 0% 14%;
+  --shadow-color: 0 0% 55%;
   /* 代码着色（config.toml / auth.json 编辑器） */
   --code-key: 349 74% 46%;
   --code-string: 122 46% 34%;
@@ -3198,9 +3198,7 @@ details.relay-fold[open] > .relay-fold-body {
 .feature-toggle > input:checked ~ .toggle-switch-visual,
 .switch-row > input:checked ~ .toggle-switch-visual {
   background: hsl(var(--brand-accent));
-  box-shadow:
-    inset 0 1px 2px hsl(var(--shadow-color) / 0.14),
-    0 2px 8px hsl(var(--brand-accent) / 0.32);
+  box-shadow: inset 0 0 0 1px hsl(var(--foreground) / 0.06);
 }
 
 .feature-toggle > input:checked ~ .toggle-switch-visual .toggle-switch-thumb,
@@ -4842,7 +4840,7 @@ select {
   color: hsl(var(--muted-foreground) / 0.85);
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.07em;
+  letter-spacing: 0;
   line-height: 1.4;
   text-transform: uppercase;
 }
@@ -4870,9 +4868,10 @@ select {
 
 .nav-item.active {
   border-color: transparent;
-  background: hsl(var(--brand-accent) / 0.14);
+  background: hsl(var(--background));
   color: hsl(var(--foreground));
-  font-weight: 550;
+  font-weight: 600;
+  box-shadow: 0 1px 3px hsl(var(--hairline) / 0.06), inset 0 0 0 1px hsl(var(--border) / 0.8);
 }
 
 /* 活动指示条 */
@@ -4903,7 +4902,7 @@ select {
 
 .nav-label {
   font-weight: inherit;
-  letter-spacing: -0.005em;
+  letter-spacing: 0;
 }
 
 .nav-badge {
@@ -4948,7 +4947,7 @@ select {
 .topbar h1 {
   font-size: 17px;
   font-weight: 620;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   line-height: 1.25;
 }
 
@@ -6287,7 +6286,7 @@ select {
 }
 
 .overview-page {
-  width: min(100%, 1120px);
+  width: min(100%, 960px);
   min-width: 0;
   margin-inline: auto;
 }
@@ -6297,7 +6296,7 @@ select {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 52px;
+  min-height: 48px;
 }
 
 .overview-section-header h2 {
@@ -6317,45 +6316,49 @@ select {
 
 .overview-health-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 28px;
 }
 
 .overview-health-row {
   display: grid;
-  grid-template-columns: 168px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 16px;
-  min-height: 58px;
-  padding: 14px 0;
-  border-top: 1px solid hsl(var(--border) / 0.65);
+  align-content: start;
+  gap: 6px 12px;
+  min-width: 0;
+  min-height: 100px;
+  padding: 18px 0;
+  border-bottom: 1px solid hsl(var(--border) / 0.75);
 }
 
 .overview-health-label {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 
 .overview-health-label svg {
   flex-shrink: 0;
-}
-
-.overview-health-row.ok svg {
-  color: hsl(var(--status-success));
-}
-
-.overview-health-row.needs-fix svg {
-  color: hsl(var(--status-warning));
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border-radius: 6px;
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
 }
 
 .overview-health-label strong {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .overview-health-detail {
+  grid-column: 1 / -1;
+  grid-row: 2;
   min-width: 0;
+  padding-left: 40px;
   color: hsl(var(--muted-foreground));
   font-size: 12px;
   line-height: 1.65;
@@ -6363,15 +6366,14 @@ select {
 }
 
 .overview-app-path {
-  margin-top: 24px;
-  border-top: 1px solid hsl(var(--border));
+  margin-top: 28px;
 }
 
 .overview-app-path .status-row {
-  grid-template-columns: 168px minmax(0, 1fr) auto;
+  grid-template-columns: 108px minmax(0, 1fr) auto;
   gap: 16px;
-  min-height: 54px;
-  padding: 14px 0;
+  min-height: 48px;
+  padding: 12px 0;
 }
 
 .overview-app-path .status-row:last-child {
@@ -6399,7 +6401,7 @@ select {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
-  margin-top: 24px;
+  margin-top: 20px;
   padding: 20px 0;
   border-top: 1px solid hsl(var(--border));
 }
@@ -6424,6 +6426,43 @@ select {
   text-align: right;
 }
 
+.overview-marketplace-status[data-failed] {
+  color: hsl(var(--status-error));
+}
+
+.overview-page [data-status],
+.codex-app-state [data-status] {
+  gap: 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.overview-page [data-status]::before,
+.codex-app-state [data-status]::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.overview-page [data-status]:is([data-status="not_checked"], [data-status="stopped"], [data-status="disconnected"], [data-status="disabled"], [data-status="unknown"]),
+.codex-app-state [data-status]:is([data-status="not_checked"], [data-status="stopped"], [data-status="disconnected"], [data-status="disabled"], [data-status="unknown"]) {
+  color: hsl(var(--muted-foreground));
+}
+
+.overview-health-row > [data-status] {
+  grid-column: 2;
+  grid-row: 1;
+}
+
 .overview-marketplace .feature-toggle > span {
   min-width: 0;
 }
@@ -6433,7 +6472,10 @@ select {
 }
 
 @media (max-width: 760px) {
-  .overview-health-row,
+  .overview-health-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .overview-app-path .status-row {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 6px 12px;
@@ -6445,14 +6487,9 @@ select {
     grid-row: 1;
   }
 
-  .overview-health-detail,
   .overview-app-path .status-row code {
     grid-column: 1 / -1;
     grid-row: 2;
-  }
-
-  .overview-health-detail {
-    padding-left: 26px;
   }
 
   .overview-marketplace {

@@ -40,7 +40,7 @@ test("overview merges the local server and protocol conversion and keeps the deb
   assert.match(screen, /aria-label=\{t\("刷新状态"\)\}/);
   assert.match(screen, /actions\.refreshCurrent/);
   const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
-  assert.match(css, /\.overview-health-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+  assert.match(css, /\.overview-health-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
 });
 
 test("overview shows the saved application path once and keeps both picker modes", () => {
@@ -74,7 +74,7 @@ function renderOverview(overview: unknown, savedPath: string | null = null) {
     t: (value: string) => value,
     useState: (value: unknown) => [value, () => {}],
     useRef: (value: unknown) => ({ current: value }),
-    ...Object.fromEntries(["Button", "Badge", "StatusRow", "FeatureToggle", "RefreshCw", "CheckCircle2", "Bell",
+    ...Object.fromEntries(["Button", "Badge", "StatusRow", "FeatureToggle", "RefreshCw", "Package", "Monitor", "Server", "Cable",
       "FolderOpen", "FileCode2", "Trash2"].map((name) => [name, name])),
   };
   const code = ts.transpileModule(`${functionSource("healthItems")}\n${functionSource("OverviewScreen")}`, {
@@ -116,6 +116,8 @@ test("overview renders all health states, full paths and accessible compact tool
     assert.equal(nodes.filter((node) => node.props.role === "listitem").length, 4);
     assert.deepEqual(nodes.filter((node) => node.type === "Badge").map((node) => node.props.status),
       overview ? ["ok", "found", "running", "connected"] : Array(4).fill("not_checked"));
+    const labels = nodes.filter((node) => node.props.className === "overview-health-label");
+    assert.deepEqual(labels.map((node) => (node.children[0] as ElementFixture).type), ["Package", "Monitor", "Server", "Cable"]);
     const paths = nodes.filter((node) => node.type === "StatusRow");
     assert.equal(paths.length, 2);
     assert.equal(paths[0].props.path, path);
@@ -141,12 +143,65 @@ test("path tools stay disabled while loading and clear requires a saved path", (
   }
 });
 
-test("overview layout uses unframed rows with wrapping details and a narrow stacked layout", () => {
+test("overview layout groups unframed health items with wrapping details and a narrow single column", () => {
   const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
-  assert.match(css, /\.overview-health-row\s*\{[^}]*grid-template-columns:\s*168px minmax\(0,\s*1fr\) auto/);
+  assert.match(css, /\.overview-health-row\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto/);
   assert.match(css, /\.overview-health-detail\s*\{[^}]*min-width:\s*0;[^}]*overflow-wrap:\s*anywhere/);
-  assert.match(css, /@media \(max-width: 760px\)\s*\{\s*\.overview-health-row,\s*\.overview-app-path \.status-row\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto/);
-  assert.match(css, /\.overview-health-detail,\s*\.overview-app-path \.status-row code\s*\{[^}]*grid-column:\s*1 \/ -1/);
+  assert.match(css, /@media \(max-width: 760px\)\s*\{\s*\.overview-health-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+  assert.match(css, /\.overview-app-path \.status-row code\s*\{[^}]*grid-column:\s*1 \/ -1/);
+});
+
+test("status styling keeps idle states neutral without suppressing failures or missing applications", () => {
+  const scope = {
+    React: {
+      createElement: (type: string, props: Record<string, unknown>, ...children: unknown[]) => ({ type, props, children }),
+    },
+    UiBadge: "UiBadge",
+    t: (value: string) => value,
+  };
+  const code = ts.transpileModule(
+    ["statusLabel", "statusClass", "Badge"].map(functionSource).join("\n"),
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React } },
+  ).outputText;
+  const render = new Function(...Object.keys(scope), `${code}\nreturn Badge;`)(...Object.values(scope));
+  for (const [status, label, tone] of [
+    ["stopped", "未运行", "warn"], ["not_checked", "未检查", "warn"],
+    ["disconnected", "未连接", "warn"], ["failed", "失败", "bad"],
+    ["missing", "缺失", "bad"], ["running", "运行中", "good"],
+  ]) {
+    const badge = render({ status });
+    assert.equal(badge.props["data-status"], status);
+    assert.equal(badge.props.className, tone);
+    assert.deepEqual(badge.children, [label]);
+  }
+  const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+  const neutralRule = css.match(/\.overview-page \[data-status\]:is\(([^)]+)\)[^{]+\{([^}]+)\}/);
+  assert.ok(neutralRule);
+  assert.doesNotMatch(neutralRule[1], /failed|missing|degraded|running/);
+  for (const status of ["not_checked", "stopped", "disconnected", "disabled", "unknown"]) {
+    assert.ok(neutralRule[1].includes(`[data-status="${status}"]`));
+  }
+  assert.match(neutralRule[2], /color:\s*hsl\(var\(--muted-foreground\)\)/);
+  assert.match(css, /\.overview-marketplace-status\[data-failed\]\s*\{[^}]*--status-error/);
+});
+
+test("neutral shell retains readable text contrast and visible keyboard focus", () => {
+  const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+  const lightness = (name: string) => {
+    const value = css.match(new RegExp(`--${name}:\\s*0 0% ([\\d.]+)%;`));
+    assert.ok(value, `${name} must use the neutral shell palette`);
+    const channel = Number(value[1]) / 100;
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  };
+  const contrast = (a: string, b: string) => {
+    const values = [lightness(a), lightness(b)].sort((a, b) => b - a);
+    return (values[0] + 0.05) / (values[1] + 0.05);
+  };
+  assert.ok(contrast("foreground", "shell-bg") >= 7);
+  assert.ok(contrast("muted-foreground", "shell-bg") >= 4.5);
+  assert.ok(contrast("primary", "primary-foreground") >= 7);
+  assert.ok(contrast("ring", "shell-bg") >= 3);
+  assert.match(css, /input:focus-visible ~ \.toggle-switch-visual\s*\{[^}]*outline:\s*2px solid hsl\(var\(--ring\)\)/);
 });
 
 test("retired settings commands are not exposed while shared configuration remains", () => {
