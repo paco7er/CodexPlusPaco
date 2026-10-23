@@ -5,9 +5,9 @@ export type ManagerNavigationIntent = {
   section?: EnhancementSection;
 };
 
-export function managerNavigationDestination(intent: ManagerNavigationIntent): {
-  route: "enhance" | "overview";
+export function managerNavigationDestination(_intent: ManagerNavigationIntent): {
+  route: "overview";
 } {
-  // 保留旧客户端的导航意图格式，已撤下的配置区不再触发标签选择或滚动。
-  return { route: intent.page === "pluginMarket" ? "overview" : "enhance" };
+  // 保留旧客户端的导航意图格式，插件市场开关已合并到概览。
+  return { route: "overview" };
 }

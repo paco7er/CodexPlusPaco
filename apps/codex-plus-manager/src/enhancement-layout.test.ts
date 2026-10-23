@@ -15,13 +15,9 @@ function ruleBody(selector: string) {
   return match[1];
 }
 
-test("the remaining enhancement fits a single column without retired group layout", () => {
-  assert.match(ruleBody(".feature-switch-grid"), /align-items:\s*start/);
-
-  assert.match(
-    ruleBody(".enhance-switch-grid"),
-    /grid-template-columns:\s*minmax\(0,\s*1fr\)/,
-  );
-  assert.match(ruleBody(".enhance-switch-grid"), /width:\s*min\(100%,\s*420px\)/);
-  assert.doesNotMatch(styles, /\.enhance-footer-hint\b|\.enhance-feature-groups\b/);
+test("marketplace setting is a compact overview row with stable save status", () => {
+  assert.match(ruleBody(".overview-marketplace"), /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto/);
+  assert.match(ruleBody(".overview-marketplace"), /border-top:/);
+  assert.match(ruleBody(".overview-marketplace-status"), /width:\s*5em/);
+  assert.doesNotMatch(styles, /\.enhance-/);
 });

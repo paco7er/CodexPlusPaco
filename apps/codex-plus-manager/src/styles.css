@@ -5131,22 +5131,6 @@ select {
   box-shadow: var(--shadow-sm);
 }
 
-.panel.enhance-panel {
-  justify-self: center;
-  width: min(100%, 1200px);
-  max-width: 100%;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  min-height: max-content;
-}
-
-.panel.enhance-panel:hover {
-  border: 0;
-  box-shadow: none;
-}
-
 .panel:hover {
   border-color: hsl(var(--border));
   box-shadow: var(--shadow-sm);
@@ -5634,20 +5618,6 @@ select {
     left: -8px;
   }
 
-  .enhance-panel .mode-grid,
-  .enhance-panel .feature-switch-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .enhance-panel .feature-action-row {
-    grid-template-columns: 1fr;
-    align-items: start;
-  }
-
-  .enhance-panel .feature-action-row .inline-flex,
-  .enhance-panel .feature-action-row button {
-    width: fit-content;
-  }
 }
 
 @media (max-width: 760px) {
@@ -6442,114 +6412,52 @@ select {
   }
 }
 
-/* 增强页的总开关与保存入口固定在顶部。 */
-.enhance-page-controls {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  border: 1px solid hsl(var(--border));
-  border-radius: var(--radius-xl);
-  background: hsl(var(--card));
-  box-shadow: var(--shadow-xs);
-}
-
-.enhance-page-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 14px 18px;
-}
-
-.enhance-master-switch.switch-row {
+.overview-marketplace {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 22px;
-  width: auto;
-  min-width: 0;
-  margin: 0;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.overview-marketplace .feature-toggle,
+.overview-marketplace .feature-toggle:hover {
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
-}
-
-.enhance-master-switch strong {
-  font-size: 13px;
-}
-
-.enhance-master-switch small {
-  color: hsl(var(--muted-foreground));
-  font-size: 12px;
-}
-
-.enhance-save-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.enhance-save-actions > span {
-  color: hsl(var(--muted-foreground));
-  font-size: 12px;
-}
-
-.enhance-save-actions > .is-dirty {
-  color: hsl(var(--brand-accent));
-}
-
-.enhance-general {
-  min-width: 0;
-}
-
-.enhance-general .panel {
-  width: 100%;
-}
-
-.enhance-content {
-  padding: 16px 18px;
-}
-
-.enhance-switch-grid {
-  grid-template-columns: minmax(0, 1fr);
-  width: min(100%, 420px);
-  margin: 0;
-}
-
-.enhance-switch-grid .feature-toggle {
-  border: 0;
-  border-radius: 6px;
-  background: hsl(var(--surface-raised) / 0.55);
-  padding: 10px 12px;
-  gap: 12px;
   box-shadow: none;
 }
 
-.enhance-page .feature-toggle strong {
+.overview-marketplace .feature-toggle strong {
+  font-size: 13px;
+}
+
+.overview-marketplace-status {
+  width: 5em;
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
+  text-align: right;
 }
 
-.enhance-page .feature-toggle small {
-  font-size: 11px;
+.overview-marketplace .feature-toggle > span {
+  min-width: 0;
 }
 
-.enhance-page .feature-toggle:hover {
-  background: hsl(var(--accent) / 0.65);
+.overview-marketplace .feature-toggle small {
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 760px) {
-  .enhance-page-toolbar {
-    flex-wrap: wrap;
-    gap: 12px;
-    padding: 12px;
+  .overview-marketplace {
+    column-gap: 10px;
+    padding: 12px 0;
   }
 
-  .enhance-save-actions {
-    width: 100%;
-    justify-content: space-between;
+  .overview-marketplace .feature-toggle {
+    gap: 10px;
   }
-
 }
 
 .settings-page {

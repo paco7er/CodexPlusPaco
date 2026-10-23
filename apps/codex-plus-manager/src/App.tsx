@@ -30,7 +30,6 @@ import {
   Edit3,
   GripVertical,
   Info,
-  Hammer,
   KeyRound,
   LayoutDashboard,
   MessageCircle,
@@ -733,7 +732,7 @@ function providerSyncTargetLabel(target: ProviderSyncTargetOption): string {
   return [...labels, ...current, ...unavailable].join(" / ") || t("发现");
 }
 
-type Route = "overview" | "relay" | "sessions" | "context" | "skills" | "enhance";
+type Route = "overview" | "relay" | "sessions" | "context" | "skills";
 
 const MANAGER_NAVIGATION_EVENT = "manager-navigation-requested";
 
@@ -745,7 +744,6 @@ const routes: Array<{ id: Route; label: string; icon: LucideIcon; badge?: string
   { id: "sessions", get label() { return t("会话管理"); }, icon: MessageCircle, tool: "codex" },
   { id: "context", label: "MCP", icon: Network, tool: "codex" },
   { id: "skills", label: "Skills", icon: BookOpen, tool: "codex" },
-  { id: "enhance", get label() { return t("Codex增强"); }, icon: Hammer, tool: "codex" },
 ];
 
 const navigationSections: Array<{ label: string; routes: Route[] }> = [
@@ -756,10 +754,6 @@ const navigationSections: Array<{ label: string; routes: Route[] }> = [
   {
     get label() { return t("全局管理"); },
     routes: ["context", "skills", "sessions"],
-  },
-  {
-    get label() { return t("扩展"); },
-    routes: ["enhance"],
   },
 ];
 
@@ -909,10 +903,6 @@ export function App() {
   const [sessionIndexRepairReportError, setSessionIndexRepairReportError] = useState<string | null>(null);
   const [selectedProviderSyncTarget, setSelectedProviderSyncTarget] = useState("");
   const [relaySwitching, setRelaySwitching] = useState(false);
-  const settingsDirty = useMemo(
-    () => Boolean(settings && !backendSettingsEqual(settingsForm, settings.settings)),
-    [settings, settingsForm],
-  );
 
   const call = <T,>(command: string, args?: Record<string, unknown>) => {
     const snapshot = args?.settings as BackendSettings | undefined;
@@ -1208,7 +1198,6 @@ export function App() {
       await refreshRelayFiles(true);
       await refreshLiveContextEntries(true);
     }
-    if (next === "enhance") await refreshSettings(true);
   };
 
   const consumePendingManagerNavigation = async (): Promise<boolean> => {
@@ -2095,6 +2084,7 @@ export function App() {
             <OverviewScreen
               overview={overview}
               settings={settings}
+              form={settingsForm}
               actions={actions}
             />
           ) : null}
@@ -2148,16 +2138,6 @@ export function App() {
             />
           ) : null}
           {route === "skills" ? <SkillsPage notify={actions.showMessage} /> : null}
-
-          {route === "enhance" ? (
-            <EnhanceScreen
-              dirty={settingsDirty}
-              form={settingsForm}
-              onFormChange={setSettingsForm}
-              actions={actions}
-            />
-          ) : null}
-
 
         </section>
       </main>
@@ -2389,13 +2369,35 @@ type Actions = {
   showMessage: (title: string, message: string, status?: Status) => Promise<void>;
 };
 
-function OverviewScreen({ overview, settings, actions }: {
+function OverviewScreen({ overview, settings, form, actions }: {
   overview: OverviewResult | null;
   settings: SettingsResult | null;
+  form: BackendSettings;
   actions: Actions;
 }) {
   const health = healthItems(overview);
   const savedCodexAppPath = settings?.settings.codexAppPath ?? "";
+  const [savingMarketplace, setSavingMarketplace] = useState(false);
+  const [marketplaceSaveFailed, setMarketplaceSaveFailed] = useState(false);
+  const marketplaceSavePending = useRef(false);
+  const updateMarketplaceUnlock = async (enabled: boolean) => {
+    if (!settings || marketplaceSavePending.current) return;
+    marketplaceSavePending.current = true;
+    setSavingMarketplace(true);
+    setMarketplaceSaveFailed(false);
+    try {
+      // 单一开关同时更新旧总开关，避免界面已开启但运行时仍被总开关拦截。
+      const saved = await actions.saveSettingsValue({
+        ...form,
+        enhancementsEnabled: enabled,
+        codexAppPluginMarketplaceUnlock: enabled,
+      });
+      setMarketplaceSaveFailed(!saved);
+    } finally {
+      marketplaceSavePending.current = false;
+      setSavingMarketplace(false);
+    }
+  };
   return (
     <>
     <Panel>
@@ -2468,6 +2470,18 @@ function OverviewScreen({ overview, settings, actions }: {
           </Toolbar>
         </CardContent>
       </Panel>
+      <div className="overview-marketplace">
+        <FeatureToggle
+          title={t("插件市场解锁")}
+          detail={t("API Key 模式下尽量显示完整插件列表。")}
+          checked={form.enhancementsEnabled && form.codexAppPluginMarketplaceUnlock}
+          disabled={!settings || savingMarketplace}
+          onChange={(enabled) => void updateMarketplaceUnlock(enabled)}
+        />
+        <span className="overview-marketplace-status" role="status" aria-live="polite">
+          {!settings ? t("加载中...") : savingMarketplace ? t("保存中...") : marketplaceSaveFailed ? t("保存失败") : t("已保存")}
+        </span>
+      </div>
     </>
   );
 }
@@ -2850,57 +2864,6 @@ function envConflictSourceLabel(source: string): string {
   if (source === "process") return t("当前进程");
   if (source === "user") return t("用户环境");
   return source || t("环境变量");
-}
-
-function EnhanceScreen({
-  dirty,
-  form,
-  onFormChange,
-  actions,
-}: {
-  dirty: boolean;
-  form: BackendSettings;
-  onFormChange: (value: BackendSettings) => void;
-  actions: Actions;
-}) {
-  const setEnhanceFlag = (key: keyof BackendSettings, value: boolean) => onFormChange({ ...form, [key]: value });
-  const masterEnabled = form.enhancementsEnabled;
-  return (
-    <div className="settings-page enhance-page">
-      <div className="enhance-page-controls" id="enhance-page-controls">
-        <div className="enhance-page-toolbar">
-          <label className="switch-row compact enhance-master-switch">
-            <input
-              checked={form.enhancementsEnabled}
-              onChange={(event) => onFormChange({ ...form, enhancementsEnabled: event.currentTarget.checked })}
-              type="checkbox"
-            />
-            <span>
-              <strong>{t("启用 Codex增强")}</strong>
-              <small>{t("关闭后暂停增强功能，服务配置会保留。")}</small>
-            </span>
-            <ToggleVisual />
-          </label>
-          <div className="enhance-save-actions">
-            <span className={dirty ? "is-dirty" : ""} role="status">{dirty ? t("有未保存修改") : t("已保存")}</span>
-            <Button disabled={!dirty} onClick={() => void actions.saveSettings()}>
-              <Save className="h-4 w-4" />
-              {t("保存增强设置")}
-            </Button>
-          </div>
-        </div>
-      </div>
-      <div className="enhance-general">
-        <Panel className="enhance-panel">
-          <CardContent className="enhance-content">
-            <div className="feature-switch-grid enhance-switch-grid">
-              <FeatureToggle title={t("插件市场解锁")} detail={t("API Key 模式下扩展插件市场请求，尽量显示完整插件列表；官方/混合模式通常不需要。")} checked={form.codexAppPluginMarketplaceUnlock} disabled={!masterEnabled} onChange={(value) => setEnhanceFlag("codexAppPluginMarketplaceUnlock", value)} />
-            </div>
-          </CardContent>
-        </Panel>
-      </div>
-    </div>
-  );
 }
 
 function SessionRepairPanel({ form, providerSyncProgress, sessionIndexRepairActive, sessionIndexRepairReport, sessionIndexRepairReportError, providerSyncTargets, selectedProviderSyncTarget, onFormChange, actions }: {
@@ -7025,7 +6988,6 @@ function routeSubtitle(route: Route) {
     sessions: t("查看、删除和修复 Codex 本地会话"),
     context: t("独立管理 MCP 服务器与插件"),
     skills: t("从 GitHub 仓库安装 Skill 到 Codex"),
-    enhance: t("管理 Codex 常用增强功能。"),
   };
   return subtitles[route];
 }
@@ -7793,12 +7755,6 @@ function normalizeStepwiseProtocol(value: StepwiseProtocol | undefined): Stepwis
     || value === "anthropic_messages"
     ? value
     : "chat_completions";
-}
-
-function backendSettingsEqual(left: BackendSettings, right: BackendSettings): boolean {
-  const { revision: _leftRevision, ...leftValues } = normalizeSettings(left);
-  const { revision: _rightRevision, ...rightValues } = normalizeSettings(right);
-  return JSON.stringify(leftValues) === JSON.stringify(rightValues);
 }
 
 function clampNumber(value: number, min: number, max: number): number {

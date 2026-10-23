@@ -108,12 +108,12 @@ test("retired enhancements have no settings, navigation or command references in
   assert.deepEqual([...new Set(references)], []);
 });
 
-test("marketplace unlock is the only remaining enhancement and obeys the master switch", () => {
-  const enhance = component("EnhanceScreen");
+test("overview shows one marketplace switch reflecting both persisted flags", () => {
+  const enhance = component("OverviewScreen");
   const toggles = elements(enhance).filter((element) => element.tagName.getText(app) === "FeatureToggle");
   assert.equal(toggles.length, 1);
-  for (const toggle of toggles) assert.equal(attribute(toggle, "disabled"), "!masterEnabled");
-  assert.equal(attribute(fieldControl(enhance, "form.codexAppPluginMarketplaceUnlock"), "disabled"), "!masterEnabled");
+  assert.equal(attribute(toggles[0], "checked"), "form.enhancementsEnabled && form.codexAppPluginMarketplaceUnlock");
+  assert.equal(attribute(toggles[0], "disabled"), "!settings || savingMarketplace");
   assert.equal(attribute(toggles[0], "title"), 't("插件市场解锁")');
   assert.equal(isConditional(toggles[0], enhance), false, "marketplace unlock stays visible when enhancements are off");
 
@@ -122,20 +122,20 @@ test("marketplace unlock is the only remaining enhancement and obeys the master 
   assert.deepEqual(visibleEnglish.map((node) => node.getText(app)), [], "internal Stepwise fields stay compatible but visible names must use Chinese");
 });
 
-test("remaining enhancements display directly without retired panes or a single-item tab strip", () => {
-  const enhance = component("EnhanceScreen");
+test("marketplace setting follows the app path without a dedicated enhancement screen", () => {
+  const enhance = component("OverviewScreen");
   assert.ok(!elements(enhance).some((element) => ["tab", "tablist", "tabpanel"].includes(attribute(element, "role") ?? "")));
-  const general = elements(enhance).find((element) => attribute(element, "className") === "enhance-general");
+  const general = elements(enhance).find((element) => attribute(element, "className") === "overview-marketplace");
+  const path = elements(enhance).find((element) => attribute(element, "className") === "overview-app-path");
   assert.ok(general);
+  assert.ok(path && path.pos < general.pos);
   assert.equal(attribute(general, "hidden"), undefined);
   assert.equal(isConditional(general, enhance), false);
   const calls = descendants(enhance).filter(ts.isCallExpression);
-  assert.ok(calls.some((node) => node.expression.getText(app) === "actions.saveSettings"), "enhancements must retain their save action");
-  assert.ok(!app.statements.some((node) => ts.isFunctionDeclaration(node) && node.name?.text === "SettingsScreen"));
-  const screen = elements(app).find((element) => element.tagName.getText(app) === "EnhanceScreen");
-  assert.ok(screen);
-  assert.equal(attribute(screen, "activeTab"), undefined);
-  assert.equal(attribute(screen, "onTabChange"), undefined);
+  assert.ok(calls.some((node) => node.expression.getText(app) === "actions.saveSettingsValue"));
+  assert.ok(!app.statements.some((node) => ts.isFunctionDeclaration(node)
+    && ["SettingsScreen", "EnhanceScreen"].includes(node.name?.text ?? "")));
+  assert.doesNotMatch(appSource, /t\("Codex增强"\)|t\("扩展"\)|t\("保存增强设置"\)/);
   const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
   assert.doesNotMatch(styles, /\.enhance-tabs\b|\.enhance-tab-panel\b|\.enhance-service-|\.stepwise-settings-|\.stepwise-advanced\b/);
 });
@@ -151,18 +151,18 @@ test("retired service panels have no dedicated manager commands while runtime co
   assert.match(appSource, /codexAppStepwiseEnabled: boolean;/);
 });
 
-test("enhancement saving is an explicit permanent top action", () => {
-  const enhance = component("EnhanceScreen");
-  const saves = elements(enhance).filter((element) => attribute(element, "onClick")?.includes("actions.saveSettings("));
-  assert.equal(saves.length, 1);
-  assert.equal(attribute(saves[0], "disabled"), "!dirty");
-  assert.equal(isConditional(saves[0], enhance), false);
-  const general = elements(enhance).find((element) => attribute(element, "className") === "enhance-general");
-  assert.ok(general && saves[0].pos < general.pos);
+test("marketplace saving has an accessible status instead of a second save action", () => {
+  const overview = component("OverviewScreen");
+  const saves = elements(overview).filter((element) => attribute(element, "onClick")?.includes("actions.saveSettings("));
+  assert.equal(saves.length, 0);
+  const status = elements(overview).find((element) => attribute(element, "className") === "overview-marketplace-status");
+  assert.ok(status);
+  assert.equal(attribute(status, "role"), "status");
+  assert.equal(attribute(status, "aria-live"), "polite");
 });
 
-test("retired enhancement controls cannot reappear or autosave from enhancements", () => {
-  const enhance = component("EnhanceScreen");
+test("retired enhancement controls do not reappear in overview", () => {
+  const enhance = component("OverviewScreen");
   const controls = elements(enhance);
   assert.ok(!controls.some((element) => attribute(element, "title") === 't("会话删除")'));
   for (const field of ["codexAppWhaleWidgetEnabled", "codexAppWhaleBalanceProtocol", "codexAppWhaleBalancePath", "codexAppWhaleBalanceField",
@@ -172,20 +172,80 @@ test("retired enhancement controls cannot reappear or autosave from enhancements
     "codexAppNativeBrowserRequireIdentification", "codexAppModelWhitelistUnlock", "codexAppNativeFastUnlock"]) {
     assert.ok(!controls.some((element) => attribute(element, "checked") === `form.${field}` || attribute(element, "value") === `form.${field}`), field);
   }
-  assert.ok(!descendants(enhance).filter(ts.isCallExpression)
-    .some((node) => node.expression.getText(app) === "actions.saveSettingsValue"));
-  assert.ok(!controls.some((element) => attribute(element, "className") === "hint-line enhance-footer-hint"));
+  assert.ok(!controls.some((element) => attribute(element, "checked") === "form.enhancementsEnabled"));
 });
 
-test("marketplace unlock remains editable through explicit save without the retired browser status panel", () => {
-  const enhance = component("EnhanceScreen");
-  const marketplace = fieldControl(enhance, "form.codexAppPluginMarketplaceUnlock");
+test("marketplace toggle saves through the shared persistence action without the retired browser panel", () => {
+  const enhance = component("OverviewScreen");
+  const marketplace = fieldControl(enhance, "form.enhancementsEnabled && form.codexAppPluginMarketplaceUnlock");
   const handler = eventHandlerNodes(enhance, marketplace, "onChange");
-  assert.ok(handler.some((node) => ts.isStringLiteral(node) && node.text === "codexAppPluginMarketplaceUnlock"));
-  assert.ok(!descendants(enhance).filter(ts.isCallExpression)
-    .some((node) => node.expression.getText(app) === "actions.saveSettingsValue"));
+  assert.ok(handler.some((node) => ts.isCallExpression(node) && node.expression.getText(app) === "actions.saveSettingsValue"));
   assert.doesNotMatch(appSource, /native-browser-settings|NativeBrowserStatusView/);
   assert.match(appSource, /codexAppNativeBrowserRequireIdentification: false,/);
   assert.match(appSource, /codexAppModelWhitelistUnlock: true,/);
   assert.match(appSource, /codexAppNativeFastUnlock: false,/);
+});
+
+function marketplaceAction(form: Record<string, unknown>, save: (value: Record<string, unknown>) => Promise<unknown>, loaded = true) {
+  const declaration = descendants(component("OverviewScreen")).find((node) =>
+    ts.isVariableDeclaration(node) && node.name.getText(app) === "updateMarketplaceUnlock");
+  assert.ok(declaration && ts.isVariableDeclaration(declaration) && declaration.initializer);
+  const code = ts.transpileModule(`const action = ${declaration.initializer.getText(app)};`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const pending = { current: false };
+  const saving: boolean[] = [];
+  const failed: boolean[] = [];
+  const action = new Function("form", "settings", "marketplaceSavePending", "setSavingMarketplace",
+    "setMarketplaceSaveFailed", "actions", `${code}\nreturn action;`)(
+    form, loaded ? {} : null, pending, (value: boolean) => saving.push(value),
+    (value: boolean) => failed.push(value), { saveSettingsValue: save },
+  );
+  return { action, pending, saving, failed };
+}
+
+test("single marketplace switch saves both flags and preserves unrelated settings", async () => {
+  for (const master of [false, true]) {
+    for (const marketplace of [false, true]) {
+      for (const enabled of [false, true]) {
+        const form = { revision: "current", enhancementsEnabled: master, codexAppPluginMarketplaceUnlock: marketplace,
+          codexAppPath: "fixture-path", relayProfiles: [{ id: "fixture" }], codexAppNativeFastUnlock: true };
+        const writes: unknown[] = [];
+        const fixture = marketplaceAction(form, async (next) => { writes.push(next); return next; });
+        await fixture.action(enabled);
+        assert.deepEqual(writes, [{ ...form, enhancementsEnabled: enabled, codexAppPluginMarketplaceUnlock: enabled }]);
+        assert.equal(form.enhancementsEnabled, master);
+        assert.equal(form.codexAppPluginMarketplaceUnlock, marketplace);
+        assert.deepEqual(fixture.saving, [true, false]);
+        assert.deepEqual(fixture.failed, [false, false]);
+        assert.equal(fixture.pending.current, false);
+      }
+    }
+  }
+});
+
+test("marketplace saving blocks duplicate writes and allows retry after failure", async () => {
+  let finish!: (value: unknown) => void;
+  let writes = 0;
+  const fixture = marketplaceAction({}, async () => {
+    writes++;
+    return new Promise((resolve) => { finish = resolve; });
+  });
+  const first = fixture.action(true);
+  await fixture.action(false);
+  assert.equal(writes, 1);
+  assert.equal(fixture.pending.current, true);
+  finish(null);
+  await first;
+  assert.equal(fixture.failed.at(-1), true);
+  assert.equal(fixture.pending.current, false);
+  const retry = fixture.action(true);
+  finish({});
+  await retry;
+  assert.equal(writes, 2);
+  assert.equal(fixture.failed.at(-1), false);
+
+  const unloaded = marketplaceAction({}, async () => assert.fail("settings not loaded"), false);
+  await unloaded.action(true);
+  assert.deepEqual(unloaded.saving, []);
 });
