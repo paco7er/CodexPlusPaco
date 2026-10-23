@@ -6481,77 +6481,6 @@ select {
   outline-offset: 2px;
 }
 
-.overview-health {
-  overflow: hidden;
-  border: 1px solid hsl(var(--hairline) / 0.18);
-  border-radius: 8px;
-  background: hsl(var(--card));
-}
-
-.overview-health > .overview-section-header {
-  min-height: 42px;
-  padding: 0 20px;
-  border-bottom: 1px solid hsl(var(--hairline) / 0.14);
-  background: hsl(var(--muted));
-}
-
-.overview-service-list {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.overview-health-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 3px 16px;
-  min-width: 0;
-  min-height: 76px;
-  padding: 14px 20px;
-}
-
-.overview-health-row + .overview-health-row {
-  border-top: 1px solid hsl(var(--hairline) / 0.14);
-}
-
-.overview-health-label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.overview-health-label svg {
-  flex-shrink: 0;
-  width: 30px;
-  height: 30px;
-  padding: 7px;
-  border-radius: 6px;
-  background: hsl(var(--brand-accent-2) / 0.08);
-  color: hsl(var(--brand-accent-2));
-}
-
-.overview-health-row:nth-child(2) .overview-health-label svg {
-  background: hsl(var(--muted));
-  color: hsl(var(--muted-foreground));
-}
-
-.overview-health-label strong {
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.overview-health-detail {
-  grid-column: 1 / -1;
-  grid-row: 2;
-  min-width: 0;
-  padding-left: 40px;
-  color: hsl(var(--muted-foreground));
-  font-size: 12px;
-  line-height: 1.65;
-  overflow-wrap: anywhere;
-}
-
 .overview-path-section {
   padding: 10px 20px 4px;
   border-top: 1px solid hsl(var(--hairline) / 0.14);
@@ -6657,11 +6586,6 @@ select {
   color: hsl(var(--muted-foreground));
 }
 
-.overview-health-row > [data-status] {
-  grid-column: 2;
-  grid-row: 1;
-}
-
 .overview-marketplace .feature-toggle > span {
   min-width: 0;
 }
@@ -6681,14 +6605,6 @@ select {
   }
 
   .overview-path-section {
-    padding-inline: 14px;
-  }
-
-  .overview-health > .overview-section-header {
-    padding-inline: 14px;
-  }
-
-  .overview-health-row {
     padding-inline: 14px;
   }
 

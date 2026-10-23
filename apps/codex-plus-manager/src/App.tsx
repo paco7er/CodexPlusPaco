@@ -42,7 +42,6 @@ import {
   Rocket,
   Save,
   Search,
-  Server,
   ShieldCheck,
   ShieldAlert,
   Stethoscope,
@@ -2339,7 +2338,6 @@ function OverviewScreen({ overview, settings, form, actions }: {
   form: BackendSettings;
   actions: Actions;
 }) {
-  const health = healthItems(overview);
   const savedCodexAppPath = settings?.settings.codexAppPath ?? "";
   const [savingMarketplace, setSavingMarketplace] = useState(false);
   const [marketplaceSaveFailed, setMarketplaceSaveFailed] = useState(false);
@@ -2434,23 +2432,6 @@ function OverviewScreen({ overview, settings, form, actions }: {
               <dd><code>{overview?.codex_app.path || t(overview ? "未检测到应用路径" : "等待状态检查")}</code></dd>
             </div>
           </dl>
-        </div>
-      </section>
-      <section className="overview-health" aria-labelledby="overview-health-title">
-        <header className="overview-section-header">
-          <h2 id="overview-health-title">{t("运行服务")}</h2>
-        </header>
-        <div className="overview-service-list" role="list">
-          {health.map((item) => (
-            <div className={`overview-health-row ${item.ok ? "ok" : "needs-fix"}`} role="listitem" key={item.title}>
-              <div className="overview-health-label">
-                <item.icon className="h-4 w-4" />
-                <strong>{item.title}</strong>
-              </div>
-              <span className="overview-health-detail">{item.detail}</span>
-              <Badge status={item.status} />
-            </div>
-          ))}
         </div>
       </section>
       <div className="overview-marketplace">
@@ -7476,24 +7457,6 @@ function isDegradedStatus(status?: Status) {
 function truncateSessionDeletePreview(value: string) {
   const normalized = value.trim();
   return normalized.length > 20 ? `${normalized.slice(0, 20)}...` : normalized;
-}
-
-function healthItems(overview: OverviewResult | null) {
-  const conversionEnabled = overview?.runtime_health?.protocol_conversion_enabled;
-  const conversionDetail = typeof conversionEnabled === "boolean"
-    ? t(conversionEnabled ? "协议转换已启用" : "协议转换未启用")
-    : undefined;
-  const serviceItem = (title: string, icon: LucideIcon, state: RuntimeServiceState | undefined, extraDetail?: string) => ({
-    title,
-    icon,
-    status: state?.status ?? "not_checked",
-    ok: ["running", "connected", "disabled"].includes(state?.status ?? ""),
-    detail: state ? [state.address, t(state.message), extraDetail].filter(Boolean).join(" · ") : t("等待状态检查"),
-  });
-  return [
-    serviceItem(t("本地服务器状态"), Server, overview?.runtime_health?.local_server, conversionDetail),
-    serviceItem(t("调试连接状态"), Cable, overview?.runtime_health?.debugger),
-  ];
 }
 
 function normalizeTypingEffect(value: unknown): TypingEffect {

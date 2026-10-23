@@ -14,21 +14,13 @@ function functionSource(name: string) {
   return declaration.getText(app);
 }
 
-test("overview merges the local server and protocol conversion and keeps the debugger", () => {
+test("overview retires service health details while keeping application status and refresh", () => {
   const screen = functionSource("OverviewScreen");
-  const items = functionSource("healthItems");
   assert.match(screen, /t\("Codex 版本"\)/);
   assert.match(screen, /t\("Codex 应用"\)/);
-  assert.doesNotMatch(screen + items, /management_shortcut|Codex\+\+ 应用入口|actions\.(checkHealth|repairShortcuts)/);
-  for (const title of ["本地服务器状态", "调试连接状态"]) {
-    assert.ok(items.includes(`t("${title}")`));
-  }
-  assert.match(items, /runtime_health/);
-  assert.match(items, /协议转换已启用/);
-  assert.match(items, /协议转换未启用/);
-  assert.doesNotMatch(items, /后台服务状态|代理服务器状态|proxy_server/);
-  assert.match(screen, /overview-service-list/);
-  assert.doesNotMatch(items, /codex_app\.path/);
+  assert.doesNotMatch(screen, /management_shortcut|Codex\+\+ 应用入口|actions\.(checkHealth|repairShortcuts)/);
+  assert.doesNotMatch(screen, /运行服务|本地服务器状态|调试连接状态|协议转换|overview-service-list|runtime_health/);
+  assert.doesNotMatch(text, /function healthItems\(/);
   assert.doesNotMatch(screen, /最近启动|LatestLaunch/);
   const entry = functionSource("App");
   assert.match(entry, /codexAppRunning \? actions\.restart\(\) : actions\.launch\(\)/);
@@ -41,7 +33,7 @@ test("overview merges the local server and protocol conversion and keeps the deb
   assert.match(screen, /aria-label=\{t\("刷新状态"\)\}/);
   assert.match(screen, /actions\.refreshCurrent/);
   const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
-  assert.match(css, /\.overview-service-list\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+  assert.doesNotMatch(css, /\.overview-health(?:\s*\{|[ >])|\.overview-health-(?:row|label|detail)\b|\.overview-service-list\b/);
 });
 
 test("overview shows the saved application path once and keeps both picker modes", () => {
@@ -76,10 +68,10 @@ function renderOverview(overview: unknown, savedPath: string | null = null) {
     t: (value: string) => value,
     useState: (value: unknown) => [value, () => {}],
     useRef: (value: unknown) => ({ current: value }),
-    ...Object.fromEntries(["Button", "Badge", "FeatureToggle", "RefreshCw", "Monitor", "Server", "Cable",
+    ...Object.fromEntries(["Button", "Badge", "FeatureToggle", "RefreshCw", "Monitor",
       "FolderOpen", "FileCode2", "Trash2"].map((name) => [name, name])),
   };
-  const code = ts.transpileModule(`${functionSource("healthItems")}\n${functionSource("OverviewScreen")}`, {
+  const code = ts.transpileModule(functionSource("OverviewScreen"), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React },
   }).outputText;
   const render = new Function(...Object.keys(scope), `${code}\nreturn OverviewScreen;`)(...Object.values(scope));
@@ -107,7 +99,7 @@ function visibleText(node: ElementFixture | string | null): string {
   return !node ? "" : typeof node === "string" ? node : node.children.map(visibleText).join("");
 }
 
-test("overview integrates application identity and paths above two compact service rows", () => {
+test("overview renders only application information and marketplace without exposing runtime services", () => {
   const path = `G:\\${"Long application directory\\".repeat(15)}Codex.exe`;
   const detectedPath = `${path}.detected`;
   for (const overview of [null, {
@@ -120,24 +112,21 @@ test("overview integrates application identity and paths above two compact servi
     },
   }]) {
     const { nodes, calls } = renderOverview(overview, path);
-    assert.equal(nodes.filter((node) => node.props.role === "listitem").length, 2);
+    assert.equal(nodes.filter((node) => node.props.role === "listitem").length, 0);
     assert.deepEqual(nodes.filter((node) => node.type === "Badge").map((node) => node.props.status),
-      overview ? ["found", "running", "connected"] : Array(3).fill("not_checked"));
+      [overview ? "found" : "not_checked"]);
     const appSection = nodes.find((node) => node.props.className === "overview-app-path");
     assert.ok(appSection);
     assert.match(visibleText(appSection), overview ? /版本 1\.2\.3/ : /未检测到版本/);
     const identity = nodes.find((node) => node.props.className === "overview-app-identity");
     assert.equal((identity?.children[0] as ElementFixture).type, "Monitor");
-    const labels = nodes.filter((node) => node.props.className === "overview-health-label");
-    assert.deepEqual(labels.map((node) => (node.children[0] as ElementFixture).type), ["Server", "Cable"]);
     const paths = nodes.filter((node) => node.type === "code");
     assert.equal(paths.length, 2);
     assert.equal(visibleText(paths[0]), path);
     assert.equal(visibleText(paths[1]), overview?.codex_app.path ?? "等待状态检查");
-    const serviceList = nodes.find((node) => node.props.className === "overview-service-list");
-    assert.ok(serviceList);
-    assert.ok(!visibleText(serviceList).includes(path), "paths are not repeated in the service list");
-    assert.ok(nodes.indexOf(appSection) < nodes.indexOf(serviceList));
+    assert.deepEqual(nodes[0].children.map((node) => (node as ElementFixture).props.className),
+      ["overview-app-path", "overview-marketplace"]);
+    assert.doesNotMatch(visibleText(nodes[0]), /运行服务|本地服务器|调试连接|协议转换|127\.0\.0\.1/);
     const tools = nodes.filter((node) => node.type === "Button");
     assert.deepEqual(tools.map((node) => node.props["aria-label"]), ["刷新状态", "选择应用目录", "选择 Codex.exe", "清除保存路径"]);
     for (const tool of tools) {
@@ -150,7 +139,7 @@ test("overview integrates application identity and paths above two compact servi
   }
 });
 
-test("missing applications and disconnected services preserve explicit states and automatic path detection", () => {
+test("missing applications preserve their state and automatic detection without service details", () => {
   const { nodes } = renderOverview({
     codex_version: null,
     codex_app: { status: "missing", path: null },
@@ -161,9 +150,9 @@ test("missing applications and disconnected services preserve explicit states an
     },
   }, "");
   assert.deepEqual(nodes.filter((node) => node.type === "Badge").map((node) => node.props.status),
-    ["missing", "stopped", "disconnected"]);
+    ["missing"]);
   assert.deepEqual(nodes.filter((node) => node.type === "code").map(visibleText), ["自动检测", "未检测到应用路径"]);
-  assert.match(nodes.map(visibleText).join(""), /协议转换未启用/);
+  assert.doesNotMatch(visibleText(nodes[0]), /本地服务器|调试|协议转换/);
 });
 
 test("path tools stay disabled while loading and clear requires a saved path", () => {
@@ -175,17 +164,12 @@ test("path tools stay disabled while loading and clear requires a saved path", (
   }
 });
 
-test("overview uses unframed service rows and wrapping application paths at every width", () => {
+test("overview preserves wrapping application paths at every width", () => {
   const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
-  assert.match(css, /\.overview-health-row\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto/);
-  assert.match(css, /\.overview-health-detail\s*\{[^}]*min-width:\s*0;[^}]*overflow-wrap:\s*anywhere/);
   assert.match(css, /\.overview-path-row\s*\{[^}]*grid-template-columns:\s*88px minmax\(0,\s*1fr\)/);
   assert.match(css, /\.overview-path-row dd\s*\{[^}]*min-width:\s*0/);
   assert.match(css, /\.overview-path-row code\s*\{[^}]*overflow-wrap:\s*anywhere/);
   assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.overview-path-section\s*\{[^}]*padding-inline:\s*14px/);
-  const serviceRow = css.match(/\.overview-health-row\s*\{([^}]+)\}/)?.[1];
-  assert.ok(serviceRow);
-  assert.doesNotMatch(serviceRow, /background:|box-shadow:|border-radius:/);
 });
 
 test("overview groups share rounded clipped boundaries without nested frames or extra effects", () => {
@@ -197,7 +181,7 @@ test("overview groups share rounded clipped boundaries without nested frames or 
     return match[1];
   };
   assert.match(rule(".overview-page"), /display:\s*grid;[^}]*gap:\s*20px/);
-  for (const selector of [".overview-app-path", ".overview-health", ".overview-marketplace"]) {
+  for (const selector of [".overview-app-path", ".overview-marketplace"]) {
     const body = rule(selector);
     assert.match(body, /border:\s*1px solid hsl\(var\(--hairline\) \/ 0\.18\)/);
     assert.match(body, /border-radius:\s*8px/);
@@ -208,10 +192,7 @@ test("overview groups share rounded clipped boundaries without nested frames or 
   assert.match(css, /\.overview-health-header-actions button,\s*\.overview-path-actions\s*\{[^}]*border-radius:\s*6px/);
   assert.match(rule(".overview-path-actions button"), /border-radius:\s*4px/);
   assert.doesNotMatch(rule(".overview-path-section"), /border-radius:|background:|box-shadow:/);
-  assert.match(rule(".overview-health > .overview-section-header"), /border-bottom:[^;]+;[^}]*background:\s*hsl\(var\(--muted\)\)/);
   assert.match(rule(".overview-path-section"), /padding:\s*10px 20px 4px;[^}]*border-top:/);
-  assert.match(rule(".overview-health-row"), /padding:\s*14px 20px/);
-  assert.match(rule(".overview-health-row + .overview-health-row"), /--hairline\) \/ 0\.14/);
   assert.match(rule(".overview-path-row + .overview-path-row"), /border-top:/);
 });
 
