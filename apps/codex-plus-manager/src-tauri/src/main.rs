@@ -1,6 +1,14 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
+#[cfg(any(windows, test))]
+mod portable;
+
 fn main() {
+    #[cfg(windows)]
+    if let Err(error) = portable::initialize() {
+        eprintln!("便携目录初始化失败：{error:#}");
+        std::process::exit(1);
+    }
     let args: Vec<_> = std::env::args_os().collect();
     // 旧 MCP 配置和安装器参数不能误启动 GUI，也不能退回执行已移除的功能。
     if retired_mode_requested(args.iter().map(|arg| arg.to_string_lossy())) {
