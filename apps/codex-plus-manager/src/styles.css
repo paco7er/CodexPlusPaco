@@ -6380,8 +6380,9 @@ select {
 }
 
 .overview-app-path {
-  border-top: 1px solid hsl(var(--hairline) / 0.18);
-  border-bottom: 1px solid hsl(var(--hairline) / 0.18);
+  overflow: hidden;
+  border: 1px solid hsl(var(--hairline) / 0.18);
+  border-radius: 8px;
   background: hsl(var(--card));
 }
 
@@ -6455,7 +6456,7 @@ select {
 .overview-health-header-actions button,
 .overview-path-actions {
   border: 1px solid hsl(var(--hairline) / 0.1);
-  border-radius: 8px;
+  border-radius: 6px;
   background: linear-gradient(hsl(var(--background) / 0.98), hsl(var(--background) / 0.72));
   box-shadow: inset 0 1px hsl(var(--background)), 0 1px 2px hsl(var(--hairline) / 0.04);
 }
@@ -6467,7 +6468,7 @@ select {
 
 .overview-path-actions button {
   border-color: transparent;
-  border-radius: 5px;
+  border-radius: 4px;
   background: transparent;
   box-shadow: none;
 }
@@ -6481,8 +6482,9 @@ select {
 }
 
 .overview-health {
-  border-top: 1px solid hsl(var(--hairline) / 0.18);
-  border-bottom: 1px solid hsl(var(--hairline) / 0.18);
+  overflow: hidden;
+  border: 1px solid hsl(var(--hairline) / 0.18);
+  border-radius: 8px;
   background: hsl(var(--card));
 }
 
@@ -6597,8 +6599,9 @@ select {
   align-items: center;
   gap: 16px;
   padding: 20px;
-  border-top: 1px solid hsl(var(--hairline) / 0.18);
-  border-bottom: 1px solid hsl(var(--hairline) / 0.18);
+  overflow: hidden;
+  border: 1px solid hsl(var(--hairline) / 0.18);
+  border-radius: 8px;
   background: hsl(var(--card));
 }
 

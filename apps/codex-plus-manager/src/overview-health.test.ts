@@ -188,7 +188,7 @@ test("overview uses unframed service rows and wrapping application paths at ever
   assert.doesNotMatch(serviceRow, /background:|box-shadow:|border-radius:/);
 });
 
-test("overview groups have distinct flat surfaces, visible separators and consistent insets", () => {
+test("overview groups share rounded clipped boundaries without nested frames or extra effects", () => {
   const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
   const rule = (selector: string) => {
     const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -199,11 +199,15 @@ test("overview groups have distinct flat surfaces, visible separators and consis
   assert.match(rule(".overview-page"), /display:\s*grid;[^}]*gap:\s*20px/);
   for (const selector of [".overview-app-path", ".overview-health", ".overview-marketplace"]) {
     const body = rule(selector);
-    assert.match(body, /border-top:\s*1px solid hsl\(var\(--hairline\) \/ 0\.18\)/);
-    assert.match(body, /border-bottom:\s*1px solid hsl\(var\(--hairline\) \/ 0\.18\)/);
+    assert.match(body, /border:\s*1px solid hsl\(var\(--hairline\) \/ 0\.18\)/);
+    assert.match(body, /border-radius:\s*8px/);
+    assert.match(body, /overflow:\s*hidden/);
     assert.match(body, /background:\s*hsl\(var\(--card\)\)/);
-    assert.doesNotMatch(body, /box-shadow:|border-radius:|backdrop-filter:|animation:/);
+    assert.doesNotMatch(body, /box-shadow:|backdrop-filter:|animation:/);
   }
+  assert.match(css, /\.overview-health-header-actions button,\s*\.overview-path-actions\s*\{[^}]*border-radius:\s*6px/);
+  assert.match(rule(".overview-path-actions button"), /border-radius:\s*4px/);
+  assert.doesNotMatch(rule(".overview-path-section"), /border-radius:|background:|box-shadow:/);
   assert.match(rule(".overview-health > .overview-section-header"), /border-bottom:[^;]+;[^}]*background:\s*hsl\(var\(--muted\)\)/);
   assert.match(rule(".overview-path-section"), /padding:\s*10px 20px 4px;[^}]*border-top:/);
   assert.match(rule(".overview-health-row"), /padding:\s*14px 20px/);

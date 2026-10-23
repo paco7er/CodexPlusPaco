@@ -17,7 +17,8 @@ function ruleBody(selector: string) {
 
 test("marketplace setting is a compact overview row with stable save status", () => {
   assert.match(ruleBody(".overview-marketplace"), /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto/);
-  assert.match(ruleBody(".overview-marketplace"), /border-top:/);
+  assert.match(ruleBody(".overview-marketplace"), /border:\s*1px solid/);
+  assert.match(ruleBody(".overview-marketplace"), /border-radius:\s*8px/);
   assert.match(ruleBody(".overview-marketplace-status"), /width:\s*5em/);
   assert.doesNotMatch(styles, /\.enhance-/);
 });
