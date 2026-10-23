@@ -6486,7 +6486,7 @@ select {
 .overview-path-row {
   display: grid;
   grid-template-columns: 88px minmax(0, 1fr);
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
   min-height: 40px;
   padding: 10px 0;
@@ -6505,6 +6505,13 @@ select {
 .overview-path-row dd {
   min-width: 0;
   margin: 0;
+}
+
+.overview-path-value {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
 }
 
 .overview-path-row code {

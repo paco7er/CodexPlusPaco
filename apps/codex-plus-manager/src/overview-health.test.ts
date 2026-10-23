@@ -36,7 +36,7 @@ test("overview retires service health details while keeping application status a
   assert.doesNotMatch(css, /\.overview-health(?:\s*\{|[ >])|\.overview-health-(?:row|label|detail)\b|\.overview-service-list\b/);
 });
 
-test("overview shows the saved application path once and keeps both picker modes", () => {
+test("overview shows the saved application path once and only offers the executable picker", () => {
   const screen = functionSource("OverviewScreen");
   assert.match(screen, /t\("Codex 应用路径"\)/);
   assert.match(screen, /settings\?\.settings\.codexAppPath/);
@@ -44,10 +44,10 @@ test("overview shows the saved application path once and keeps both picker modes
   assert.match(screen, /savedCodexAppPath \|\| t\("自动检测"\)/);
   assert.match(screen, /overview\?\.codex_app\.path/);
   assert.doesNotMatch(screen, /<Input|<Field|<Panel|<CardContent/);
-  assert.match(screen, /actions\.chooseCodexAppPath\("folder"\)/);
-  assert.match(screen, /actions\.chooseCodexAppPath\("file"\)/);
+  assert.doesNotMatch(screen, /选择应用目录|FolderOpen|chooseCodexAppPath\("(folder|file)"\)/);
+  assert.match(screen, /actions\.chooseCodexAppPath\(\)/);
   assert.match(screen, /actions\.clearCodexAppPath\(\)/);
-  assert.equal((screen.match(/disabled=\{!settings\}/g) ?? []).length, 2);
+  assert.equal((screen.match(/disabled=\{!settings\}/g) ?? []).length, 1);
   assert.match(screen, /disabled=\{!settings \|\| !savedCodexAppPath\}/);
   assert.match(functionSource("App"), /<OverviewScreen\s+overview=\{overview\}\s+settings=\{settings\}/);
 });
@@ -69,7 +69,7 @@ function renderOverview(overview: unknown, savedPath: string | null = null) {
     useState: (value: unknown) => [value, () => {}],
     useRef: (value: unknown) => ({ current: value }),
     ...Object.fromEntries(["Button", "Badge", "FeatureToggle", "RefreshCw", "Monitor",
-      "FolderOpen", "FileCode2", "Trash2"].map((name) => [name, name])),
+      "FileCode2", "Trash2"].map((name) => [name, name])),
   };
   const code = ts.transpileModule(functionSource("OverviewScreen"), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React },
@@ -81,7 +81,7 @@ function renderOverview(overview: unknown, savedPath: string | null = null) {
     form: { enhancementsEnabled: true, codexAppPluginMarketplaceUnlock: true },
     actions: {
       refreshCurrent: () => calls.push("refresh"),
-      chooseCodexAppPath: (mode: string) => calls.push(mode),
+      chooseCodexAppPath: () => calls.push("file"),
       clearCodexAppPath: () => calls.push("clear"),
     },
   });
@@ -128,14 +128,14 @@ test("overview renders only application information and marketplace without expo
       ["overview-app-path", "overview-marketplace"]);
     assert.doesNotMatch(visibleText(nodes[0]), /运行服务|本地服务器|调试连接|协议转换|127\.0\.0\.1/);
     const tools = nodes.filter((node) => node.type === "Button");
-    assert.deepEqual(tools.map((node) => node.props["aria-label"]), ["刷新状态", "选择应用目录", "选择 Codex.exe", "清除保存路径"]);
+    assert.deepEqual(tools.map((node) => node.props["aria-label"]), ["刷新状态", "重新选择 Codex.exe", "移除保存路径"]);
     for (const tool of tools) {
       assert.equal(tool.props.size, "icon");
       assert.equal(tool.props.title, tool.props["aria-label"]);
       assert.ok(!tool.props.disabled);
       tool.props.onClick();
     }
-    assert.deepEqual(calls, ["refresh", "folder", "file", "clear"]);
+    assert.deepEqual(calls, ["refresh", "file", "clear"]);
   }
 });
 
@@ -160,14 +160,31 @@ test("path tools stay disabled while loading and clear requires a saved path", (
     const { nodes } = renderOverview(null, savedPath);
     const tools = nodes.filter((node) => node.type === "Button").slice(1);
     assert.deepEqual(tools.map((node) => node.props.disabled),
-      [savedPath === null, savedPath === null, !savedPath]);
+      [savedPath === null, !savedPath]);
+    assert.equal(tools[0].props["aria-label"], savedPath ? "重新选择 Codex.exe" : "选择 Codex.exe");
   }
+});
+
+test("executable selection and removal belong to the saved-path row instead of the section header", () => {
+  const { nodes } = renderOverview(null, "G:\\Codex.exe");
+  const header = nodes.find((node) => node.props.className === "overview-section-header");
+  assert.ok(header);
+  assert.equal(header.children.length, 1);
+  const value = nodes.find((node) => node.props.className === "overview-path-value");
+  assert.ok(value);
+  assert.equal((value.children[0] as ElementFixture).type, "code");
+  const actions = value.children[1] as ElementFixture;
+  assert.equal(actions.props.className, "overview-path-actions");
+  assert.equal(actions.props.role, "group");
+  assert.deepEqual(actions.children.map((child) => (child as ElementFixture).props["aria-label"]),
+    ["重新选择 Codex.exe", "移除保存路径"]);
 });
 
 test("overview preserves wrapping application paths at every width", () => {
   const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
   assert.match(css, /\.overview-path-row\s*\{[^}]*grid-template-columns:\s*88px minmax\(0,\s*1fr\)/);
   assert.match(css, /\.overview-path-row dd\s*\{[^}]*min-width:\s*0/);
+  assert.match(css, /\.overview-path-value\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto/);
   assert.match(css, /\.overview-path-row code\s*\{[^}]*overflow-wrap:\s*anywhere/);
   assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.overview-path-section\s*\{[^}]*padding-inline:\s*14px/);
 });
@@ -314,11 +331,11 @@ test("path saves use shared settings persistence and refresh detection only afte
   assert.deepEqual(refreshes, [true]);
 });
 
-test("pickers preserve file filters, handle cancellation and never report a failed save as success", async () => {
-  const options: Array<{ directory: boolean; filters?: unknown }> = [];
+test("executable picker replaces the saved path, handles cancellation and never reports a failed save as success", async () => {
+  const options: Array<{ directory: boolean; multiple?: boolean; filters?: unknown }> = [];
   const paths: string[] = [];
   const notices: unknown[][] = [];
-  let selection: string | null = " G:\\Portable Codex\\app ";
+  let selection: string | null = " G:\\Portable Codex\\Codex.exe ";
   let succeeds = true;
   let pickerFails = false;
   const choose = action("chooseCodexAppPath", {
@@ -332,22 +349,29 @@ test("pickers preserve file filters, handle cancellation and never report a fail
     saveCodexAppPath: async (path: string) => { paths.push(path); return succeeds ? {} : null; },
     showNotice: (...args: unknown[]) => { notices.push(args); },
   });
-  await choose("folder");
-  assert.equal(options[0].directory, true);
-  assert.deepEqual(paths, ["G:\\Portable Codex\\app"]);
+  await choose();
+  assert.equal(options[0].directory, false);
+  assert.equal(options[0].multiple, false);
+  assert.deepEqual(options[0].filters, [{ name: "Codex 应用", extensions: ["exe"] }]);
+  assert.deepEqual(paths, ["G:\\Portable Codex\\Codex.exe"]);
   assert.equal(notices.length, 1);
+  selection = "G:\\Another Codex\\Codex.exe";
+  await choose();
+  assert.deepEqual(paths, ["G:\\Portable Codex\\Codex.exe", "G:\\Another Codex\\Codex.exe"]);
+  assert.equal(notices.length, 2);
   succeeds = false;
-  await choose("file");
-  assert.equal(options[1].directory, false);
-  assert.deepEqual(options[1].filters, [{ name: "Codex 应用", extensions: ["exe", "app"] }]);
-  assert.equal(notices.length, 1);
+  await choose();
+  assert.equal(notices.length, 2);
   selection = null;
-  await choose("folder");
-  assert.equal(paths.length, 2);
+  await choose();
+  assert.equal(paths.length, 3);
+  selection = " ";
+  await choose();
+  assert.equal(paths.length, 3);
   pickerFails = true;
-  await choose("file");
-  assert.equal(notices[1][2], "failed");
-  assert.match(String(notices[1][1]), /picker unavailable/);
+  await choose();
+  assert.equal(notices[2][2], "failed");
+  assert.match(String(notices[2][1]), /picker unavailable/);
 });
 
 test("clearing the saved path restores automatic detection only after persistence succeeds", async () => {

@@ -35,7 +35,6 @@ import {
   MessageCircle,
   Monitor,
   FileCode2,
-  FolderOpen,
   Network,
   Plus,
   RefreshCw,
@@ -1906,19 +1905,15 @@ export function App() {
       saveSettingsValue,
       refreshSettings,
 
-      chooseCodexAppPath: async (mode: "folder" | "file") => {
+      chooseCodexAppPath: async () => {
         let selected: unknown;
         try {
-          selected = await open(
-            mode === "folder"
-              ? { directory: true, multiple: false, title: t("选择 Codex 应用目录") }
-              : {
-                  directory: false,
-                  multiple: false,
-                  title: t("选择 Codex.exe 或 Codex.app"),
-                  filters: [{ name: t("Codex 应用"), extensions: ["exe", "app"] }],
-                },
-          );
+          selected = await open({
+            directory: false,
+            multiple: false,
+            title: t("选择 Codex.exe"),
+            filters: [{ name: t("Codex 应用"), extensions: ["exe"] }],
+          });
         } catch (error) {
           // Surface plugin failures (e.g. missing capability permission) so the
           // buttons no longer appear unresponsive — see #345.
@@ -2288,7 +2283,7 @@ type Actions = {
   saveSettingsValue: (settings: BackendSettings, silent?: boolean) => Promise<BackendSettings | null>;
   refreshSettings: (silent?: boolean) => Promise<BackendSettings | null>;
 
-  chooseCodexAppPath: (mode: "folder" | "file") => Promise<void>;
+  chooseCodexAppPath: () => Promise<void>;
   clearCodexAppPath: () => Promise<void>;
   syncProvidersNow: () => Promise<void>;
   recoverProviderSync: () => Promise<void>;
@@ -2339,6 +2334,7 @@ function OverviewScreen({ overview, settings, form, actions }: {
   actions: Actions;
 }) {
   const savedCodexAppPath = settings?.settings.codexAppPath ?? "";
+  const choosePathLabel = t(savedCodexAppPath ? "重新选择 Codex.exe" : "选择 Codex.exe");
   const [savingMarketplace, setSavingMarketplace] = useState(false);
   const [marketplaceSaveFailed, setMarketplaceSaveFailed] = useState(false);
   const marketplaceSavePending = useRef(false);
@@ -2389,43 +2385,35 @@ function OverviewScreen({ overview, settings, form, actions }: {
         <div className="overview-path-section">
           <header className="overview-section-header">
             <h3>{t("应用路径")}</h3>
-            <div className="overview-path-actions" role="group" aria-label={t("Codex 应用路径")}>
-              <Button
-                disabled={!settings}
-                aria-label={t("选择应用目录")}
-                title={t("选择应用目录")}
-                size="icon"
-                variant="outline"
-                onClick={() => void actions.chooseCodexAppPath("folder")}
-              >
-                <FolderOpen className="h-4 w-4" />
-              </Button>
-              <Button
-                disabled={!settings}
-                aria-label={t("选择 Codex.exe")}
-                title={t("选择 Codex.exe")}
-                size="icon"
-                variant="outline"
-                onClick={() => void actions.chooseCodexAppPath("file")}
-              >
-                <FileCode2 className="h-4 w-4" />
-              </Button>
-              <Button
-                disabled={!settings || !savedCodexAppPath}
-                aria-label={t("清除保存路径")}
-                title={t("清除保存路径")}
-                size="icon"
-                variant="ghost"
-                onClick={() => void actions.clearCodexAppPath()}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
           </header>
           <dl className="overview-path-list">
             <div className="overview-path-row">
               <dt>{t("保存路径")}</dt>
-              <dd><code>{savedCodexAppPath || t("自动检测")}</code></dd>
+              <dd className="overview-path-value">
+                <code>{savedCodexAppPath || t("自动检测")}</code>
+                <div className="overview-path-actions" role="group" aria-label={t("Codex 应用路径")}>
+                  <Button
+                    disabled={!settings}
+                    aria-label={choosePathLabel}
+                    title={choosePathLabel}
+                    size="icon"
+                    variant="outline"
+                    onClick={() => void actions.chooseCodexAppPath()}
+                  >
+                    <FileCode2 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    disabled={!settings || !savedCodexAppPath}
+                    aria-label={t("移除保存路径")}
+                    title={t("移除保存路径")}
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => void actions.clearCodexAppPath()}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </dd>
             </div>
             <div className="overview-path-row">
               <dt>{t("当前识别")}</dt>
