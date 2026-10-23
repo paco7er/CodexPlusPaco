@@ -459,28 +459,6 @@ body {
   font-size: 12px;
 }
 
-@media (max-width: 760px) {
-  .overview-app-path .panel-head {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-  }
-
-  .overview-app-path .panel-head p {
-    max-width: 100%;
-    text-align: left;
-  }
-
-  .overview-app-path .status-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px;
-  }
-
-  .overview-app-path .status-row code {
-    grid-column: 1 / -1;
-  }
-}
-
 .metric-list {
   display: grid;
   gap: 8px;
@@ -3009,41 +2987,6 @@ details.relay-fold[open] > .relay-fold-body {
 .guide-list {
   display: grid;
   gap: 8px;
-}
-
-.overview-health-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.panel-head.overview-health-header {
-  align-items: center;
-}
-
-.overview-health-header-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  min-width: 0;
-}
-
-.overview-health-header .overview-health-header-actions p {
-  max-width: none;
-}
-
-.overview-health-grid .health-item,
-.overview-health-grid .health-item > div {
-  min-width: 0;
-}
-
-.overview-health-grid .health-item span {
-  overflow-wrap: anywhere;
-}
-
-@media (max-width: 760px) {
-  .overview-health-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 .feature-switch-grid {
@@ -6343,12 +6286,121 @@ select {
   }
 }
 
+.overview-page {
+  width: min(100%, 1120px);
+  min-width: 0;
+  margin-inline: auto;
+}
+
+.overview-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+}
+
+.overview-section-header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.overview-health-header-actions,
+.overview-path-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+.overview-health-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.overview-health-row {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 58px;
+  padding: 14px 0;
+  border-top: 1px solid hsl(var(--border) / 0.65);
+}
+
+.overview-health-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.overview-health-label svg {
+  flex-shrink: 0;
+}
+
+.overview-health-row.ok svg {
+  color: hsl(var(--status-success));
+}
+
+.overview-health-row.needs-fix svg {
+  color: hsl(var(--status-warning));
+}
+
+.overview-health-label strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.overview-health-detail {
+  min-width: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.overview-app-path {
+  margin-top: 24px;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.overview-app-path .status-row {
+  grid-template-columns: 168px minmax(0, 1fr) auto;
+  gap: 16px;
+  min-height: 54px;
+  padding: 14px 0;
+}
+
+.overview-app-path .status-row:last-child {
+  border-bottom: 0;
+}
+
+.overview-app-path .status-row > span:first-child {
+  font-size: 13px;
+}
+
+.overview-app-path .status-row > .inline-flex {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.overview-app-path .status-row code {
+  grid-column: 2;
+  grid-row: 1;
+  line-height: 1.65;
+  user-select: text;
+}
+
 .overview-marketplace {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
-  padding: 14px 18px;
+  margin-top: 24px;
+  padding: 20px 0;
   border-top: 1px solid hsl(var(--border));
 }
 
@@ -6381,9 +6433,31 @@ select {
 }
 
 @media (max-width: 760px) {
+  .overview-health-row,
+  .overview-app-path .status-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 12px;
+  }
+
+  .overview-health-row > .inline-flex,
+  .overview-app-path .status-row > .inline-flex {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .overview-health-detail,
+  .overview-app-path .status-row code {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .overview-health-detail {
+    padding-left: 26px;
+  }
+
   .overview-marketplace {
     column-gap: 10px;
-    padding: 12px 0;
+    padding: 18px 0;
   }
 
   .overview-marketplace .feature-toggle {

@@ -2358,77 +2358,84 @@ function OverviewScreen({ overview, settings, form, actions }: {
     }
   };
   return (
-    <>
-    <Panel>
-            <CardHeader className="panel-head overview-health-header">
-              <CardTitle>{t("健康检查")}</CardTitle>
-              <div className="overview-health-header-actions">
-                <CardDescription>{t("Codex 应用与本地运行状态")}</CardDescription>
-                <Button
-                  aria-label={t("刷新状态")}
-                  title={t("刷新状态")}
-                  size="icon"
-                  variant="outline"
-                  className="shrink-0"
-                  onClick={() => void actions.refreshCurrent()}
-                >
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="health-grid overview-health-grid">
-                <div className={`health-item ${overview?.codex_version ? "ok" : "needs-fix"}`}>
-                  {overview?.codex_version ? <CheckCircle2 className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
-                  <div>
-                    <strong>{t("Codex 版本")}</strong>
-                    <span>{overview?.codex_version ?? t("未检测到 Codex 应用版本。")}</span>
-                  </div>
-                  <Badge status={overview?.codex_version ? "ok" : "not_checked"} />
-                </div>
-                {health.map((item) => (
-                  <div className={`health-item ${item.ok ? "ok" : "needs-fix"}`} key={item.title}>
-                    {item.ok ? <CheckCircle2 className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
-                    <div>
-                      <strong>{item.title}</strong>
-                      <span>{item.detail}</span>
-                    </div>
-                    <Badge status={item.status} />
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Panel>
-      <Panel className="overview-app-path">
-        <CardHead title={t("Codex 应用路径")} detail={t("免安装版或解包版只需要选择一次，之后从界面启动会自动复用")} />
-        <CardContent>
-          <div className="status-table">
-            <StatusRow title={t("保存路径")} status={savedCodexAppPath ? "ok" : "not_checked"} path={savedCodexAppPath || null} />
-            <StatusRow title={t("当前识别")} status={overview?.codex_app.status} path={overview?.codex_app.path} />
+    <div className="overview-page">
+      <section className="overview-health" aria-labelledby="overview-health-title">
+        <header className="overview-section-header">
+          <h2 id="overview-health-title">{t("健康检查")}</h2>
+          <div className="overview-health-header-actions">
+            <Button
+              aria-label={t("刷新状态")}
+              title={t("刷新状态")}
+              size="icon"
+              variant="ghost"
+              onClick={() => void actions.refreshCurrent()}
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
           </div>
-          <Field label={t("保存的应用路径")}>
-            <Input
-              value={savedCodexAppPath}
-              placeholder={t("选择 Codex.exe、Codex.app、app 目录或解包目录")}
-              readOnly
-            />
-          </Field>
-          <Toolbar>
-            <Button disabled={!settings} onClick={() => void actions.chooseCodexAppPath("folder")}>
+        </header>
+        <div className="overview-health-grid" role="list">
+          <div className={`overview-health-row ${overview?.codex_version ? "ok" : "needs-fix"}`} role="listitem">
+            <div className="overview-health-label">
+              {overview?.codex_version ? <CheckCircle2 className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+              <strong>{t("Codex 版本")}</strong>
+            </div>
+            <span className="overview-health-detail">{overview?.codex_version ?? t("未检测到 Codex 应用版本。")}</span>
+            <Badge status={overview?.codex_version ? "ok" : "not_checked"} />
+          </div>
+          {health.map((item) => (
+            <div className={`overview-health-row ${item.ok ? "ok" : "needs-fix"}`} role="listitem" key={item.title}>
+              <div className="overview-health-label">
+                {item.ok ? <CheckCircle2 className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+                <strong>{item.title}</strong>
+              </div>
+              <span className="overview-health-detail">{item.detail}</span>
+              <Badge status={item.status} />
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="overview-app-path" aria-labelledby="overview-path-title">
+        <header className="overview-section-header">
+          <h2 id="overview-path-title">{t("Codex 应用路径")}</h2>
+          <div className="overview-path-actions" role="group" aria-label={t("Codex 应用路径")}>
+            <Button
+              disabled={!settings}
+              aria-label={t("选择应用目录")}
+              title={t("选择应用目录")}
+              size="icon"
+              variant="outline"
+              onClick={() => void actions.chooseCodexAppPath("folder")}
+            >
               <FolderOpen className="h-4 w-4" />
-              {t("选择应用目录")}
             </Button>
-            <Button disabled={!settings} variant="secondary" onClick={() => void actions.chooseCodexAppPath("file")}>
+            <Button
+              disabled={!settings}
+              aria-label={t("选择 Codex.exe")}
+              title={t("选择 Codex.exe")}
+              size="icon"
+              variant="outline"
+              onClick={() => void actions.chooseCodexAppPath("file")}
+            >
               <FileCode2 className="h-4 w-4" />
-              {t("选择 Codex.exe")}
             </Button>
-            <Button disabled={!settings} variant="secondary" onClick={() => void actions.clearCodexAppPath()}>
+            <Button
+              disabled={!settings || !savedCodexAppPath}
+              aria-label={t("清除保存路径")}
+              title={t("清除保存路径")}
+              size="icon"
+              variant="ghost"
+              onClick={() => void actions.clearCodexAppPath()}
+            >
               <Trash2 className="h-4 w-4" />
-              {t("清除保存路径")}
             </Button>
-          </Toolbar>
-        </CardContent>
-      </Panel>
+          </div>
+        </header>
+        <div className="status-table">
+          <StatusRow title={t("保存路径")} status={savedCodexAppPath ? "ok" : "not_checked"} path={savedCodexAppPath || null} />
+          <StatusRow title={t("当前识别")} status={overview?.codex_app.status} path={overview?.codex_app.path} />
+        </div>
+      </section>
       <div className="overview-marketplace">
         <FeatureToggle
           title={t("插件市场解锁")}
@@ -2441,7 +2448,7 @@ function OverviewScreen({ overview, settings, form, actions }: {
           {!settings ? t("加载中...") : savingMarketplace ? t("保存中...") : marketplaceSaveFailed ? t("保存失败") : t("已保存")}
         </span>
       </div>
-    </>
+    </div>
   );
 }
 

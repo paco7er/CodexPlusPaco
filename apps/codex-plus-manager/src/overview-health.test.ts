@@ -40,21 +40,113 @@ test("overview merges the local server and protocol conversion and keeps the deb
   assert.match(screen, /aria-label=\{t\("刷新状态"\)\}/);
   assert.match(screen, /actions\.refreshCurrent/);
   const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
-  assert.match(css, /\.overview-health-grid\s*\{\s*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(css, /\.overview-health-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
 });
 
-test("overview contains the saved application path and both picker modes", () => {
+test("overview shows the saved application path once and keeps both picker modes", () => {
   const screen = functionSource("OverviewScreen");
   assert.match(screen, /t\("Codex 应用路径"\)/);
   assert.match(screen, /settings\?\.settings\.codexAppPath/);
   assert.match(screen, /StatusRow title=\{t\("当前识别"\)\} status=\{overview\?\.codex_app\.status\}/);
-  assert.match(screen, /value=\{savedCodexAppPath\}/);
-  assert.match(screen, /readOnly/);
+  assert.match(screen, /path=\{savedCodexAppPath \|\| null\}/);
+  assert.doesNotMatch(screen, /<Input|<Field|<Panel|<CardContent/);
   assert.match(screen, /actions\.chooseCodexAppPath\("folder"\)/);
   assert.match(screen, /actions\.chooseCodexAppPath\("file"\)/);
   assert.match(screen, /actions\.clearCodexAppPath\(\)/);
-  assert.equal((screen.match(/disabled=\{!settings\}/g) ?? []).length, 3);
+  assert.equal((screen.match(/disabled=\{!settings\}/g) ?? []).length, 2);
+  assert.match(screen, /disabled=\{!settings \|\| !savedCodexAppPath\}/);
   assert.match(functionSource("App"), /<OverviewScreen\s+overview=\{overview\}\s+settings=\{settings\}/);
+});
+
+type ElementFixture = {
+  type: string;
+  props: Record<string, any>;
+  children: Array<ElementFixture | string | null>;
+};
+
+function renderOverview(overview: unknown, savedPath: string | null = null) {
+  const calls: string[] = [];
+  const scope = {
+    React: {
+      createElement: (type: string, props: Record<string, unknown> | null, ...children: ElementFixture["children"]) =>
+        ({ type, props: props ?? {}, children: children.flat(Infinity) }),
+    },
+    t: (value: string) => value,
+    useState: (value: unknown) => [value, () => {}],
+    useRef: (value: unknown) => ({ current: value }),
+    ...Object.fromEntries(["Button", "Badge", "StatusRow", "FeatureToggle", "RefreshCw", "CheckCircle2", "Bell",
+      "FolderOpen", "FileCode2", "Trash2"].map((name) => [name, name])),
+  };
+  const code = ts.transpileModule(`${functionSource("healthItems")}\n${functionSource("OverviewScreen")}`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React },
+  }).outputText;
+  const render = new Function(...Object.keys(scope), `${code}\nreturn OverviewScreen;`)(...Object.values(scope));
+  const root: ElementFixture = render({
+    overview,
+    settings: savedPath === null ? null : { settings: { codexAppPath: savedPath } },
+    form: { enhancementsEnabled: true, codexAppPluginMarketplaceUnlock: true },
+    actions: {
+      refreshCurrent: () => calls.push("refresh"),
+      chooseCodexAppPath: (mode: string) => calls.push(mode),
+      clearCodexAppPath: () => calls.push("clear"),
+    },
+  });
+  const nodes: ElementFixture[] = [];
+  const visit = (node: ElementFixture | string | null) => {
+    if (!node || typeof node !== "object") return;
+    nodes.push(node);
+    node.children.forEach(visit);
+  };
+  visit(root);
+  return { nodes, calls };
+}
+
+test("overview renders all health states, full paths and accessible compact tools", () => {
+  const path = `G:\\${"Long application directory\\".repeat(15)}Codex.exe`;
+  for (const overview of [null, {
+    codex_version: "1.2.3",
+    codex_app: { status: "found", path },
+    runtime_health: {
+      local_server: { status: "running", address: "http://127.0.0.1:57321", message: "ready" },
+      debugger: { status: "connected", address: "http://127.0.0.1:9229", message: "connected" },
+      protocol_conversion_enabled: true,
+    },
+  }]) {
+    const { nodes, calls } = renderOverview(overview, path);
+    assert.equal(nodes.filter((node) => node.props.role === "listitem").length, 4);
+    assert.deepEqual(nodes.filter((node) => node.type === "Badge").map((node) => node.props.status),
+      overview ? ["ok", "found", "running", "connected"] : Array(4).fill("not_checked"));
+    const paths = nodes.filter((node) => node.type === "StatusRow");
+    assert.equal(paths.length, 2);
+    assert.equal(paths[0].props.path, path);
+    assert.equal(paths[1].props.path, overview?.codex_app.path);
+    const tools = nodes.filter((node) => node.type === "Button");
+    assert.deepEqual(tools.map((node) => node.props["aria-label"]), ["刷新状态", "选择应用目录", "选择 Codex.exe", "清除保存路径"]);
+    for (const tool of tools) {
+      assert.equal(tool.props.size, "icon");
+      assert.equal(tool.props.title, tool.props["aria-label"]);
+      assert.ok(!tool.props.disabled);
+      tool.props.onClick();
+    }
+    assert.deepEqual(calls, ["refresh", "folder", "file", "clear"]);
+  }
+});
+
+test("path tools stay disabled while loading and clear requires a saved path", () => {
+  for (const savedPath of [null, "", "G:\\Codex.exe"]) {
+    const { nodes } = renderOverview(null, savedPath);
+    const tools = nodes.filter((node) => node.type === "Button").slice(1);
+    assert.deepEqual(tools.map((node) => node.props.disabled),
+      [savedPath === null, savedPath === null, !savedPath]);
+  }
+});
+
+test("overview layout uses unframed rows with wrapping details and a narrow stacked layout", () => {
+  const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+  assert.match(css, /\.overview-health-row\s*\{[^}]*grid-template-columns:\s*168px minmax\(0,\s*1fr\) auto/);
+  assert.match(css, /\.overview-health-detail\s*\{[^}]*min-width:\s*0;[^}]*overflow-wrap:\s*anywhere/);
+  assert.match(css, /@media \(max-width: 760px\)\s*\{\s*\.overview-health-row,\s*\.overview-app-path \.status-row\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto/);
+  assert.match(css, /\.overview-health-detail,\s*\.overview-app-path \.status-row code\s*\{[^}]*grid-column:\s*1 \/ -1/);
 });
 
 test("retired settings commands are not exposed while shared configuration remains", () => {
