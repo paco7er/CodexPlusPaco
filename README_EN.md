@@ -1,193 +1,147 @@
-# Codex++
-
 <p align="center">
-  <img src="docs/images/codex-plus-plus.png" alt="Codex++ icon" width="160">
+  <img src="docs/images/codex-plus-plus.png" alt="Codex++ icon" width="88">
 </p>
 
-<p align="center">
-  <a href="README.md">中文</a> | English
-</p>
+# CodexPlusPaco
 
-<p align="center">
-  <img alt="Release" src="https://img.shields.io/github/v/release/BigPizzaV3/CodexPlusPlus">
-  <img alt="Stars" src="https://img.shields.io/github/stars/BigPizzaV3/CodexPlusPlus">
-  <img alt="License" src="https://img.shields.io/github/license/BigPizzaV3/CodexPlusPlus">
-  <img alt="Rust" src="https://img.shields.io/badge/rust-1.85%2B-orange">
-  <img alt="Tauri" src="https://img.shields.io/badge/tauri-2.x-24C8DB">
-</p>
+A personal customization of [CodexPlusPlus](https://github.com/BigPizzaV3/CodexPlusPlus). The application is still named **Codex++**. This fork focuses on launching the Codex desktop app, direct providers, per-model context settings, MCP, Skills, and local sessions.
 
-Codex++ is a unified management application for the OpenAI Codex / ChatGPT desktop app. Double-clicking opens its window; the official app is started from that window. It uses the Chromium DevTools Protocol and an embedded runtime for provider switching, protocol conversion, session management, and UI enhancements without modifying the official app's `app.asar` or installation files.
+The custom release is **v1.11.1.S**, delivered as a **Windows x64 portable ZIP**. It selectively incorporates upstream v1.11.1 fixes rather than mirroring the full upstream feature set. The executable and project manifests still report the internal version `1.10.1`.
 
-This branch retains the Codex workspace only. The application rail, recommendations, cache cleanup, agent collaboration, About and updates, global settings, language switching, and manager theme switching have been removed. The manager uses Chinese and a fixed light theme; existing configuration and task data are not automatically deleted.
+[中文](README.md) · [Fork releases](https://github.com/paco7er/CodexPlusPaco/releases) · [Report an issue](https://github.com/paco7er/CodexPlusPaco/issues)
 
-## Quick Start
+## Current Scope
 
-Download the latest installer from [GitHub Releases](https://github.com/BigPizzaV3/CodexPlusPlus/releases):
+The manager has a fixed Chinese, light-theme interface with five pages:
 
-- Windows: `CodexPlusPlus-*-windows-x64-setup.exe`
-- macOS Intel and Apple Silicon: `CodexPlusPlus-*-macos-universal.dmg`
-
-After installation, one `Codex++` entry is available. Double-click it to open the window, verify the detected official app path, configure a provider and optional enhancements, then click **Launch** to start the official app with your saved configuration.
-
-The Windows installer creates Desktop and Start Menu shortcuts. On macOS, drag `Codex++.app` from the DMG into Applications.
-
-**Upgrading an older macOS version:** The old two-app updater cannot install the new single-app package. Quit both old apps, then drag `Codex++.app` from the new DMG into Applications and replace the old app with the same name. Remove the old `Codex++ 管理工具.app`. Existing settings and session data are preserved.
-
-## Community and Support
-
-Join <a href="https://qm.qq.com/q/5h3pxpxg7S">Codex++ community group 4 (QQ group: 1127858981)</a> to report issues, share feedback, or suggest features.
-
-Telegram: <https://t.me/CodexPlusPlus>
-
-Friendly link: <a href="https://linux.do">LINUX DO</a>
-
-## Current Features
-
-| Area | Capabilities |
+| Page | Capabilities |
 | --- | --- |
-| Provider configuration | Official login, official login plus API, pure API, and aggregate providers; Grok provider management; Responses / Chat Completions; model tests, model discovery, Provider Doctor, cc-switch and deep-link imports |
-| Models and context | Per-model context windows, auto-compact limits, `model_catalog_json`, model metadata import (models.json), shared config, and per-provider MCP, Skill, and Plugin selection |
-| Session management | Local session scanning, bulk deletion, Markdown export, token usage history, Provider metadata sync, and backups |
-| Codex enhancements | Plugin marketplace and model whitelist handling, session actions, paste fix, API-key dictation, conversation width and scroll restore, native Fast unlock, Goals, and next-step suggestions |
-| Native Fast for API keys | Opt in to Codex's native Standard / Fast controls for models configured with Fast (priority) support; disabled by default, with availability and pricing determined by the provider |
-| Development workflow | Project move and thread IDs |
-| Usage status line | Live generation speed, cache hit rate, and context usage below the composer, read from local Codex session records; the context share follows the per-model window Codex sees |
-| Request shock absorption | Absorb upstream overload errors (`server_overloaded`, `server_is_overloaded`, `at capacity`, ...) at the proxy with backoff retries. Existing shock absorption settings remain effective, and the composer status line shows in-flight request status |
-| Overview | Application path selection, app detection, and runtime health checks |
+| Overview (概览) | Codex version and app status, executable path selection/replacement/removal, plugin marketplace unlock |
+| Providers (供应商配置) | Direct Responses providers, official login or pure API configuration, model discovery and tests, Provider Doctor |
+| MCP | Local MCP configuration |
+| Skills | Local skills, repositories, and installation management |
+| Sessions (会话管理) | Project/time views, search, session details, batch archiving, individual and bulk deletion |
 
-Every UI enhancement is independently configurable. Disabling the global enhancement switch still leaves Codex++ available as a provider and launch manager.
+The provider list **starts empty**. Loading settings does not import the local Codex configuration as a "system default" provider. Saved providers survive upgrades; existing entries are not automatically removed. New provider drafts enter the list only when saved.
 
-**Usage status line** shows live generation speed, cache hit rate, and context usage below the composer. Values come from the session records Codex writes locally, using the same definitions as Codex: cache hit is `cached_input_tokens / input_tokens`, and context usage compares the latest call's tokens against the per-model window Codex sees from the generated model catalog. It is on by default and can be disabled under Codex Enhancements → General → Usage status line. Speed is throughput measured between adjacent token events, so it includes tool execution time and reads below raw decode speed.
+The only retained Codex UI enhancement is **plugin marketplace unlock**, controlled from Overview. It attempts to display the full plugin list in API-key mode; it does not bypass paid access, subscriptions, or server-side authorization.
 
-<p align="center">
-  <img src="docs/images/usage-statusline.png" alt="Usage status line below the composer: 51 tok/s, cache hit 99.9%, context usage 19%" width="100%">
-</p>
+### Differences From Upstream
 
-This custom branch removes Codex multi-launch, WeChat connection, skin management, proxy settings, request logs, and extension management. Request history is no longer written to disk, and user scripts no longer load automatically. Existing configuration, sessions, historical logs, and user files are preserved. Protocol conversion, standalone proxies, and in-flight request status used by provider configuration remain available.
+- No installer, in-app updater, recommendations, Maintenance page, or separate Codex Enhancements page.
+- The provider list only displays non-aggregate Responses profiles without model routes. Legacy Chat Completions, routed, and aggregate profiles remain stored; hiding them does not delete them. There is no aggregate-provider creation entry.
+- Multi-launch, WeChat integration, skins, desktop widgets, dictation, typing effects, usage status lines, and forced native Fast unlock are not offered. Retained legacy enhancement fields do not reactivate those features.
+- User scripts no longer load automatically. The extension marketplace, proxy settings, and request-log pages are removed.
 
+Provider configuration still uses local protocol conversion and runtime services when needed. "Direct" describes the manager's provider workflow, not a guarantee that every request bypasses local services. Retained upstream modules support compatibility and are not a list of enabled features.
 
-Enable the optional Codex usage widget under Codex Enhancements → General → Widgets and pets. It includes the original character, modular bubble editor, sound library and waveform trimming, character/image/audio management, edge snapping and alerts. View session and local usage, observed subscription windows and costs estimated from configured prices, or connect provider balance and quota templates. See the [widget guide](docs/whale-widget.md) and [feature verification](docs/whale-parity.md).
+## Portable Quick Start
 
-**Whale widget source and credits:** The original features, complete UI engine, character, built-in sounds and animations come from [MeteorNOX/DeepSeek-Balance-Whale-Widget](https://github.com/MeteorNOX/DeepSeek-Balance-Whale-Widget), adapted here as a built-in Codex++ feature. The Codex desktop architecture also references [Yang-huai406/Codex-Whale-Public](https://github.com/Yang-huai406/Codex-Whale-Public). The upstream [LICENSE](assets/inject/upstream/whale-widget/LICENSE) and [PROVENANCE.md](assets/inject/upstream/whale-widget/PROVENANCE.md) are preserved; the media assets are not claimed as original work by this project.
+1. Prepare the official Codex desktop app and a working Microsoft Edge WebView2 Runtime.
+2. Extract `CodexPlusPlus-v1.11.1.S-windows-x64-portable.zip` into a writable directory. Keep `portable.flag` next to `codex-plus-plus.exe`, then run the EXE.
+3. In Overview, select `Codex.exe` directly rather than its folder. Re-selecting replaces the saved path; removing it restores automatic detection.
+4. To manage a provider, add one manually and configure its URL, key, protocol, and models. Save it, then switch when needed. Leaving the list empty continues to use Codex's existing configuration.
+5. Set plugin marketplace unlock in Overview if desired, then click "启动 Codex". Restart Codex from Codex++ after changing injection-related settings.
 
-## Provider Modes
+Opening the manager or launching Codex does not automatically switch providers or rewrite Codex's `config.toml` / `auth.json`. With provider switching enabled, explicitly switching providers or saving the active provider can apply configuration to these files. Disabling provider switching prevents these provider-apply writes.
 
-Official login, mixed API, and pure API are stored and switched separately:
+Closing the window minimizes the manager to the system tray. Exit the older Codex++ instance from its tray before running the portable edition: installed and portable editions share the default single-instance ports.
 
-| Mode | Purpose | Authentication boundary |
-| --- | --- | --- |
-| Official login | Use only the official ChatGPT / Codex account | Removes custom providers and API keys while preserving official login state |
-| Official login + API | Keep official account features and plugins while routing model requests to a compatible API | Stores the key as a provider bearer token, not in pure API `auth.json` |
-| Pure API | Use a custom Base URL and key without an official account | Maintains independent `config.toml` and API-key auth without mixing official credentials |
-| Aggregate provider | Two types: Failover (fail over or rotate across providers) and Model aggregation (bind catalog models to specific members) | Members can be ordinary API providers or signed-in official accounts; Failover supports failover, conversation round-robin, request round-robin, and weighted round-robin |
+## Models And Context
 
-Each provider can configure Responses or Chat Completions, model lists, a test model, User-Agent, context windows, auto-compact limits, and enabled MCP servers, Skills, and Plugins. Chat Completions can be converted locally into the Responses protocol used by Codex.
-
-Per-model windows accept values such as `1M`, `200K`, or plain integers. Codex++ generates a dedicated `model_catalog_json` for Codex.
-
-When creating an aggregate provider, first choose **Failover** or **Model aggregation**. The two types have separate forms and runtime behavior. Model aggregation merges member models into Codex's model list and binds `cpx-<provider-id>/` entries to that member; Failover uses failover, rotation, and weights. Each member keeps its own model list, context window, and auto-compact settings.
-
-Members can be ordinary API providers or official accounts with a completed ChatGPT login. For official members the proxy sends requests to the chatgpt.com backend with that account's OAuth credentials, refreshes the access token with its refresh token when needed (writing the rotated tokens back to the provider snapshot), and retries once after a 401. When the same account is also used directly, the live auth.json credentials take precedence so refresh-token rotation cannot invalidate the snapshot.
-
-### A model picker that folds by provider
-
-Model aggregation merges several members' models into one catalog. The native model picker now folds them into a collapsible group per provider: headers show the provider name and model count, model names drop the repeated "（provider）" suffix, and the default member's group carries a **Default** badge. An "expand all / collapse all" control sits in the corner, collapse state is remembered per provider, and opening the picker expands just the group holding the current selection (or the default provider when nothing is selected). Single-provider setups keep the untouched native list.
-
-<p align="center">
-  <img src="docs/images/readme-preview/model-picker-groups.png" alt="Model picker folded by provider: Provider 4 group (Default, 7 models) and DeepSeek group (2 models)" width="560">
-</p>
-
-Provider switching saves the current profile before applying the target profile. Real API keys remain local and should never be posted in logs, screenshots, or issues.
-
-## Codex Enhancements
-
-- Session delete, bulk delete, Markdown export, and project move actions.
-- Plugin marketplace unlock, plugin auto-expand, and model whitelist handling.
-- Plain-text paste and startup acceleration.
-- Dictation: use an independent OpenAI-compatible service or the local SenseVoiceSmall INT8 model (downloaded manually from the voice settings and run on-device), then record and insert or send the text.
-- Conversation width, scroll restoration, thread IDs, native Fast unlock, and Goals.
-- Next-step suggestions: manage toggles, API, model, item count, and timeout together in Codex Enhancements.
-
-Settings that depend on renderer injection generally require saving and restarting Codex from the Codex++ window.
-
-### Use native Fast controls with an API key
-
-**Force unlock native Fast** gives pure API-key setups access to Codex's native **Standard / ⚡ Fast** controls for supported models, using the existing model and reasoning-effort menus.
-
-1. Open **Codex enhancements → Common enhancements** and enable both the enhancement master switch and **Force unlock native Fast** (disabled by default).
-2. Make sure the model declares a Fast service tier. To configure it manually, open that model's settings in **Provider configuration**, set **Fast (priority) support**, and save the model and provider.
-3. Save the enhancement settings and restart Codex from Codex++. Open the model or reasoning-effort menu and select **⚡ Fast**, or select **Standard** to switch back.
-
-Availability, speed improvements, and pricing depend on the provider. Enabling this feature does not automatically speed up every model. Disable the option and restart Codex to restore its original authentication checks.
-
-## Updates and Packages
-
-Codex++ publishes installers through GitHub Releases. Windows builds an NSIS installer, while macOS builds one universal DMG for Intel and Apple Silicon Macs. Each package contains one application executable.
-
-This branch does not include in-app updates; install new builds manually. Older macOS two-app versions require the manual migration described above.
-
-## Data Locations
-
-- Codex config: `~/.codex/config.toml`
-- Codex auth state: `~/.codex/auth.json`
-- Codex local database: prefers `~/.codex/sqlite/*.db`, falls back to legacy `~/.codex/state_5.sqlite`
-- Codex++ state and logs: `~/.codex-session-delete/`
-- Provider Sync backups: `~/.codex/backups_state/provider-sync`
-
-`~/.codex` above refers to the Codex home directory: it follows the `CODEX_HOME` environment variable when set, and defaults to `.codex` under the user profile otherwise.
-
-## FAQ
-
-### The Codex++ menu does not appear
-
-Open `Codex++`, check or select the official app path under **Overview → Codex application path**, then click **Launch**. Overview also shows runtime health. The Maintenance page has been removed.
-
-### Requests fail after switching providers
-
-Run the model test or Provider Doctor from the provider detail page. Verify that the protocol, Base URL, key, and test model match. Pure API and official-login-plus-API use different authentication locations; do not manually copy `auth.json` between them.
-
-### Does it support Intel Macs?
-
-Yes. Releases provide both `macos-x64.dmg` and `macos-arm64.dmg`. Intel Macs should use the x64 package, while Apple Silicon Macs should use the arm64 package.
-
-## Development
-
-```bash
-cd apps/codex-plus-manager
-npm ci
-npm run check
-npm run vite:build
-
-cd ../..
-cargo fmt --all -- --check
-cargo test
-cargo build --release
-```
-
-Project structure:
+Provider profiles support model lists, per-model context windows, and auto-compact limits. A model list can also declare a window through a suffix:
 
 ```text
-apps/
-  codex-plus-launcher/          Embedded launch and injection runtime library
-  codex-plus-manager/           Unified Tauri application (codex-plus-plus)
-assets/inject/
-  renderer-inject.js            Enhancement script injected into Codex
-crates/
-  codex-plus-core/              Launch, injection, config, update, install, bridge
-  codex-plus-data/              Session data, export, Provider Sync
-scripts/installer/
-  windows/CodexPlusPlus.nsi     Windows NSIS installer
-  macos/package-dmg.sh          macOS DMG packager
+your-model-a[1M]
+your-model-b[200K]
+your-model-c[128000]
 ```
+
+`M`, `K`, and plain integer values specify the context window, not part of the model name. These are placeholder names, not claims about actual model availability or capabilities.
+
+When configuration is applied, Codex++ generates a model catalog and uses the native `model_catalog_json` pointer so Codex can recognize each model's window. Models without individual limits keep provider-level settings; existing single-value settings remain compatible.
+
+## Data Boundaries
+
+**Portable mode isolates Codex++ data only. It does not take over or migrate the Codex home directory.**
+
+```text
+CodexPlusPlus-v1.11.1.S-windows-x64-portable/
+  codex-plus-plus.exe
+  portable.flag
+  README.txt
+  data/                  # Created at first launch, not included in the ZIP
+    state/               # Codex++ settings, Skills, and runtime logs
+    webview/             # Manager UI cache
+```
+
+| Data | Location |
+| --- | --- |
+| Portable Codex++ settings | `data/state/` beside the EXE |
+| Portable manager cache | `data/webview/` beside the EXE |
+| Default non-portable Codex++ state | `%USERPROFILE%\.codex-session-delete\`, overridable with `CODEX_PLUS_STATE_DIR` |
+| Codex configuration, auth, and sessions | Codex's own home: `CODEX_HOME`, or `%USERPROFILE%\.codex\` when unset |
+| Codex session databases | `sqlite/*.db` inside Codex home, with legacy `state_5.sqlite` fallback |
+
+`.codex-session-delete` is a historical Codex++ state-directory name, not Codex's own configuration directory or an automatic mapping to portable `data`. Portable mode does not automatically import settings from it.
+
+Portable mode overrides `CODEX_PLUS_STATE_DIR` and `WEBVIEW2_USER_DATA_FOLDER` to use its own `data` directory, but **does not override `CODEX_HOME`**. A legacy `data/codex-home` directory is not automatically read, migrated, or deleted.
+
+Not every operation writes only to `data`: explicit provider configuration changes, MCP edits, Skills installation, and session deletion modify their respective target data. Portable mode is not a sandbox for Codex configuration or sessions.
+
+### Migration And Upgrades
+
+Exit from the tray and make backups before changing files:
+
+- Upgrade: replace the EXE, `portable.flag`, and package instructions, preserving all of `data`.
+- Relocate: move the entire extracted directory. Codex's own data does not move with it.
+- Import installed settings: confirm the old instance's actual state directory, then copy its contents into `data/state`, not the `data` root. Other versions may retain additional legacy fields.
+- Back up sessions separately: preserve Codex home as well as portable `data`. Session deletion creates local backups, but close affected sessions and keep an additional backup first.
+
+Settings may contain API keys or authentication snapshots. Never commit personal `data`, `.codex-session-delete`, `auth.json`, or credential-bearing configuration.
+
+## Development And Packaging
+
+Built with Rust, Tauri 2, React, and TypeScript. The current delivery target is Windows x64. Other platform code remains from upstream; that does not mean this custom release has been built or verified for those platforms.
+
+| Directory | Purpose |
+| --- | --- |
+| `apps/codex-plus-manager/` | React UI and Tauri entry point |
+| `apps/codex-plus-launcher/` | Embedded launch and injection runtime |
+| `crates/codex-plus-core/` | Settings, providers, model catalogs, runtime services |
+| `crates/codex-plus-data/` | Local sessions and persistence |
+| `assets/inject/` | Injection code and retained upstream assets |
+| `scripts/` | Builds, portable packaging, and local-instance maintenance |
+| `docs/` | Design and research, including historical upstream documents |
+
+Prepare Node.js/npm, Rust, and the Windows prerequisites for Tauri. Install frontend dependencies from the lockfile in `apps/codex-plus-manager` as a separate setup step. The full frontend suite includes upstream macOS packaging simulations. On Windows, put the Git for Windows `bin` directory on the test process's `PATH` so these tests find Git Bash rather than WSL's `bash.exe`.
+
+With dependencies available, run from the repository root:
+
+```powershell
+npm --prefix apps/codex-plus-manager run check
+npm --prefix apps/codex-plus-manager test
+npm --prefix apps/codex-plus-manager run vite:build
+cargo test -p codex-plus-core
+cargo test -p codex-plus-manager
+cargo build --release -p codex-plus-manager --bin codex-plus-plus
+./scripts/package-windows-portable.ps1 -Version 'v1.11.1.S'
+```
+
+Outputs go to `dist/portable/`. The packager includes only the EXE, marker, and instructions, never personal `data`. It refuses to overwrite an existing output directory or ZIP; back up older packages first. Do not distribute debug builds as the portable release.
+
+The fixed Windows verification entry point is `dist/local-build/codex-plus-plus.exe`. Replace only its EXE, preserve data, then launch it to verify changes. `scripts/relaunch-local.mjs` currently targets macOS bundles, not Windows.
+
+After editing renderer injection fragments, run `node scripts/assemble-renderer-inject.mjs`. Use only `node scripts/prune-local-builds.mjs --apply` for historical local-build cleanup. See [AGENTS.md](AGENTS.md) for repository working rules.
+
+## Support And Attribution
+
+Report custom-version issues to [CodexPlusPaco Issues](https://github.com/paco7er/CodexPlusPaco/issues) with the package name, Windows/Codex versions, reproduction steps, and redacted logs. Do not upload personal data directories. Old screenshots and upstream guides under `docs/` may not match this fork; use this README and current code as the reference.
+
+Thanks to [BigPizzaV3/CodexPlusPlus](https://github.com/BigPizzaV3/CodexPlusPlus) and its contributors. Upstream copyright and third-party notices are preserved; upstream code and assets are not claimed as original work.
 
 ## License
 
-Copyright (C) 2026 BigPizzaV3
+Copyright (C) 2026 BigPizzaV3. Custom modifications retain the [GNU AGPL v3.0](LICENSE), SPDX `AGPL-3.0-only`. Provide corresponding source code when distributing modified versions or offering them over a network, as required by the license.
 
-CodexPlusPlus is licensed under the [GNU Affero General Public License v3.0](LICENSE), SPDX identifier `AGPL-3.0-only`. Modified versions that are distributed or offered to users over a network must provide the corresponding source code as required by AGPLv3.
-
-The license covers CodexPlusPlus code only. It does not grant rights to OpenAI, ChatGPT, Codex trademarks, application assets, or other third-party content.
-
-## Compatibility
-
-Codex++ depends on the official desktop app's page structure, CDP behavior, and local data formats. Official app updates may require injection updates. Keep backups before changing provider configuration or local session data.
+See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and resource-specific notices. Retained widget assets have their own [LICENSE](assets/inject/upstream/whale-widget/LICENSE) and [PROVENANCE.md](assets/inject/upstream/whale-widget/PROVENANCE.md). This is not an official OpenAI product and grants no rights to OpenAI, ChatGPT, Codex trademarks, or official application assets.
